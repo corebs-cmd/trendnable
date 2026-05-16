@@ -17,20 +17,29 @@ const ANTHROPIC_API_KEY         = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
 const HAIKU_INPUT_RATE  = 0.80 / 1_000_000;
 const HAIKU_OUTPUT_RATE = 4.00 / 1_000_000;
 
-// Targeted Funko-specific searches — broader coverage across fandoms and exclusivity types
+// 18 targeted searches — exclusives, grails, rare variants, and fandom-specific
 const FUNKO_SEARCHES = [
-  'Funko Pop chase GITD exclusive limited edition',
-  'Funko Pop convention exclusive Comic-Con SDCC',
-  'Funko Pop GameStop exclusive limited',
-  'Funko Pop Target exclusive limited rare',
-  'Funko Pop grail HTF vaulted hard to find',
-  'Funko Pop anime exclusive One Piece Dragon Ball',
-  'Funko Pop horror exclusive Halloween limited',
-  'Funko Pop Marvel exclusive rare chase',
-  'Funko Pop Disney exclusive limited edition',
-  'Funko Pop Star Wars exclusive limited rare',
-  'Funko Pop Pokemon exclusive rare',
-  'Funko Pop Stranger Things exclusive limited',
+  // Exclusivity & chase
+  'Funko Pop chase exclusive GITD limited edition',
+  'Funko Pop SDCC NYCC convention exclusive 2024 2025',
+  'Funko Pop GameStop exclusive limited edition',
+  'Funko Pop Target Walmart Hot Topic BoxLunch exclusive',
+  // Grails & rare finds
+  'Funko Pop grail rare HTF vaulted retired',
+  'Funko Pop vaulted discontinued retired out of print',
+  'Funko Pop metallic flocked glow holographic chrome rare',
+  'Funko Pop signed autographed certificate authenticity',
+  'Funko Pop diamond chrome translucent pearlescent rare',
+  'Funko Pop 1000 pcs limited sticker rare',
+  // Fandom grails & exclusives
+  'Funko Pop anime rare exclusive One Piece Demon Slayer',
+  'Funko Pop horror rare exclusive Halloween vaulted',
+  'Funko Pop Marvel rare exclusive chase variant grail',
+  'Funko Pop Disney rare exclusive vaulted retired',
+  'Funko Pop Star Wars rare exclusive variant grail',
+  'Funko Pop Pokemon rare exclusive grail',
+  'Funko Pop DC rare exclusive variant chase',
+  'Funko Pop Stranger Things exclusive rare grail',
 ];
 
 // ── eBay ──────────────────────────────────────────────────────────────────────
@@ -76,36 +85,58 @@ async function classifyWithClaude(
 ): Promise<{ candidates: any[]; inputTokens: number; outputTokens: number }> {
   const FANDOMS = 'onepiece, demon (Demon Slayer), starwars, pokemon, marvel, mha (My Hero Academia), stranger (Stranger Things), labubu, disney, jjk (Jujutsu Kaisen), dc, horror, gaming';
 
-  const prompt = `You are a Funko Pop specialist. Evaluate these eBay listings to find specific, trackable Funko Pop figures worth price monitoring.
+  const prompt = `You are a Funko Pop grail specialist and price tracker. Evaluate these eBay listings to find specific, trackable Funko Pop figures worth monitoring — including exclusives, rare variants, and community grails.
 
-ALREADY TRACKED (skip these): ${existingNames.slice(0, 60).join(' | ')}
+ALREADY TRACKED (skip): ${existingNames.slice(0, 60).join(' | ')}
 
 KNOWN FANDOMS: ${FANDOMS}
 
-APPROVE a listing if ALL of the following are true:
-- It is a single, specific Funko Pop figure (not a lot, bundle, multi-pack, or mystery box)
-- The Pop number is clearly visible in the title (e.g. #1578, #472, No. 1583)
-- It is NOT already in the tracked list above
-- It has some exclusivity signal: chase, GITD (glow in the dark), exclusive retailer (GameStop, Target, Walmart, Hot Topic, BoxLunch, SDCC, NYCC, FunkonatiCon, Amazon), vaulted, limited edition, or grail/HTF designation
+━━ WHAT TO APPROVE ━━
+
+APPROVE if the listing is a single specific Funko Pop AND matches at least one of these rarity signals:
+
+EXCLUSIVES
+- Retailer exclusives: GameStop, Target, Walmart, Hot Topic, BoxLunch, FYE, Amazon, Walgreens, Barnes & Noble
+- Convention exclusives: SDCC, NYCC, ECCC, C2E2, FunkonatiCon, Emerald City, WonderCon, D23
+
+CHASE & VARIANTS
+- Chase variant (sticker or title says "chase")
+- GITD — Glow in the Dark variant
+- Metallic finish
+- Flocked (fuzzy texture)
+- Holographic
+- Chrome / diamond / translucent / pearlescent / jeweled
+- Signed or autographed (with or without COA)
+
+GRAILS & HARD TO FIND
+- Vaulted, retired, or discontinued — no longer produced, drives secondary market prices up
+- HTF (Hard to Find) or out of print
+- Limited print run — listings mentioning "1000 pcs", "LE500", stickered quantity limits
+- Price signal: if the listing is $75 or more for a single figure it is almost certainly rare or a grail — approve it
+- Community-recognized grails: figures the Funko community widely considers rare trophies even if the listing doesn't use the word "grail"
+
+━━ MANDATORY RULES ━━
+
+⚠️ POP NUMBER IS MANDATORY — You MUST extract the Pop number from the title (e.g. #1578, #472, or bare number 1578). If no Pop number is anywhere in the title, REJECT. Never guess or invent a number.
 
 REJECT if:
-- No Pop number visible anywhere in the title
-- Generic listing with no specific figure identity
-- A lot or multi-pack
-- Common/widely available non-exclusive figure with no chase variant
+- No Pop number visible in the title
+- A lot, bundle, multi-pack, or mystery box
+- Bootleg, knock-off, or custom (not official Funko)
+- Common mass-market figure with no rarity signal and price under $30
 
-⚠️ POP NUMBER IS MANDATORY: You MUST extract the Pop number from the title. If no number is visible (e.g. #1578, #472, or bare number like "1578"), REJECT the item. Do not guess or invent Pop numbers.
+━━ OUTPUT FORMAT ━━
 
 For each APPROVED item return:
-- name: "Character Name [#XXXX]" — clean canonical name ending with the Pop number in [#XXXX] format
-- short: nickname max 18 chars (no Pop number needed here)
-- series: product line (e.g. "Funko Pop · Marvel #1234" or "Funko Pop · Horror #567")
-- fandom_id: best matching fandom from the known list, or null
-- ebay_query: concise eBay search string that includes the bare Pop number (e.g. "Funko Pop Luffy Gear 5 1583 chase")
+- name: "Character Name [#XXXX]" — canonical name ending with Pop number in [#XXXX] format
+- short: nickname max 18 chars
+- series: product line (e.g. "Funko Pop · Marvel #1234")
+- fandom_id: best match from known fandoms or null
+- ebay_query: search string including bare Pop number + rarity keyword (e.g. "Funko Pop Luffy 1583 chase GITD")
 - ebay_title: original listing title verbatim
 - price_median: listing price as a number
-- reasoning: one sentence — what makes this worth tracking (exclusivity, demand signal, rarity)
-- exclusive_type: one of "chase" | "gitd" | "convention" | "retailer" | "vaulted" | "limited" | "htf" | null
+- reasoning: one sentence on why this is worth tracking — cite the specific rarity signal
+- exclusive_type: one of "chase" | "gitd" | "convention" | "retailer" | "vaulted" | "grail" | "rare_variant" | "signed" | "limited" | "htf" | null
 
 Return ONLY a valid JSON array (can be empty). No markdown, no explanation outside the array.
 
@@ -215,7 +246,7 @@ serve(async (req) => {
     let totalOutputTokens = 0;
     const BATCH = 20;
 
-    for (let i = 0; i < Math.min(filtered.length, 400); i += BATCH) {
+    for (let i = 0; i < Math.min(filtered.length, 500); i += BATCH) {
       const batch = filtered.slice(i, i + BATCH);
       const { candidates: approved, inputTokens, outputTokens } = await classifyWithClaude(batch, existingNames);
       candidates.push(...approved);
