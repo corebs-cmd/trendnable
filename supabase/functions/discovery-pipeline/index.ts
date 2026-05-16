@@ -20,10 +20,8 @@ const ANTHROPIC_API_KEY         = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
 const HAIKU_INPUT_RATE  = 0.80 / 1_000_000;
 const HAIKU_OUTPUT_RATE = 4.00 / 1_000_000;
 
-// Broad searches per category — sorted by watchCountDesc to surface what buyers want most
+// Broad searches per category — Funko Pop handled by dedicated funko-pipeline
 const CATEGORY_SEARCHES = [
-  { category_id: 'funko',   query: 'Funko Pop vinyl exclusive limited' },
-  { category_id: 'funko',   query: 'Funko Pop chase GITD grail HTF' },
   { category_id: 'tcg',     query: 'Pokemon card rare holo graded PSA' },
   { category_id: 'tcg',     query: 'Pokemon TCG ex full art secret rare' },
   { category_id: 'popmart', query: 'Pop Mart Labubu blind box figure' },
