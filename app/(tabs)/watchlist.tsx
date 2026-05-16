@@ -4,6 +4,7 @@ import {
   Text,
   ScrollView,
   Pressable,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -23,6 +24,7 @@ export default function WatchlistScreen() {
   const isDark = useAppStore((s) => s.isDark);
   const isPremium = useAppStore((s) => s.isPremium);
   const storeWatchlist = useAppStore((s) => s.watchlist);
+  const removeFromWatchlist = useAppStore((s) => s.removeFromWatchlist);
   const hotSkus = useAppStore((s) => s.hotSkus);
   const theme = buildTheme(isDark);
 
@@ -156,6 +158,16 @@ export default function WatchlistScreen() {
                   theme={theme}
                   density="medium"
                   onPress={() => router.push(`/sku/${sku.id}`)}
+                  onLongPress={() =>
+                    Alert.alert(
+                      'Remove from watchlist',
+                      `Stop watching ${sku.name}?`,
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Remove', style: 'destructive', onPress: () => removeFromWatchlist(sku.id) },
+                      ]
+                    )
+                  }
                 />
               ))}
             </View>

@@ -4,11 +4,10 @@ import {
   Text,
   TextInput,
   Pressable,
-  Alert,
 } from 'react-native';
 import { Theme, RADIUS } from '@/lib/theme';
 import { CollectionItem, SKU } from '@/lib/types';
-import { fmtPrice } from '@/lib/mockData';
+import { fmtPrice } from '@/lib/appConfig';
 import { useAppStore } from '@/stores/appStore';
 
 import Sheet from '@/components/Sheet';
@@ -126,6 +125,9 @@ interface AddToCollectionSheetProps {
 const CONDITIONS = ['Sealed', 'Mint', 'Near Mint', 'Loose', 'Damaged'] as const;
 type Condition = (typeof CONDITIONS)[number];
 
+const GRADERS = ['PSA', 'BGS', 'CGC', 'SGC'] as const;
+type Grader = (typeof GRADERS)[number];
+
 // ─── Main component ──────────────────────────────────────────────────────────
 export default function AddToCollectionSheet({
   open,
@@ -148,6 +150,8 @@ export default function AddToCollectionSheet({
     return s ? String(s.price.median) : '';
   });
   const [condition, setCondition] = useState<Condition>('Mint');
+  const [grader, setGrader] = useState<Grader>('PSA');
+  const [grade, setGrade] = useState('');
   const [notes, setNotes] = useState('');
 
   const selectedSku = skuLookup(selected);
@@ -176,14 +180,20 @@ export default function AddToCollectionSheet({
 
   function handleConfirm() {
     if (!selected || !selectedSku) return;
+    const isTcgGraded = selectedSku.category === 'tcg' && selectedSku.cardVariant === 'graded';
     const item: CollectionItem = {
       skuId: selected,
       qty,
       purchased: priceNum,
       purchaseDate: new Date().toISOString().slice(0, 10),
-      condition,
+      condition: isTcgGraded ? `${grader}${grade ? ` ${grade}` : ''}` : condition,
       notes: notes.trim() || undefined,
       forSale: false,
+      ...(isTcgGraded
+        ? { cardVariant: 'graded' as const, cardGrader: grader, cardGrade: grade || undefined }
+        : selectedSku.category === 'tcg'
+        ? { cardVariant: 'raw' as const }
+        : {}),
     };
     addToCollection(item);
     onConfirm(item);
@@ -191,6 +201,8 @@ export default function AddToCollectionSheet({
     setQty(1);
     setPrice('');
     setCondition('Mint');
+    setGrader('PSA');
+    setGrade('');
     setNotes('');
     setSelected(skuId);
     setSearchQuery('');
@@ -232,54 +244,6 @@ export default function AddToCollectionSheet({
               }}
               autoFocus
             />
-          </View>
-
-          {/* Alternative lookup methods — coming soon */}
-          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-            <Pressable
-              onPress={() => Alert.alert('Coming soon', 'Barcode scanning will be available in a future update.')}
-              accessibilityRole="button"
-              accessibilityLabel="Scan barcode — coming soon"
-              accessibilityState={{ disabled: true }}
-              style={{
-                flex: 1,
-                height: 40,
-                backgroundColor: theme.surface2,
-                borderRadius: RADIUS.chip,
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'row',
-                gap: 6,
-                opacity: 0.5,
-              }}
-            >
-              <Text style={{ color: theme.faint, fontSize: 13 }}>▣</Text>
-              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.faint }}>
-                Scan barcode
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => Alert.alert('Coming soon', 'Photo lookup will be available in a future update.')}
-              accessibilityRole="button"
-              accessibilityLabel="Photo lookup — coming soon"
-              accessibilityState={{ disabled: true }}
-              style={{
-                flex: 1,
-                height: 40,
-                backgroundColor: theme.surface2,
-                borderRadius: RADIUS.chip,
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexDirection: 'row',
-                gap: 6,
-                opacity: 0.5,
-              }}
-            >
-              <Text style={{ color: theme.faint, fontSize: 13 }}>◎</Text>
-              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.faint }}>
-                Photo lookup
-              </Text>
-            </Pressable>
           </View>
 
           {/* Results */}
@@ -435,23 +399,68 @@ export default function AddToCollectionSheet({
             </View>
           </View>
 
-          {/* Condition chips */}
-          <View style={{ marginBottom: 20 }}>
-            <FieldLabel label="Condition" color={theme.faint} />
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-              {CONDITIONS.map((c) => (
-                <Chip
-                  key={c}
-                  theme={theme}
-                  size="xs"
-                  active={condition === c}
-                  onClick={() => setCondition(c)}
-                >
-                  {c}
-                </Chip>
-              ))}
+          {/* Condition / Grading — graded TCG cards get grader+grade, everything else gets condition chips */}
+          {selectedSku?.category === 'tcg' && selectedSku?.cardVariant === 'graded' ? (
+            <View style={{ marginBottom: 20 }}>
+              <FieldLabel label="Grader" color={theme.faint} />
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+                {GRADERS.map((g) => (
+                  <Chip
+                    key={g}
+                    theme={theme}
+                    size="xs"
+                    active={grader === g}
+                    onClick={() => setGrader(g)}
+                  >
+                    {g}
+                  </Chip>
+                ))}
+              </View>
+              <FieldLabel label="Grade" color={theme.faint} />
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: theme.surface2,
+                  borderRadius: RADIUS.card,
+                  paddingHorizontal: 14,
+                  height: 48,
+                }}
+              >
+                <TextInput
+                  value={grade}
+                  onChangeText={setGrade}
+                  keyboardType="decimal-pad"
+                  placeholder="10, 9.5, 9…"
+                  placeholderTextColor={theme.faint}
+                  style={{
+                    flex: 1,
+                    color: theme.text,
+                    fontFamily: 'JetBrainsMono_400Regular',
+                    fontSize: 16,
+                    fontVariant: ['tabular-nums'],
+                  }}
+                />
+              </View>
             </View>
-          </View>
+          ) : (
+            <View style={{ marginBottom: 20 }}>
+              <FieldLabel label="Condition" color={theme.faint} />
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                {CONDITIONS.map((c) => (
+                  <Chip
+                    key={c}
+                    theme={theme}
+                    size="xs"
+                    active={condition === c}
+                    onClick={() => setCondition(c)}
+                  >
+                    {c}
+                  </Chip>
+                ))}
+              </View>
+            </View>
+          )}
 
           {/* Notes */}
           <View style={{ marginBottom: 20 }}>

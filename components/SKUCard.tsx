@@ -3,7 +3,7 @@ import { Pressable, View, Text, StyleSheet } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Theme } from '@/lib/theme';
 import { SKU, CardDensity } from '@/lib/types';
-import { catById, fandomById, fmtPriceRange } from '@/lib/mockData';
+import { catById, fandomById, fmtPriceRange } from '@/lib/appConfig';
 import ProductPlaceholder from '@/components/ProductPlaceholder';
 import { HotScoreBadge } from '@/components/HotScore';
 import DeltaPill from '@/components/DeltaPill';
@@ -14,19 +14,21 @@ interface SKUCardProps {
   theme: Theme;
   density?: CardDensity;
   onPress: () => void;
+  onLongPress?: () => void;
   rank?: number;
 }
 
 // ── Hero card — "TOP FIND" editorial showcase ─────────────────────────────────
 // Layout matches prototype SKUHeroCard exactly:
 // [eyebrow row padding] → [body: ProductPlaceholder lg + info] → [narrative] → [footer]
-function HeroCard({ sku, theme, onPress }: SKUCardProps) {
+function HeroCard({ sku, theme, onPress, onLongPress }: SKUCardProps) {
   const cat = catById(sku.category);
   const fandom = fandomById(sku.fandom);
 
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
       style={({ pressed }) => ({
         backgroundColor: theme.surface,
         borderRadius: theme.radiusLg,
@@ -67,6 +69,13 @@ function HeroCard({ sku, theme, onPress }: SKUCardProps) {
           <View style={styles.chipsRow}>
             {cat && <Chip theme={theme} size="xs">{cat.short}</Chip>}
             {fandom && <Chip theme={theme} size="xs">{fandom.label}</Chip>}
+            {sku.category === 'tcg' && sku.cardVariant && (
+              <Chip theme={theme} size="xs" active>
+                {sku.cardVariant === 'raw'
+                  ? 'Raw'
+                  : `Graded${sku.cardGrader ? ` · ${sku.cardGrader}` : ''}${sku.cardGrade ? ` ${sku.cardGrade}` : ''}`}
+              </Chip>
+            )}
           </View>
         </View>
       </View>
@@ -102,13 +111,14 @@ function HeroCard({ sku, theme, onPress }: SKUCardProps) {
 // ── Standard card — flush-left ProductPlaceholder, editorial row ──────────────
 // Card has no padding. ProductPlaceholder is flush with card edges (borderRadius: 0).
 // Card overflow: hidden clips the placeholder to the card's border radius.
-function StandardCard({ sku, theme, rank, onPress }: SKUCardProps) {
+function StandardCard({ sku, theme, rank, onPress, onLongPress }: SKUCardProps) {
   const cat = catById(sku.category);
   const fandom = fandomById(sku.fandom);
 
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
       style={({ pressed }) => ({
         backgroundColor: theme.surface,
         borderRadius: theme.radius,
@@ -149,6 +159,15 @@ function StandardCard({ sku, theme, rank, onPress }: SKUCardProps) {
             >
               {sku.series}
             </Text>
+            {sku.category === 'tcg' && sku.cardVariant && (
+              <View style={{ marginTop: 4 }}>
+                <Chip theme={theme} size="xs" active>
+                  {sku.cardVariant === 'raw'
+                    ? 'Raw'
+                    : `Graded${sku.cardGrader ? ` · ${sku.cardGrader}` : ''}${sku.cardGrade ? ` ${sku.cardGrade}` : ''}`}
+                </Chip>
+              </View>
+            )}
           </View>
           <HotScoreBadge sku={sku} theme={theme} size="sm" showSpark={false} />
         </View>

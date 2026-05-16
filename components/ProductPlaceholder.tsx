@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ViewStyle, Image } from 'react-native';
 import Svg, { Path, Circle, Ellipse, G, Rect, Text as SvgText } from 'react-native-svg';
 import { Theme, categoryColor } from '@/lib/theme';
 import { SKU } from '@/lib/types';
-import { catById } from '@/lib/mockData';
+import { catById } from '@/lib/appConfig';
 
 // ── Size map ──────────────────────────────────────────────────────────────────
 type SizeKey = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'hero';

@@ -16,7 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle, Defs, Pattern, Rect } from 'react-native-svg';
 
 import { buildTheme, categoryColor, RADIUS } from '@/lib/theme';
-import { catById, fandomById, fmtPrice } from '@/lib/mockData';
+import { catById, fandomById, fmtPrice } from '@/lib/appConfig';
 import { useAppStore } from '@/stores/appStore';
 import { fetchSkuHistory } from '@/lib/api';
 import { SKU } from '@/lib/types';
@@ -155,11 +155,11 @@ export default function SKUDetailScreen() {
   const insets = useSafeAreaInsets();
 
   const isDark = useAppStore((s) => s.isDark);
-  const isWatching = useAppStore((s) => s.isWatching);
-  const isInCollection = useAppStore((s) => s.isInCollection);
   const toggleWatchlist = useAppStore((s) => s.toggleWatchlist);
   const isPremium = useAppStore((s) => s.isPremium);
   const hotSkus = useAppStore((s) => s.hotSkus);
+  const watching = useAppStore((s) => s.watchlist.includes(id ?? ''));
+  const inCollection = useAppStore((s) => s.collection.some((c) => c.skuId === (id ?? '')));
 
   const theme = buildTheme(isDark);
 
@@ -210,9 +210,6 @@ export default function SKUDetailScreen() {
   const fandom = sku ? fandomById(sku.fandom) : undefined;
   const c = sku ? categoryColor(sku.category, isDark) : undefined;
 
-  const watching = sku ? isWatching(sku.id) : false;
-  const inCollection = sku ? isInCollection(sku.id) : false;
-
   const [shareOpen, setShareOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [historyWindow, setHistoryWindow] = useState<HistoryWindow>('30D');
@@ -234,28 +231,30 @@ export default function SKUDetailScreen() {
 
   const encodedQuery = encodeURIComponent(sku.ebay_query || sku.name);
   const marketplaces = [
-    {
+    ...(sku.ebay_url ? [{
       id: 'ebay',
       name: 'eBay',
-      listings: Math.round(sku.listings * 0.65),
+      url: sku.ebay_url,
+      listings: sku.listings,
       median: sku.price.median,
       primary: true,
-      url: sku.ebay_url || `https://www.ebay.com/sch/i.html?_nkw=${encodedQuery}`,
-    },
-    {
+    }] : []),
+    ...(sku.mercari_url ? [{
       id: 'mercari',
       name: 'Mercari',
-      listings: Math.floor(sku.listings / 4),
-      median: Math.round(sku.price.median * 0.97),
-      url: `https://www.mercari.com/search/?keyword=${encodedQuery}`,
-    },
-    {
+      url: sku.mercari_url,
+      listings: null as number | null,
+      median: null as number | null,
+      primary: false,
+    }] : []),
+    ...(sku.popnbeats_url ? [{
       id: 'popnbeats',
       name: 'PopnBeats',
-      listings: Math.floor(sku.listings / 7),
-      median: Math.round(sku.price.median * 1.04),
-      url: `https://popnbeats.com/search?q=${encodedQuery}`,
-    },
+      url: sku.popnbeats_url,
+      listings: null as number | null,
+      median: null as number | null,
+      primary: false,
+    }] : []),
   ];
 
   return (
@@ -335,6 +334,13 @@ export default function SKUDetailScreen() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
             {cat && <Chip theme={theme} size="sm">{cat.label}</Chip>}
             {fandom && <Chip theme={theme} size="sm">{fandom.label}</Chip>}
+            {sku.category === 'tcg' && sku.cardVariant && (
+              <Chip theme={theme} size="sm" active>
+                {sku.cardVariant === 'raw'
+                  ? 'Raw'
+                  : `Graded${sku.cardGrader ? ` · ${sku.cardGrader}` : ''}${sku.cardGrade ? ` ${sku.cardGrade}` : ''}`}
+              </Chip>
+            )}
           </View>
         </View>
 
@@ -409,11 +415,20 @@ export default function SKUDetailScreen() {
         {/* ── Where to buy ── */}
         <SectionHeader title="Where to buy" theme={theme} />
         <View style={{ marginHorizontal: 20, gap: 8 }}>
-          {marketplaces.map((mp) => (
+          {marketplaces.length === 0 ? (
+            <View style={{
+              backgroundColor: theme.surface, borderRadius: theme.radius,
+              padding: 20, alignItems: 'center',
+            }}>
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.faint, textAlign: 'center' }}>
+                No marketplace links set yet.{'\n'}Check back after the next pipeline run.
+              </Text>
+            </View>
+          ) : marketplaces.map((mp) => (
             <Pressable
               key={mp.id}
               accessibilityRole="link"
-              accessibilityLabel={`Search ${mp.name} — ${mp.listings} listings, median ${fmtPrice(mp.median)}`}
+              accessibilityLabel={`Open ${mp.name}`}
               onPress={() => Linking.openURL(mp.url).catch(() => {})}
               style={({ pressed }) => ({
                 backgroundColor: theme.surface,
@@ -446,12 +461,18 @@ export default function SKUDetailScreen() {
                 }}>
                   {mp.name}
                 </Text>
-                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginTop: 2 }}>
-                  {mp.listings} listings · median{' '}
-                  <Text style={{ fontFamily: 'JetBrainsMono_700Bold', color: theme.premium }}>
-                    {fmtPrice(mp.median)}
+                {mp.listings != null && mp.median != null ? (
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginTop: 2 }}>
+                    {mp.listings} listings · median{' '}
+                    <Text style={{ fontFamily: 'JetBrainsMono_700Bold', color: theme.premium }}>
+                      {fmtPrice(mp.median)}
+                    </Text>
                   </Text>
-                </Text>
+                ) : (
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginTop: 2 }}>
+                    View listings
+                  </Text>
+                )}
               </View>
               <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={theme.faint} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <Path d="M7 17L17 7M7 7h10v10" />
@@ -594,32 +615,31 @@ export default function SKUDetailScreen() {
             height: 50, paddingHorizontal: 16,
             borderWidth: 1.5,
             borderColor: watching ? theme.accent : theme.hairline,
-            backgroundColor: watching ? theme.accent : 'transparent',
+            backgroundColor: watching ? theme.surface2 : 'transparent',
             borderRadius: RADIUS.button,
             alignItems: 'center', justifyContent: 'center',
             flexDirection: 'row', gap: 7,
             opacity: pressed ? 0.7 : 1,
           })}
         >
-          <Svg width={16} height={16} viewBox="0 0 24 24"
-            fill={watching ? theme.accentInk : 'none'}
-            stroke={watching ? theme.accentInk : theme.faint}
+          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none"
+            stroke={watching ? theme.accent : theme.faint}
             strokeWidth={2}
           >
-            <Path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" />
-            <Circle cx="12" cy="12" r="3" />
+            <Path fill="none" d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" />
+            <Circle cx="12" cy="12" r="3" fill={watching ? theme.accent : 'none'} />
           </Svg>
           <Text style={{
             fontFamily: 'Inter_600SemiBold', fontSize: 14,
-            color: watching ? theme.accentInk : theme.muted,
+            color: watching ? theme.accent : theme.muted,
           }}>
             {watching ? 'Watching' : 'Watch'}
           </Text>
         </Pressable>
 
         <View style={{ flex: 1 }}>
-          <PrimaryButton theme={theme} size="md" tone={inCollection ? 'ink' : 'accent'} full onPress={() => setAddOpen(true)}>
-            {inCollection ? '✓ In Collection · Add more' : 'Add to Collection'}
+          <PrimaryButton theme={theme} size="md" tone={inCollection ? 'soft' : 'accent'} full onPress={() => setAddOpen(true)}>
+            {inCollection ? '✓ In Collection' : 'Add to Collection'}
           </PrimaryButton>
         </View>
       </View>

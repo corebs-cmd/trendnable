@@ -47,6 +47,13 @@ export interface SKU {
   imageUrl?: string;
   ebay_query?: string;
   ebay_url?: string;
+  mercari_url?: string;
+  popnbeats_url?: string;
+  isFeatured?: boolean;
+  // Trading Cards only
+  cardVariant?: 'raw' | 'graded';
+  cardGrader?: string;   // PSA, BGS, CGC, SGC, etc.
+  cardGrade?: string;    // 10, 9.5, 9, etc.
 }
 
 export interface CollectionItem {
@@ -57,6 +64,10 @@ export interface CollectionItem {
   condition: string;
   notes?: string;
   forSale: boolean;
+  // Trading Cards only
+  cardVariant?: 'raw' | 'graded';
+  cardGrader?: string;
+  cardGrade?: string;
 }
 
 export interface CollectionItemEnriched extends CollectionItem {
@@ -93,6 +104,10 @@ export interface DBCollectionItem {
   for_sale: boolean;
   created_at: string;
   updated_at: string;
+  // Trading Cards only
+  card_variant: string | null;
+  card_grader: string | null;
+  card_grade: string | null;
 }
 
 // Supabase watchlist row

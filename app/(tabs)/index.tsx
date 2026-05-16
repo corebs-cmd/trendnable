@@ -12,7 +12,7 @@ import Svg, { Path } from 'react-native-svg';
 
 import { useAppStore } from '@/stores/appStore';
 import { buildTheme } from '@/lib/theme';
-import { CATEGORIES } from '@/lib/mockData';
+import { CATEGORIES } from '@/lib/appConfig';
 
 import AppHeader from '@/components/AppHeader';
 import IconButton from '@/components/IconButton';
@@ -82,7 +82,9 @@ export default function HotScreen() {
     }
   }, []);
 
-  const [hero, ...rest] = filtered;
+  const featuredSku = filtered.find((s) => s.isFeatured);
+  const hero = featuredSku ?? filtered[0];
+  const rest = filtered.filter((s) => s !== hero);
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>

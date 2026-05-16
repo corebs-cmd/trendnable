@@ -12,7 +12,7 @@ import Svg, { Path, Circle } from 'react-native-svg';
 
 import { useAppStore } from '@/stores/appStore';
 import { buildTheme, categoryColor } from '@/lib/theme';
-import { CATEGORIES, FANDOMS, fmtPrice } from '@/lib/mockData';
+import { CATEGORIES, FANDOMS, fmtPrice } from '@/lib/appConfig';
 import { Category, Fandom, SKU } from '@/lib/types';
 
 import AppHeader from '@/components/AppHeader';

@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAppStore } from '../../stores/appStore';
 import { buildTheme } from '../../lib/theme';
-import { CATEGORIES, FANDOMS } from '../../lib/mockData';
+import { CATEGORIES, FANDOMS } from '../../lib/appConfig';
 import * as api from '../../lib/api';
 
 type Step = 'welcome' | 'categories' | 'fandoms' | 'ready';

@@ -99,6 +99,9 @@ export async function upsertCollectionItem(
       condition: item.condition,
       notes: item.notes ?? null,
       for_sale: item.forSale,
+      card_variant: item.cardVariant ?? null,
+      card_grader: item.cardGrader ?? null,
+      card_grade: item.cardGrade ?? null,
     },
     { onConflict: 'user_id,sku_id' }
   );
@@ -219,9 +222,15 @@ function rowToSku(row: Record<string, unknown>): SKU {
     history: [],
     listingsHist: [],
     priceHist: [],
-    imageUrl:   (row.image_url  as string) ?? undefined,
-    ebay_query: (row.ebay_query as string) ?? undefined,
-    ebay_url:   (row.ebay_url   as string) ?? undefined,
+    imageUrl:      (row.image_url     as string) ?? undefined,
+    ebay_query:    (row.ebay_query   as string) ?? undefined,
+    ebay_url:      (row.ebay_url     as string) ?? undefined,
+    mercari_url:   (row.mercari_url  as string) ?? undefined,
+    popnbeats_url: (row.popnbeats_url as string) ?? undefined,
+    isFeatured:    (row.is_featured  as boolean) ?? false,
+    cardVariant: (row.card_variant as SKU['cardVariant']) ?? undefined,
+    cardGrader:  (row.card_grader  as string) ?? undefined,
+    cardGrade:   (row.card_grade   as string) ?? undefined,
   };
 }
 
@@ -234,5 +243,8 @@ function dbToCollectionItem(row: DBCollectionItem): CollectionItem {
     condition: row.condition,
     notes: row.notes ?? undefined,
     forSale: row.for_sale,
+    cardVariant: (row.card_variant as CollectionItem['cardVariant']) ?? undefined,
+    cardGrader: row.card_grader ?? undefined,
+    cardGrade: row.card_grade ?? undefined,
   };
 }

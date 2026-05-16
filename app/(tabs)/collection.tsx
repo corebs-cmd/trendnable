@@ -13,7 +13,7 @@ import Svg, { Path } from 'react-native-svg';
 
 import { buildTheme } from '@/lib/theme';
 import { useAppStore } from '@/stores/appStore';
-import { catById, fmtPrice } from '@/lib/mockData';
+import { catById, fmtPrice } from '@/lib/appConfig';
 import { CollectionItemEnriched, UpgradeContext } from '@/lib/types';
 import AppHeader from '@/components/AppHeader';
 import Sparkline from '@/components/Sparkline';
@@ -269,16 +269,6 @@ export default function CollectionScreen() {
                     padding: 12, opacity: pressed ? 0.78 : 1,
                   })}
                   onPress={() => router.push(`/sku/${item.skuId}`)}
-                  onLongPress={() =>
-                    Alert.alert(
-                      'Remove from collection',
-                      `Remove ${item.sku.name}?`,
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: 'Remove', style: 'destructive', onPress: () => removeFromCollection(item.skuId) },
-                      ]
-                    )
-                  }
                 >
                   <ProductThumb sku={item.sku} theme={theme} size={60} />
 
@@ -312,6 +302,26 @@ export default function CollectionScreen() {
                       <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.faint }}>◆ P&L</Text>
                     )}
                   </View>
+                  <Pressable
+                    onPress={() =>
+                      Alert.alert(
+                        'Remove from collection',
+                        `Remove ${item.sku.name}?`,
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Remove', style: 'destructive', onPress: () => removeFromCollection(item.skuId) },
+                        ]
+                      )
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove ${item.sku.name} from collection`}
+                    style={({ pressed }) => ({ padding: 8, marginLeft: 2, opacity: pressed ? 0.5 : 1 })}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                  >
+                    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={theme.faint} strokeWidth={2.5} strokeLinecap="round">
+                      <Path d="M18 6L6 18M6 6l12 12" />
+                    </Svg>
+                  </Pressable>
                 </Pressable>
               );
             })

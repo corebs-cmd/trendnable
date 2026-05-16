@@ -1,5 +1,7 @@
 // Trendnable Hot Pipeline — runs daily via cron
 // Fetches eBay data for each active SKU, computes hot scores, updates hot_index.
+// Also generates narratives for SKUs that don't have one yet.
+// Logs every run to pipeline_runs with token usage and cost.
 //
 // Scoring formula (0-100):
 //   velocity    (0-30): new listings per day vs. 7-day baseline
@@ -10,10 +12,18 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+const SUPABASE_URL             = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-const EBAY_CLIENT_ID = Deno.env.get('EBAY_CLIENT_ID') ?? '';
-const EBAY_CLIENT_SECRET = Deno.env.get('EBAY_CLIENT_SECRET') ?? '';
+const PIPELINE_SECRET          = Deno.env.get('PIPELINE_SECRET') ?? '';
+const EBAY_CLIENT_ID           = Deno.env.get('EBAY_CLIENT_ID') ?? '';
+const EBAY_CLIENT_SECRET       = Deno.env.get('EBAY_CLIENT_SECRET') ?? '';
+const ANTHROPIC_API_KEY        = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
+
+// Claude Haiku 4.5 pricing (USD per token)
+const HAIKU_INPUT_RATE  = 0.80 / 1_000_000;
+const HAIKU_OUTPUT_RATE = 4.00 / 1_000_000;
+
+// ── eBay ──────────────────────────────────────────────────────────────────────
 
 async function getEbayToken(): Promise<string> {
   const credentials = btoa(`${EBAY_CLIENT_ID}:${EBAY_CLIENT_SECRET}`);
@@ -44,6 +54,8 @@ async function fetchEbayListings(query: string, token: string) {
   return data.itemSummaries ?? [];
 }
 
+// ── Scoring ───────────────────────────────────────────────────────────────────
+
 function computeHotScore(params: {
   listings: number;
   prevListings: number;
@@ -54,19 +66,11 @@ function computeHotScore(params: {
 }): { hot: number; velocity: number; volume: number; confirmation: number; freshness: number } {
   const { listings, prevListings, velocity, age, redditMentions, ebayWatchers } = params;
 
-  // Velocity (0-30): listing growth rate
   const growthRate = prevListings > 0 ? (listings - prevListings) / prevListings : 0;
   const velocityScore = Math.min(30, Math.round(Math.max(0, growthRate * 100)));
-
-  // Volume (0-30): absolute listing count signal
   const volumeScore = Math.min(30, Math.round(Math.log10(Math.max(1, listings)) * 10));
-
-  // Confirmation (0-25): social signals
   const confirmationScore = Math.min(25, redditMentions * 3 + Math.floor(ebayWatchers / 10));
-
-  // Freshness (0-15): newer SKUs score higher
   const freshnessScore = age < 7 ? 15 : age < 30 ? 12 : age < 90 ? 8 : age < 180 ? 4 : 1;
-
   const hot = velocityScore + volumeScore + confirmationScore + freshnessScore;
 
   return {
@@ -78,9 +82,99 @@ function computeHotScore(params: {
   };
 }
 
+// ── Narrative generation ───────────────────────────────────────────────────────
+
+interface SkuMarketData {
+  id: string;
+  name: string;
+  category_id: string;
+  fandom_id: string | null;
+  hot: number;
+  delta: number;
+  listings: number;
+  priceLow: number;
+  priceMedian: number;
+  priceHigh: number;
+  velocity: number;
+  age: number;
+}
+
+async function generateNarratives(skus: SkuMarketData[]): Promise<{
+  results: { sku_id: string; narrative: string }[];
+  inputTokens: number;
+  outputTokens: number;
+}> {
+  const BATCH = 15;
+  const results: { sku_id: string; narrative: string }[] = [];
+  let inputTokens = 0;
+  let outputTokens = 0;
+
+  for (let i = 0; i < skus.length; i += BATCH) {
+    const batch = skus.slice(i, i + BATCH);
+
+    const prompt = `Generate a 1–2 sentence market narrative for each collectible below. Be specific about what the market signals suggest (price trend, listing velocity, collector demand). Terse analyst tone, present tense, max 28 words per narrative.
+
+Return ONLY a valid JSON array — no markdown, no explanation: [{sku_id, narrative}]
+
+ITEMS:
+${batch.map((s, idx) =>
+  `${idx + 1}. sku_id="${s.id}" | ${s.name} (${s.category_id}${s.fandom_id ? ', ' + s.fandom_id : ''}) | hot=${s.hot} delta=${s.delta >= 0 ? '+' : ''}${s.delta} | listings=${s.listings} | price=$${s.priceLow}–$${s.priceHigh} median $${s.priceMedian} | velocity=${s.velocity}/30 | age=${s.age}d`
+).join('\n')}`;
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    if (!res.ok) {
+      console.error('Claude narrative error:', res.status, await res.text());
+      continue;
+    }
+
+    const data = await res.json();
+
+    // Accumulate token usage
+    inputTokens  += data.usage?.input_tokens  ?? 0;
+    outputTokens += data.usage?.output_tokens ?? 0;
+
+    const text: string = data.content?.[0]?.text ?? '[]';
+    try {
+      const match = text.match(/\[[\s\S]*\]/);
+      if (match) {
+        const parsed = JSON.parse(match[0]);
+        results.push(
+          ...parsed.filter((r: any) => r.sku_id && typeof r.narrative === 'string')
+        );
+      }
+    } catch {
+      console.error('Failed to parse narrative response:', text.slice(0, 200));
+    }
+
+    if (i + BATCH < skus.length) {
+      await new Promise((r) => setTimeout(r, 800));
+    }
+  }
+
+  return { results, inputTokens, outputTokens };
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+
 serve(async (req) => {
+  const startTime = Date.now();
+
   const authHeader = req.headers.get('Authorization');
-  if (!authHeader || authHeader !== `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`) {
+  const validTokens = [`Bearer ${PIPELINE_SECRET}`, `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`].filter(Boolean);
+  if (!authHeader || !validTokens.some((t) => t === authHeader)) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401, headers: { 'Content-Type': 'application/json' },
     });
@@ -91,27 +185,39 @@ serve(async (req) => {
   try {
     const token = await getEbayToken();
 
-    // Fetch all active SKUs
     const { data: skus, error } = await supabase
       .from('skus')
-      .select('id, name, ebay_query, created_at')
+      .select('id, name, category_id, fandom_id, ebay_query, card_variant, card_grader, card_grade, created_at')
       .eq('is_active', true);
 
-    // Track which SKUs already have a canonical image so we skip re-saving
     const { data: existingImages } = await supabase
       .from('product_images')
       .select('sku_id')
       .eq('is_canonical', true);
     const hasImage = new Set((existingImages ?? []).map((r: any) => r.sku_id));
 
+    const { data: existingNarratives } = await supabase
+      .from('sku_narratives')
+      .select('sku_id');
+    const hasNarrative = new Set((existingNarratives ?? []).map((r: any) => r.sku_id as string));
+
     if (error) throw error;
 
     const today = new Date().toISOString().split('T')[0];
     const processed: string[] = [];
+    const skuMarketData: SkuMarketData[] = [];
 
     for (const sku of skus ?? []) {
       try {
-        const query = sku.ebay_query || sku.name;
+        let query = sku.ebay_query || sku.name;
+        if (sku.category_id === 'tcg' && sku.card_variant) {
+          if (sku.card_variant === 'graded' && sku.card_grader) {
+            query += sku.card_grade ? ` ${sku.card_grader} ${sku.card_grade}` : ` ${sku.card_grader}`;
+          } else if (sku.card_variant === 'raw') {
+            query += ' -PSA -BGS -CGC -SGC';
+          }
+        }
+
         const listings = await fetchEbayListings(query, token);
         if (!listings) continue;
 
@@ -122,10 +228,9 @@ serve(async (req) => {
           .sort((a: number, b: number) => a - b);
 
         const priceMedian = prices.length > 0 ? prices[Math.floor((prices.length - 1) / 2)] : 0;
-        const priceLow = prices[0] ?? 0;
-        const priceHigh = prices[prices.length - 1] ?? 0;
+        const priceLow    = prices[0] ?? 0;
+        const priceHigh   = prices[prices.length - 1] ?? 0;
 
-        // Get yesterday's snapshot for velocity
         const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
         const { data: prevSnap } = await supabase
           .from('daily_snapshots')
@@ -137,7 +242,6 @@ serve(async (req) => {
         const prevListings = prevSnap?.listing_count ?? listingCount;
         const ageDays = Math.floor((Date.now() - new Date(sku.created_at).getTime()) / 86400000);
 
-        // Fetch the previous hot_score before overwriting it
         const { data: prevHotRow } = await supabase
           .from('hot_index')
           .select('hot_score')
@@ -149,13 +253,12 @@ serve(async (req) => {
           prevListings,
           velocity: listingCount - prevListings,
           age: ageDays,
-          redditMentions: 0, // filled by weekly signal pipeline
-          ebayWatchers: 0,   // filled by app-check pipeline
+          redditMentions: 0,
+          ebayWatchers: 0,
         });
 
         const delta = Math.round(scores.hot - (prevHotRow?.hot_score ?? scores.hot));
 
-        // Upsert snapshot
         await supabase.from('daily_snapshots').upsert({
           sku_id: sku.id,
           snapshot_date: today,
@@ -167,22 +270,19 @@ serve(async (req) => {
           hot_score: scores.hot,
         });
 
-        // Save canonical image from the first listing that has one
         if (!hasImage.has(sku.id)) {
-          const imageUrl = listings.find((l: any) => l.image?.imageUrl)?.image?.imageUrl
-            ?? listings.find((l: any) => l.thumbnailImages?.[0]?.imageUrl)?.thumbnailImages?.[0]?.imageUrl;
+          const imageUrl =
+            listings.find((l: any) => l.image?.imageUrl)?.image?.imageUrl ??
+            listings.find((l: any) => l.thumbnailImages?.[0]?.imageUrl)?.thumbnailImages?.[0]?.imageUrl;
           if (imageUrl) {
-            await supabase.from('product_images').upsert({
-              sku_id: sku.id,
-              url: imageUrl,
-              source: 'ebay',
-              is_canonical: true,
-            }, { onConflict: 'sku_id,source' });
+            await supabase.from('product_images').upsert(
+              { sku_id: sku.id, url: imageUrl, source: 'ebay', is_canonical: true },
+              { onConflict: 'sku_id,source' }
+            );
             hasImage.add(sku.id);
           }
         }
 
-        // Upsert hot index
         await supabase.from('hot_index').upsert({
           sku_id: sku.id,
           hot_score: scores.hot,
@@ -195,15 +295,78 @@ serve(async (req) => {
           updated_at: new Date().toISOString(),
         });
 
+        if (!hasNarrative.has(sku.id)) {
+          skuMarketData.push({
+            id: sku.id,
+            name: sku.name,
+            category_id: sku.category_id,
+            fandom_id: sku.fandom_id ?? null,
+            hot: scores.hot,
+            delta,
+            listings: listingCount,
+            priceLow,
+            priceMedian,
+            priceHigh,
+            velocity: scores.velocity,
+            age: ageDays,
+          });
+        }
+
         processed.push(sku.id);
-        await new Promise((r) => setTimeout(r, 500)); // rate limit
+        await new Promise((r) => setTimeout(r, 500));
       } catch (skuErr) {
         console.error(`Failed SKU ${sku.id}:`, skuErr);
       }
     }
 
+    // Generate narratives and track token usage
+    let narrativesGenerated = 0;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+
+    if (skuMarketData.length > 0 && ANTHROPIC_API_KEY) {
+      const { results: narratives, inputTokens, outputTokens } = await generateNarratives(skuMarketData);
+      totalInputTokens  = inputTokens;
+      totalOutputTokens = outputTokens;
+
+      for (const n of narratives) {
+        const { error: narrativeErr } = await supabase
+          .from('sku_narratives')
+          .upsert({ sku_id: n.sku_id, narrative: n.narrative }, { onConflict: 'sku_id', ignoreDuplicates: true });
+        if (!narrativeErr) narrativesGenerated++;
+      }
+    }
+
+    const durationMs = Date.now() - startTime;
+    const costUsd = (totalInputTokens * HAIKU_INPUT_RATE) + (totalOutputTokens * HAIKU_OUTPUT_RATE);
+
+    // Log run — non-blocking, don't let this fail the response
+    supabase.from('pipeline_runs').insert({
+      pipeline: 'hot-pipeline',
+      duration_ms: durationMs,
+      input_tokens: totalInputTokens,
+      output_tokens: totalOutputTokens,
+      cost_usd: costUsd,
+      meta: {
+        processed: processed.length,
+        narratives_generated: narrativesGenerated,
+        date: today,
+      },
+    }).then(({ error: logErr }) => {
+      if (logErr) console.error('Failed to log pipeline run:', logErr.message);
+    });
+
     return new Response(
-      JSON.stringify({ ok: true, processed: processed.length, date: today }),
+      JSON.stringify({
+        ok: true,
+        processed: processed.length,
+        narratives_generated: narrativesGenerated,
+        input_tokens: totalInputTokens,
+        output_tokens: totalOutputTokens,
+        cost_usd: Number(costUsd.toFixed(8)),
+        duration_ms: durationMs,
+        date: today,
+      }),
       { headers: { 'Content-Type': 'application/json' } }
     );
   } catch (err) {
