@@ -51,7 +51,7 @@ async function getEbayToken(): Promise<string> {
   return data.access_token;
 }
 
-async function searchEbayWatched(query: string, token: string, limit = 25): Promise<any[]> {
+async function searchEbayWatched(query: string, token: string, limit = 50): Promise<any[]> {
   const url = new URL('https://api.ebay.com/buy/browse/v1/item_summary/search');
   url.searchParams.set('q', query);
   url.searchParams.set('sort', 'watchCountDesc');
@@ -221,7 +221,7 @@ serve(async (req) => {
     let totalOutputTokens = 0;
     const BATCH = 20;
 
-    for (let i = 0; i < Math.min(filtered.length, 160); i += BATCH) {
+    for (let i = 0; i < Math.min(filtered.length, 320); i += BATCH) {
       const batch = filtered.slice(i, i + BATCH);
       const { candidates: approved, inputTokens, outputTokens } = await classifyWithClaude(batch, existingNames);
       candidates.push(...approved);
