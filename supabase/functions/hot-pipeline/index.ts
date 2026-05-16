@@ -42,7 +42,8 @@ async function getEbayToken(): Promise<string> {
 async function fetchEbayListings(query: string, token: string) {
   const url = new URL('https://api.ebay.com/buy/browse/v1/item_summary/search');
   url.searchParams.set('q', query);
-  url.searchParams.set('filter', 'categoryIds:{220,64482}');
+  url.searchParams.set('filter', 'categoryIds:{220,64482},buyingOptions:{FIXED_PRICE}');
+  url.searchParams.set('sort', 'price');
   url.searchParams.set('limit', '50');
 
   const res = await fetch(url.toString(), {
@@ -221,10 +222,14 @@ serve(async (req) => {
         if (!listings) continue;
 
         const listingCount = listings.length;
-        const prices = listings
+        const allPrices = listings
           .map((l: any) => parseFloat(l.price?.value ?? '0'))
           .filter((p: number) => p > 0)
           .sort((a: number, b: number) => a - b);
+
+        // Trim top 15% to remove speculator/inflated asking prices
+        const trimCount = Math.floor(allPrices.length * 0.15);
+        const prices = allPrices.slice(0, allPrices.length - trimCount);
 
         const priceMedian = prices.length > 0 ? prices[Math.floor((prices.length - 1) / 2)] : 0;
         const priceLow    = prices[0] ?? 0;
