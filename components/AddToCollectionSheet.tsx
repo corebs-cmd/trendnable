@@ -1,0 +1,561 @@
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  Alert,
+} from 'react-native';
+import { Theme, RADIUS } from '@/lib/theme';
+import { CollectionItem, SKU } from '@/lib/types';
+import { fmtPrice } from '@/lib/mockData';
+import { useAppStore } from '@/stores/appStore';
+
+import Sheet from '@/components/Sheet';
+import Chip from '@/components/Chip';
+import PrimaryButton from '@/components/PrimaryButton';
+import { ProductThumb } from '@/components/ProductPlaceholder';
+
+// ─── Stepper ────────────────────────────────────────────────────────────────
+interface StepperProps {
+  value: number;
+  onDecrement: () => void;
+  onIncrement: () => void;
+  theme: Theme;
+}
+function Stepper({ value, onDecrement, onIncrement, theme }: StepperProps) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 0 }}>
+      <Pressable
+        onPress={onDecrement}
+        style={({ pressed }) => ({
+          width: 40,
+          height: 40,
+          backgroundColor: theme.surface2,
+          borderTopLeftRadius: RADIUS.chip,
+          borderBottomLeftRadius: RADIUS.chip,
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: pressed ? 0.65 : 1,
+        })}
+      >
+        <Text
+          style={{
+            fontFamily: 'Inter_700Bold',
+            fontSize: 18,
+            color: value <= 1 ? theme.faint : theme.text,
+          }}
+        >
+          −
+        </Text>
+      </Pressable>
+      <View
+        style={{
+          width: 52,
+          height: 40,
+          backgroundColor: theme.surface2,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Text
+          style={{
+            fontFamily: 'JetBrainsMono_700Bold',
+            fontSize: 16,
+            color: theme.text,
+            fontVariant: ['tabular-nums'],
+          }}
+        >
+          {value}
+        </Text>
+      </View>
+      <Pressable
+        onPress={onIncrement}
+        style={({ pressed }) => ({
+          width: 40,
+          height: 40,
+          backgroundColor: theme.surface2,
+          borderTopRightRadius: RADIUS.chip,
+          borderBottomRightRadius: RADIUS.chip,
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: pressed ? 0.65 : 1,
+        })}
+      >
+        <Text
+          style={{
+            fontFamily: 'Inter_700Bold',
+            fontSize: 18,
+            color: theme.text,
+          }}
+        >
+          +
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+// ─── FieldLabel ─────────────────────────────────────────────────────────────
+function FieldLabel({ label, color }: { label: string; color: string }) {
+  return (
+    <Text
+      style={{
+        fontFamily: 'Inter_600SemiBold',
+        fontSize: 11,
+        color,
+        letterSpacing: 0.1 * 11,
+        textTransform: 'uppercase',
+        marginBottom: 8,
+      }}
+    >
+      {label}
+    </Text>
+  );
+}
+
+// ─── Props ──────────────────────────────────────────────────────────────────
+interface AddToCollectionSheetProps {
+  open: boolean;
+  skuId?: string;
+  theme: Theme;
+  onClose: () => void;
+  onConfirm: (item: CollectionItem) => void;
+}
+
+const CONDITIONS = ['Sealed', 'Mint', 'Near Mint', 'Loose', 'Damaged'] as const;
+type Condition = (typeof CONDITIONS)[number];
+
+// ─── Main component ──────────────────────────────────────────────────────────
+export default function AddToCollectionSheet({
+  open,
+  skuId,
+  theme,
+  onClose,
+  onConfirm,
+}: AddToCollectionSheetProps) {
+  const addToCollection = useAppStore((s) => s.addToCollection);
+  const hotSkus = useAppStore((s) => s.hotSkus);
+
+  const skuLookup = (id: string | undefined): SKU | undefined =>
+    id ? hotSkus.find((s) => s.id === id) : undefined;
+
+  const [selected, setSelected] = useState<string | undefined>(skuId);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [qty, setQty] = useState(1);
+  const [price, setPrice] = useState<string>(() => {
+    const s = skuLookup(skuId);
+    return s ? String(s.price.median) : '';
+  });
+  const [condition, setCondition] = useState<Condition>('Mint');
+  const [notes, setNotes] = useState('');
+
+  const selectedSku = skuLookup(selected);
+
+  const isSearchView = !selected;
+
+  const filteredSKUs = hotSkus.filter((s) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      s.name.toLowerCase().includes(q) ||
+      s.series.toLowerCase().includes(q) ||
+      s.short.toLowerCase().includes(q)
+    );
+  });
+
+  const priceNum = parseFloat(price) || 0;
+  const totalCost = priceNum * qty;
+  const currentValue = selectedSku ? selectedSku.price.median * qty : 0;
+
+  function handleSelect(id: string) {
+    setSelected(id);
+    const s = skuLookup(id);
+    if (s) setPrice(String(s.price.median));
+  }
+
+  function handleConfirm() {
+    if (!selected || !selectedSku) return;
+    const item: CollectionItem = {
+      skuId: selected,
+      qty,
+      purchased: priceNum,
+      purchaseDate: new Date().toISOString().slice(0, 10),
+      condition,
+      notes: notes.trim() || undefined,
+      forSale: false,
+    };
+    addToCollection(item);
+    onConfirm(item);
+    // reset
+    setQty(1);
+    setPrice('');
+    setCondition('Mint');
+    setNotes('');
+    setSelected(skuId);
+    setSearchQuery('');
+  }
+
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      theme={theme}
+      title="Add to Collection"
+    >
+      {/* ── Search view ── */}
+      {isSearchView ? (
+        <View>
+          {/* Search input */}
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: theme.surface2,
+              borderRadius: RADIUS.card,
+              paddingHorizontal: 12,
+              height: 44,
+              marginBottom: 12,
+            }}
+          >
+            <Text style={{ color: theme.faint, marginRight: 8, fontSize: 15 }}>⌕</Text>
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search SKUs…"
+              placeholderTextColor={theme.faint}
+              style={{
+                flex: 1,
+                color: theme.text,
+                fontFamily: 'Inter_400Regular',
+                fontSize: 15,
+              }}
+              autoFocus
+            />
+          </View>
+
+          {/* Alternative lookup methods — coming soon */}
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+            <Pressable
+              onPress={() => Alert.alert('Coming soon', 'Barcode scanning will be available in a future update.')}
+              accessibilityRole="button"
+              accessibilityLabel="Scan barcode — coming soon"
+              accessibilityState={{ disabled: true }}
+              style={{
+                flex: 1,
+                height: 40,
+                backgroundColor: theme.surface2,
+                borderRadius: RADIUS.chip,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 6,
+                opacity: 0.5,
+              }}
+            >
+              <Text style={{ color: theme.faint, fontSize: 13 }}>▣</Text>
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.faint }}>
+                Scan barcode
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => Alert.alert('Coming soon', 'Photo lookup will be available in a future update.')}
+              accessibilityRole="button"
+              accessibilityLabel="Photo lookup — coming soon"
+              accessibilityState={{ disabled: true }}
+              style={{
+                flex: 1,
+                height: 40,
+                backgroundColor: theme.surface2,
+                borderRadius: RADIUS.chip,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
+                gap: 6,
+                opacity: 0.5,
+              }}
+            >
+              <Text style={{ color: theme.faint, fontSize: 13 }}>◎</Text>
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.faint }}>
+                Photo lookup
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Results */}
+          <View>
+            {filteredSKUs.map((s, idx) => (
+              <Pressable
+                key={s.id}
+                onPress={() => handleSelect(s.id)}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: theme.surface,
+                  borderRadius: theme.radius,
+                  padding: 10,
+                  marginBottom: idx < filteredSKUs.length - 1 ? 8 : 0,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <ProductThumb sku={s} theme={theme} size={44} />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text
+                    style={{
+                      fontFamily: theme.fontDispBold,
+                      fontSize: 14,
+                      color: theme.text,
+                      letterSpacing: -0.2,
+                      marginBottom: 2,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {s.name}
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: 'Inter_400Regular',
+                      fontSize: 12,
+                      color: theme.muted,
+                    }}
+                  >
+                    {fmtPrice(s.price.median)} · {s.series}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : (
+        /* ── Form view ── */
+        <View>
+          {/* Selected item header */}
+          {selectedSku && (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: theme.surface2,
+                borderRadius: theme.radius,
+                padding: 12,
+                marginBottom: 20,
+              }}
+            >
+              <ProductThumb sku={selectedSku} theme={theme} size={60} />
+              <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
+                <Text
+                  style={{
+                    fontFamily: theme.fontDispBold,
+                    fontSize: 15,
+                    color: theme.text,
+                    letterSpacing: -0.2,
+                    marginBottom: 2,
+                  }}
+                  numberOfLines={1}
+                >
+                  {selectedSku.name}
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: 'Inter_400Regular',
+                    fontSize: 12,
+                    color: theme.muted,
+                  }}
+                >
+                  Today's median {fmtPrice(selectedSku.price.median)}
+                </Text>
+              </View>
+              {!skuId && (
+                <Pressable
+                  onPress={() => setSelected(undefined)}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
+                >
+                  <Text
+                    style={{
+                      fontFamily: 'Inter_700Bold',
+                      fontSize: 13,
+                      color: theme.accent,
+                    }}
+                  >
+                    Change
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+
+          {/* Quantity */}
+          <View style={{ marginBottom: 20 }}>
+            <FieldLabel label="Quantity" color={theme.faint} />
+            <Stepper
+              value={qty}
+              onDecrement={() => setQty((v) => Math.max(1, v - 1))}
+              onIncrement={() => setQty((v) => v + 1)}
+              theme={theme}
+            />
+          </View>
+
+          {/* Purchase price */}
+          <View style={{ marginBottom: 20 }}>
+            <FieldLabel label="Purchase price" color={theme.faint} />
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: theme.surface2,
+                borderRadius: RADIUS.card,
+                paddingHorizontal: 14,
+                height: 48,
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: 'JetBrainsMono_400Regular',
+                  fontSize: 16,
+                  color: theme.muted,
+                  marginRight: 4,
+                }}
+              >
+                $
+              </Text>
+              <TextInput
+                value={price}
+                onChangeText={setPrice}
+                keyboardType="decimal-pad"
+                placeholder="0.00"
+                placeholderTextColor={theme.faint}
+                style={{
+                  flex: 1,
+                  color: theme.text,
+                  fontFamily: 'JetBrainsMono_400Regular',
+                  fontSize: 16,
+                  fontVariant: ['tabular-nums'],
+                }}
+              />
+            </View>
+          </View>
+
+          {/* Condition chips */}
+          <View style={{ marginBottom: 20 }}>
+            <FieldLabel label="Condition" color={theme.faint} />
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+              {CONDITIONS.map((c) => (
+                <Chip
+                  key={c}
+                  theme={theme}
+                  size="xs"
+                  active={condition === c}
+                  onClick={() => setCondition(c)}
+                >
+                  {c}
+                </Chip>
+              ))}
+            </View>
+          </View>
+
+          {/* Notes */}
+          <View style={{ marginBottom: 20 }}>
+            <FieldLabel label="Notes" color={theme.faint} />
+            <TextInput
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Optional notes…"
+              placeholderTextColor={theme.faint}
+              multiline
+              numberOfLines={3}
+              style={{
+                backgroundColor: theme.surface2,
+                borderRadius: RADIUS.card,
+                padding: 12,
+                color: theme.text,
+                fontFamily: 'Inter_400Regular',
+                fontSize: 14,
+                lineHeight: 21,
+                minHeight: 76,
+                textAlignVertical: 'top',
+              }}
+            />
+          </View>
+
+          {/* Summary row */}
+          <View
+            style={{
+              flexDirection: 'row',
+              backgroundColor: theme.surface2,
+              borderRadius: RADIUS.card,
+              padding: 14,
+              marginBottom: 20,
+              gap: 8,
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  fontFamily: 'JetBrainsMono_400Regular',
+                  fontSize: 9,
+                  color: theme.faint,
+                  letterSpacing: 0.8,
+                  textTransform: 'uppercase',
+                  marginBottom: 4,
+                }}
+              >
+                Total cost
+              </Text>
+              <Text
+                style={{
+                  fontFamily: 'JetBrainsMono_700Bold',
+                  fontSize: 18,
+                  color: theme.text,
+                  fontVariant: ['tabular-nums'],
+                }}
+              >
+                {fmtPrice(totalCost)}
+              </Text>
+            </View>
+            <View
+              style={{
+                width: 1,
+                backgroundColor: theme.hairline,
+                marginVertical: 2,
+              }}
+            />
+            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+              <Text
+                style={{
+                  fontFamily: 'JetBrainsMono_400Regular',
+                  fontSize: 9,
+                  color: theme.faint,
+                  letterSpacing: 0.8,
+                  textTransform: 'uppercase',
+                  marginBottom: 4,
+                }}
+              >
+                Current value
+              </Text>
+              <Text
+                style={{
+                  fontFamily: 'JetBrainsMono_700Bold',
+                  fontSize: 18,
+                  color: theme.pos,
+                  fontVariant: ['tabular-nums'],
+                }}
+              >
+                {fmtPrice(currentValue)}
+              </Text>
+            </View>
+          </View>
+
+          {/* CTA */}
+          <PrimaryButton
+            theme={theme}
+            size="lg"
+            onPress={handleConfirm}
+            disabled={!selected}
+          >
+            Add to collection
+          </PrimaryButton>
+        </View>
+      )}
+    </Sheet>
+  );
+}

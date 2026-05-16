@@ -1,0 +1,15 @@
+diff --git a/node_modules/expo-image/ios/ContentPosition.swift b/node_modules/expo-image/ios/ContentPosition.swift
+index 73c34ca..022bed2 100644
+--- a/node_modules/expo-image/ios/ContentPosition.swift
++++ b/node_modules/expo-image/ios/ContentPosition.swift
+@@ -9,8 +9,8 @@ typealias ContentPositionValue = Either<Double, String>
+  Specifies the alignment of the image within the container's box.
+  - Note: Its intention is to behave like the CSS [`object-position`](https://developer.mozilla.org/en-US/docs/Web/CSS/object-position) property.
+  */
+-struct ContentPosition: Record {
+-  static let center = Self()
++struct ContentPosition: Record, @unchecked Sendable {
++  nonisolated(unsafe) static let center = Self()
+ 
+   @Field
+   var top: ContentPositionValue?
