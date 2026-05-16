@@ -50,6 +50,8 @@ export interface SKU {
   mercari_url?: string;
   popnbeats_url?: string;
   isFeatured?: boolean;
+  // Funko Pop only
+  popNumber?: number;
   // Trading Cards only
   cardVariant?: 'raw' | 'graded';
   cardGrader?: string;   // PSA, BGS, CGC, SGC, etc.

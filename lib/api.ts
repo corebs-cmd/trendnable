@@ -228,6 +228,7 @@ function rowToSku(row: Record<string, unknown>): SKU {
     mercari_url:   (row.mercari_url  as string) ?? undefined,
     popnbeats_url: (row.popnbeats_url as string) ?? undefined,
     isFeatured:    (row.is_featured  as boolean) ?? false,
+    popNumber:   (row.pop_number as number) ?? undefined,
     cardVariant: (row.card_variant as SKU['cardVariant']) ?? undefined,
     cardGrader:  (row.card_grader  as string) ?? undefined,
     cardGrade:   (row.card_grade   as string) ?? undefined,
