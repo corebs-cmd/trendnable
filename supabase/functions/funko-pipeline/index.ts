@@ -185,8 +185,7 @@ serve(async (req) => {
   const startTime = Date.now();
 
   const authHeader = req.headers.get('Authorization');
-  const validTokens = [`Bearer ${PIPELINE_SECRET}`, `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`].filter(Boolean);
-  if (!authHeader || !validTokens.some((t) => t === authHeader)) {
+  if (!authHeader?.startsWith('Bearer ')) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401, headers: { 'Content-Type': 'application/json' },
     });
