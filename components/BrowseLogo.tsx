@@ -6,24 +6,28 @@ import Svg, {
 
 // ── Brand logo SVGs ───────────────────────────────────────────────────────────
 
-// Funko Pop — round-head Pop! figure silhouette
+// Funko Pop — iconic vinyl figure: oversized round head, huge black oval eyes, stubby body, "POP!" tag
 function LogoFunko() {
   return (
-    <Svg viewBox="0 0 100 100" width="64%" height="64%">
-      <G fill="#FFFFFF" opacity={0.95}>
-        {/* head */}
-        <Circle cx={50} cy={34} r={26} />
-        {/* body */}
-        <Path d="M26 62 Q50 56 74 62 L72 96 Q50 102 28 96 Z" />
-        {/* arms */}
-        <Ellipse cx={18} cy={76} rx={8} ry={16} transform="rotate(-10 18 76)" />
-        <Ellipse cx={82} cy={76} rx={8} ry={16} transform="rotate(10 82 76)" />
-        {/* eyes */}
-        <Circle cx={42} cy={36} r={4} fill="#D0252A" />
-        <Circle cx={58} cy={36} r={4} fill="#D0252A" />
-        {/* smile */}
-        <Path d="M42 46 Q50 52 58 46" stroke="#D0252A" strokeWidth={2.5} fill="none" strokeLinecap="round" />
-      </G>
+    <Svg viewBox="0 0 100 115" width="62%" height="62%">
+      {/* body — short squat block */}
+      <Rect x={34} y={68} width={32} height={26} rx={4} fill="#FFFFFF" opacity={0.92} />
+      {/* arms */}
+      <Ellipse cx={24} cy={80} rx={7} ry={12} fill="#FFFFFF" opacity={0.88} />
+      <Ellipse cx={76} cy={80} rx={7} ry={12} fill="#FFFFFF" opacity={0.88} />
+      {/* neck */}
+      <Rect x={44} y={60} width={12} height={10} fill="#FFFFFF" opacity={0.9} />
+      {/* head — very large, round */}
+      <Circle cx={50} cy={40} r={34} fill="#FFFFFF" opacity={0.96} />
+      {/* big oval eyes — the defining Funko feature */}
+      <Ellipse cx={37} cy={40} rx={8} ry={11} fill="#1A1A1A" />
+      <Ellipse cx={63} cy={40} rx={8} ry={11} fill="#1A1A1A" />
+      {/* eye shine */}
+      <Circle cx={34} cy={36} r={2.5} fill="#FFFFFF" opacity={0.7} />
+      <Circle cx={60} cy={36} r={2.5} fill="#FFFFFF" opacity={0.7} />
+      {/* "POP!" text tag at bottom */}
+      <Rect x={28} y={97} width={44} height={16} rx={3} fill="#FFFFFF" opacity={0.95} />
+      <SvgText x={50} y={109} textAnchor="middle" fontFamily="Inter_700Bold" fontSize={10} fontWeight="900" fill="#F5541E" letterSpacing={1}>POP!</SvgText>
     </Svg>
   );
 }
@@ -66,26 +70,30 @@ function LogoPopmart() {
   );
 }
 
-// Hot Toys — detailed figure silhouette with "HT" badge
+// Hot Toys — Iron Man-style helmet face (what Hot Toys is most famous for)
 function LogoHottoys() {
   return (
-    <Svg viewBox="0 0 100 100" width="68%" height="68%">
-      <G fill="#FFFFFF" opacity={0.9}>
-        {/* helmet/head */}
-        <Circle cx={50} cy={24} r={18} />
-        {/* visor */}
-        <Path d="M36 22 Q50 14 64 22 Q64 30 50 30 Q36 30 36 22 Z" fill="#111111" opacity={0.7} />
-        {/* torso */}
-        <Rect x={34} y={42} width={32} height={28} rx={3} />
-        {/* chest detail */}
-        <Rect x={40} y={47} width={20} height={12} rx={2} fill="#111111" opacity={0.4} />
-        {/* legs */}
-        <Rect x={36} y={70} width={11} height={24} rx={3} />
-        <Rect x={53} y={70} width={11} height={24} rx={3} />
-        {/* arms */}
-        <Rect x={20} y={42} width={10} height={22} rx={4} />
-        <Rect x={70} y={42} width={10} height={22} rx={4} />
-      </G>
+    <Svg viewBox="0 0 100 100" width="70%" height="70%">
+      {/* helmet outer shell */}
+      <Path d="M50 6 Q82 10 88 34 L86 68 Q82 88 50 94 Q18 88 14 68 L12 34 Q18 10 50 6 Z" fill="#C0C0C0" opacity={0.92} />
+      {/* forehead panel */}
+      <Path d="M50 10 Q76 14 80 32 L72 32 Q66 18 50 16 Q34 18 28 32 L20 32 Q24 14 50 10 Z" fill="#E8E8E8" opacity={0.85} />
+      {/* left eye glow */}
+      <Path d="M20 40 L34 36 L38 44 L24 50 Z" fill="#FFD700" opacity={0.95} />
+      {/* right eye glow */}
+      <Path d="M80 40 L66 36 L62 44 L76 50 Z" fill="#FFD700" opacity={0.95} />
+      {/* nose bridge */}
+      <Rect x={46} y={44} width={8} height={18} rx={2} fill="#A0A0A0" opacity={0.7} />
+      {/* mouth grille */}
+      <Path d="M30 68 Q50 62 70 68 L68 78 Q50 84 32 78 Z" fill="#888888" opacity={0.8} />
+      {/* grille lines */}
+      <Line x1={36} y1={70} x2={34} y2={77} stroke="#5C0A14" strokeWidth={1.5} opacity={0.5} />
+      <Line x1={44} y1={68} x2={43} y2={77} stroke="#5C0A14" strokeWidth={1.5} opacity={0.5} />
+      <Line x1={50} y1={67} x2={50} y2={77} stroke="#5C0A14" strokeWidth={1.5} opacity={0.5} />
+      <Line x1={56} y1={68} x2={57} y2={77} stroke="#5C0A14" strokeWidth={1.5} opacity={0.5} />
+      <Line x1={64} y1={70} x2={66} y2={77} stroke="#5C0A14" strokeWidth={1.5} opacity={0.5} />
+      {/* chin piece */}
+      <Path d="M32 78 Q50 86 68 78 Q66 90 50 94 Q34 90 32 78 Z" fill="#B0B0B0" opacity={0.85} />
     </Svg>
   );
 }
@@ -340,10 +348,10 @@ function LogoGaming() {
 type LogoEntry = { bg: string; component: React.ReactNode };
 
 const LOGOS: Record<string, LogoEntry> = {
-  funko:    { bg: '#D0252A', component: <LogoFunko /> },
-  tcg:      { bg: '#003A70', component: <LogoTcg /> },
+  funko:    { bg: '#F5541E', component: <LogoFunko /> },
+  tcg:      { bg: '#9C1C4A', component: <LogoTcg /> },
   popmart:  { bg: '#EE2B3B', component: <LogoPopmart /> },
-  hottoys:  { bg: '#111111', component: <LogoHottoys /> },
+  hottoys:  { bg: '#5C0A14', component: <LogoHottoys /> },
   neca:     { bg: '#AA0000', component: <LogoNeca /> },
   hwheels:  { bg: '#E8272B', component: <LogoHwheels /> },
   onepiece: { bg: '#0C1440', component: <LogoOnepiece /> },
