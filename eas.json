@@ -26,6 +26,10 @@
     "production": {
       "ios": {
         "resourceClass": "m-medium"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://wmuvigcdazjitzstxqvk.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndtdXZpZ2NkYXpqaXR6c3R4cXZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MTYxOTgsImV4cCI6MjA5NDM5MjE5OH0.0QPeg4I228bm_aYZYwvXkeeW7eWwfZ9N-BDiFw09g9s"
       }
     }
   },
