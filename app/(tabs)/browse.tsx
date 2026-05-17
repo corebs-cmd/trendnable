@@ -19,6 +19,7 @@ import AppHeader from '@/components/AppHeader';
 import { HotScoreBadge } from '@/components/HotScore';
 import DeltaPill from '@/components/DeltaPill';
 import ProductPlaceholder, { ProductThumb } from '@/components/ProductPlaceholder';
+import BrowseLogo from '@/components/BrowseLogo';
 
 type BrowseMode = 'category' | 'fandom';
 
@@ -207,15 +208,9 @@ export default function BrowseScreen() {
                     overflow: 'hidden', opacity: pressed ? 0.85 : 1,
                   })}
                 >
-                  {/* Full-bleed placeholder in 1:1 */}
+                  {/* Full-bleed logo in 1:1 */}
                   <View style={{ aspectRatio: 1, width: '100%', position: 'relative' }}>
-                    <ProductPlaceholder
-                      sku={topSku}
-                      theme={theme}
-                      size="hero"
-                      showTag={false}
-                      style={{ width: '100%', height: '100%', borderRadius: 0 }}
-                    />
+                    <BrowseLogo id={group.id} label={group.label} />
                     {/* Hot score pill */}
                     <View style={{
                       position: 'absolute', top: 8, right: 8,
