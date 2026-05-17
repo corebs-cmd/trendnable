@@ -42,8 +42,9 @@ export default function BrowseScreen() {
   const [mode, setMode] = useState<BrowseMode>('category');
   const [query, setQuery] = useState('');
   const [scrolled, setScrolled] = useState(false);
+  const [segmentWidth, setSegmentWidth] = useState(0);
 
-  const indicatorAnim = useRef(new Animated.Value(0)).current;
+  const indicatorAnim = useRef(new Animated.Value(4)).current;
 
   const trimmedQuery = query.trim().toLowerCase();
 
@@ -71,18 +72,12 @@ export default function BrowseScreen() {
   const switchMode = useCallback((next: BrowseMode) => {
     setMode(next);
     Animated.spring(indicatorAnim, {
-      toValue: next === 'category' ? 0 : 1,
+      toValue: next === 'category' ? 4 : segmentWidth / 2,
       useNativeDriver: true,
       damping: 22,
       stiffness: 240,
     }).start();
-  }, [indicatorAnim]);
-
-  const SEGMENT_W = 160;
-  const indicatorX = indicatorAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [4, SEGMENT_W + 4],
-  });
+  }, [indicatorAnim, segmentWidth]);
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
@@ -160,15 +155,18 @@ export default function BrowseScreen() {
 
         {/* Mode toggle */}
         <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
-          <View style={{
-            height: 46, backgroundColor: theme.surface,
-            borderRadius: 14, flexDirection: 'row', position: 'relative',
-            padding: 4, borderWidth: 0.5, borderColor: theme.hairline,
-          }}>
+          <View
+            onLayout={(e) => setSegmentWidth(e.nativeEvent.layout.width)}
+            style={{
+              height: 46, backgroundColor: theme.surface,
+              borderRadius: 14, flexDirection: 'row', position: 'relative',
+              padding: 4, borderWidth: 0.5, borderColor: theme.hairline,
+            }}
+          >
             <Animated.View style={{
               position: 'absolute', top: 4, bottom: 4, width: '50%',
               backgroundColor: theme.accent, borderRadius: 10,
-              transform: [{ translateX: indicatorX }],
+              transform: [{ translateX: indicatorAnim }],
             }} />
             <Pressable onPress={() => switchMode('category')} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: mode === 'category' ? theme.accentInk : theme.text }}>
