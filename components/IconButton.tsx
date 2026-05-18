@@ -18,7 +18,7 @@ export default function IconButton({
   theme,
   onPress,
   tone = 'soft',
-  size = 36,
+  size = 40,
   accessibilityLabel,
 }: IconButtonProps) {
   const backgroundColor =

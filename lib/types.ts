@@ -50,6 +50,7 @@ export interface SKU {
   mercari_url?: string;
   popnbeats_url?: string;
   isFeatured?: boolean;
+  forceFeaturedUntil?: string | null;
   // Funko Pop only
   popNumber?: number;
   // Trading Cards only

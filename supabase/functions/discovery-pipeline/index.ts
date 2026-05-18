@@ -27,7 +27,15 @@ const CATEGORY_SEARCHES = [
   { category_id: 'popmart', query: 'Pop Mart Labubu blind box figure' },
   { category_id: 'popmart', query: 'Pop Mart Skull Panda Dimoo figure' },
   { category_id: 'hottoys', query: 'Hot Toys 1/6 scale figure MMS' },
+  { category_id: 'hottoys', query: 'Hot Toys Marvel Avengers Iron Man Spider-Man 1/6' },
+  { category_id: 'hottoys', query: 'Hot Toys Star Wars Mandalorian Darth Vader 1/6' },
+  { category_id: 'hottoys', query: 'Hot Toys Disney Pixar 1/6 scale figure MMS' },
+  // NECA — general + dedicated franchise/theme lines
   { category_id: 'neca',    query: 'NECA ultimate action figure 7 inch' },
+  { category_id: 'neca',    query: 'NECA TMNT Teenage Mutant Ninja Turtles figure' },
+  { category_id: 'neca',    query: 'NECA Alien Predator Xenomorph horror figure' },
+  { category_id: 'neca',    query: 'NECA Terminator RoboCop Escape New York sci-fi figure' },
+  { category_id: 'neca',    query: 'NECA Stranger Things Breaking Bad pop culture figure' },
   { category_id: 'hwheels', query: 'Hot Wheels Super Treasure Hunt 2024 2025' },
   { category_id: 'hwheels', query: 'Hot Wheels Real Riders premium' },
 ];
@@ -73,13 +81,15 @@ async function classifyWithClaude(
   items: any[],
   existingNames: string[]
 ): Promise<{ candidates: any[]; inputTokens: number; outputTokens: number }> {
-  const FANDOMS = 'onepiece, demon (Demon Slayer), starwars, pokemon, marvel, mha (My Hero Academia), stranger (Stranger Things), labubu, disney, jjk (Jujutsu Kaisen), dc, horror, gaming';
+  const FANDOMS = 'onepiece (One Piece only), demon (Demon Slayer only), starwars, pokemon, marvel, anime (use for: My Hero Academia/MHA, Jujutsu Kaisen/JJK, Naruto, Dragon Ball/DBZ, Attack on Titan, Bleach, Fairy Tail, Black Clover, Chainsaw Man, Solo Leveling, or any anime franchise not covered by another fandom), labubu, disney, jjk (Jujutsu Kaisen), dc, gaming, tmnt (Teenage Mutant Ninja Turtles — use for any TMNT/Ninja Turtles figure), popcult (Pop Culture — use for: Stranger Things, Terminator, RoboCop, Escape from New York, They Live, Blade Runner, The Warriors, Big Trouble in Little China, Ghostbusters, Back to the Future, Pulp Fiction, Breaking Bad, The Office, Alien, Predator, Halloween, Friday the 13th, Nightmare on Elm Street, IT, The Thing, Hellraiser, Scream, Chucky, any horror franchise, any cult classic TV/film not covered by another fandom)';
+  const NECA_FANDOM_HINTS = 'NECA fandom mapping hints — TMNT/Ninja Turtles/Donatello/Leonardo/Raphael/Michelangelo: tmnt. Terminator/RoboCop/Escape from New York/They Live/Blade Runner: popcult. Alien/Predator/AVP/Halloween/Jason/Freddy/Pennywise/Chucky/Leatherface/horror franchise: popcult. Stranger Things: popcult. Star Wars: starwars. Marvel/Spider-Man/Wolverine/X-Men/Deadpool: marvel. DC/Batman/Joker: dc. My Hero Academia/MHA/Deku/Bakugo: anime. Jujutsu Kaisen/JJK/Gojo/Itadori: anime. Naruto/DBZ/Dragon Ball/Attack on Titan/Bleach: anime.';
   const CATEGORIES = 'funko, tcg, popmart, hottoys, neca, hwheels';
 
   const prompt = `You are a collectibles trend analyst. Evaluate these eBay listings to find specific, trackable collectible SKUs worth price monitoring.
 
 CATEGORIES: ${CATEGORIES}
 FANDOMS: ${FANDOMS}
+${NECA_FANDOM_HINTS}
 ALREADY TRACKED (skip): ${existingNames.slice(0, 40).join(' | ')}
 
 APPROVE an item if it is ALL of:

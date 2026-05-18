@@ -15,11 +15,11 @@ export const FANDOMS: Fandom[] = [
   { id: 'starwars',  label: 'Star Wars' },
   { id: 'pokemon',   label: 'Pokémon' },
   { id: 'marvel',    label: 'Marvel' },
-  { id: 'mha',       label: 'My Hero Academia' },
-  { id: 'stranger',  label: 'Stranger Things' },
+  { id: 'anime',     label: 'Anime' },
   { id: 'labubu',    label: 'Labubu' },
   { id: 'disney',    label: 'Disney' },
-  { id: 'jjk',       label: 'Jujutsu Kaisen' },
+  { id: 'tmnt',      label: 'TMNT' },
+  { id: 'popcult',   label: 'Pop Culture' },
 ];
 
 export const catById = (id: string): Category | undefined =>

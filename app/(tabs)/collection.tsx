@@ -16,6 +16,7 @@ import { useAppStore } from '@/stores/appStore';
 import { catById, fmtPrice } from '@/lib/appConfig';
 import { CollectionItemEnriched, UpgradeContext } from '@/lib/types';
 import AppHeader from '@/components/AppHeader';
+import IconButton from '@/components/IconButton';
 import Sparkline from '@/components/Sparkline';
 import UpgradeSheet from '@/components/UpgradeSheet';
 import { ProductThumb } from '@/components/ProductPlaceholder';
@@ -92,28 +93,26 @@ export default function CollectionScreen() {
         theme={theme}
         scrolled={scrolled}
         trailing={
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <Pressable
-              accessibilityRole="button"
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <IconButton
+              theme={theme}
               accessibilityLabel="Share collection"
               onPress={() => isPremium ? null : setUpgradeContext('share')}
-              style={{ padding: 4 }}
             >
-              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={theme.muted} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.muted} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <Path d="M12 16V4M8 8l4-4 4 4" />
                 <Path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6" />
               </Svg>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
+            </IconButton>
+            <IconButton
+              theme={theme}
               accessibilityLabel="Add item to collection"
               onPress={() => setAddOpen(true)}
-              style={{ padding: 4 }}
             >
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2.6} strokeLinecap="round">
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2.5} strokeLinecap="round">
                 <Path d="M12 5v14M5 12h14" />
               </Svg>
-            </Pressable>
+            </IconButton>
           </View>
         }
       />

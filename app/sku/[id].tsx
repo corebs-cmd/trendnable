@@ -533,7 +533,7 @@ export default function SKUDetailScreen() {
         }}>
           {/* Back button */}
           <IconButton theme={theme} onPress={() => router.back()} accessibilityLabel="Go back">
-            <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2.4} strokeLinecap="round">
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2.2} strokeLinecap="round">
               <Path d="M19 12H5M12 5l-7 7 7 7" />
             </Svg>
           </IconButton>
@@ -556,7 +556,7 @@ export default function SKUDetailScreen() {
                     opacity: filterIdx > 0 ? (pressed ? 0.5 : 1) : 0.3,
                   })}
                 >
-                  <Svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2.5} strokeLinecap="round">
+                  <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2.5} strokeLinecap="round">
                     <Path d="M15 18l-6-6 6-6" />
                   </Svg>
                 </Pressable>
@@ -576,7 +576,7 @@ export default function SKUDetailScreen() {
                     opacity: filterIdx < filterTotal - 1 ? (pressed ? 0.5 : 1) : 0.3,
                   })}
                 >
-                  <Svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2.5} strokeLinecap="round">
+                  <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2.5} strokeLinecap="round">
                     <Path d="M9 18l6-6-6-6" />
                   </Svg>
                 </Pressable>
@@ -586,7 +586,7 @@ export default function SKUDetailScreen() {
 
           {/* Share button */}
           <IconButton theme={theme} onPress={() => setShareOpen(true)} accessibilityLabel="Share this SKU">
-            <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
               <Path d="M12 16V4M8 8l4-4 4 4" />
               <Path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6" />
             </Svg>

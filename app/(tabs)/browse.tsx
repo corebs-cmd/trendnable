@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import Svg, { Path, Circle } from 'react-native-svg';
+import Svg, { Path, Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 
 import { useAppStore } from '@/stores/appStore';
 import { buildTheme, categoryColor } from '@/lib/theme';
@@ -62,7 +62,7 @@ export default function BrowseScreen() {
       const topSku = topSkuFor(hotSkus, mode === 'category' ? 'category' : 'fandom', g.id);
       const count = skuCountFor(hotSkus, mode === 'category' ? 'category' : 'fandom', g.id);
       return { group: g, topSku, count };
-    }).filter((x) => x.topSku);
+    });
   }, [hotSkus, mode, trimmedQuery]);
 
   const handleScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
@@ -194,12 +194,10 @@ export default function BrowseScreen() {
         ) : (
           <View style={{ paddingHorizontal: 20, flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
             {groups.map(({ group, topSku, count }) => {
-              if (!topSku) return null;
-              const c = categoryColor(topSku.category, isDark);
               return (
                 <Pressable
                   key={group.id}
-                  onPress={() => router.push(`/sku/${topSku.id}?filterKind=${mode}&filterId=${group.id}`)}
+                  onPress={() => router.push(`/catalog/${mode}/${group.id}`)}
                   style={({ pressed }) => ({
                     width: '47%',
                     backgroundColor: theme.surface, borderRadius: theme.radius,
@@ -209,20 +207,29 @@ export default function BrowseScreen() {
                   {/* Full-bleed logo in 1:1 */}
                   <View style={{ aspectRatio: 1, width: '100%', position: 'relative' }}>
                     <BrowseLogo id={group.id} label={group.label} />
-                    {/* Hot score pill */}
-                    <View style={{
-                      position: 'absolute', top: 8, right: 8,
-                      backgroundColor: isDark ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.88)',
-                      borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4,
-                      flexDirection: 'row', alignItems: 'center', gap: 4,
-                    }}>
-                      <Svg width={10} height={10} viewBox="0 0 12 12" fill={theme.gold}>
-                        <Path d="M6 1.5l1.5 3 3 .4-2.2 2 .6 3.1L6 8.5 3.1 10l.6-3.1L1.5 4.9l3-.4z" />
-                      </Svg>
-                      <Text style={{ fontFamily: theme.fontMonoBold, fontSize: 11, color: theme.text }}>
-                        {topSku.hot}
-                      </Text>
-                    </View>
+                    {/* Hot score pill — only when SKUs exist */}
+                    {topSku && (
+                      <View style={{
+                        position: 'absolute', top: 8, right: 8,
+                        backgroundColor: isDark ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.88)',
+                        borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4,
+                        flexDirection: 'row', alignItems: 'center', gap: 4,
+                      }}>
+                        <Svg width={10} height={10} viewBox="0 0 16 16">
+                          <Defs>
+                            <LinearGradient id="flameGrad" x1="0" y1="1" x2="0" y2="0">
+                              <Stop offset="0" stopColor="#FFCC00" />
+                              <Stop offset="0.5" stopColor="#FF6B00" />
+                              <Stop offset="1" stopColor="#FF2D00" />
+                            </LinearGradient>
+                          </Defs>
+                          <Path d="M8 16c3.314 0 6-2 6-5.5 0-1.5-.5-4-2.5-6 .25 1.5-1.25 2-1.25 2C11 4 9 .5 6 0c.357 2 .5 4-2 6-1.25 1-2 2.729-2 4.5C2 14 4.686 16 8 16z" fill="url(#flameGrad)" />
+                        </Svg>
+                        <Text style={{ fontFamily: theme.fontMonoBold, fontSize: 11, color: theme.text }}>
+                          {topSku.hot}
+                        </Text>
+                      </View>
+                    )}
                   </View>
 
                   {/* Footer */}
@@ -234,7 +241,7 @@ export default function BrowseScreen() {
                       <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11.5, color: theme.muted }}>
                         {count} tracked
                       </Text>
-                      <DeltaPill delta={topSku.delta} theme={theme} size="sm" />
+                      {topSku && <DeltaPill delta={topSku.delta} theme={theme} size="sm" />}
                     </View>
                   </View>
                 </Pressable>

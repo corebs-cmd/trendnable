@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, Image } from 'react-native';
 import Svg, {
   Path, Circle, Rect, G, Ellipse, Line, Polygon, Text as SvgText,
 } from 'react-native-svg';
@@ -70,30 +70,14 @@ function LogoPopmart() {
   );
 }
 
-// Hot Toys — Iron Man-style helmet face (what Hot Toys is most famous for)
+// Hot Toys — clean circular badge, stacked HOT / TOYS
 function LogoHottoys() {
   return (
-    <Svg viewBox="0 0 100 100" width="70%" height="70%">
-      {/* helmet outer shell */}
-      <Path d="M50 6 Q82 10 88 34 L86 68 Q82 88 50 94 Q18 88 14 68 L12 34 Q18 10 50 6 Z" fill="#C0C0C0" opacity={0.92} />
-      {/* forehead panel */}
-      <Path d="M50 10 Q76 14 80 32 L72 32 Q66 18 50 16 Q34 18 28 32 L20 32 Q24 14 50 10 Z" fill="#E8E8E8" opacity={0.85} />
-      {/* left eye glow */}
-      <Path d="M20 40 L34 36 L38 44 L24 50 Z" fill="#FFD700" opacity={0.95} />
-      {/* right eye glow */}
-      <Path d="M80 40 L66 36 L62 44 L76 50 Z" fill="#FFD700" opacity={0.95} />
-      {/* nose bridge */}
-      <Rect x={46} y={44} width={8} height={18} rx={2} fill="#A0A0A0" opacity={0.7} />
-      {/* mouth grille */}
-      <Path d="M30 68 Q50 62 70 68 L68 78 Q50 84 32 78 Z" fill="#888888" opacity={0.8} />
-      {/* grille lines */}
-      <Line x1={36} y1={70} x2={34} y2={77} stroke="#5C0A14" strokeWidth={1.5} opacity={0.5} />
-      <Line x1={44} y1={68} x2={43} y2={77} stroke="#5C0A14" strokeWidth={1.5} opacity={0.5} />
-      <Line x1={50} y1={67} x2={50} y2={77} stroke="#5C0A14" strokeWidth={1.5} opacity={0.5} />
-      <Line x1={56} y1={68} x2={57} y2={77} stroke="#5C0A14" strokeWidth={1.5} opacity={0.5} />
-      <Line x1={64} y1={70} x2={66} y2={77} stroke="#5C0A14" strokeWidth={1.5} opacity={0.5} />
-      {/* chin piece */}
-      <Path d="M32 78 Q50 86 68 78 Q66 90 50 94 Q34 90 32 78 Z" fill="#B0B0B0" opacity={0.85} />
+    <Svg viewBox="0 0 100 100" width="76%" height="76%">
+      <Circle cx={50} cy={50} r={44} fill="#FFFFFF" opacity={0.95} />
+      <SvgText x={50} y={46} textAnchor="middle" fontFamily="Inter_700Bold" fontSize={22} fontWeight="900" fill="#5C0A14" letterSpacing={2}>HOT</SvgText>
+      <Line x1={22} y1={52} x2={78} y2={52} stroke="#5C0A14" strokeWidth={1.5} opacity={0.2} />
+      <SvgText x={50} y={68} textAnchor="middle" fontFamily="Inter_700Bold" fontSize={22} fontWeight="900" fill="#5C0A14" letterSpacing={2}>TOYS</SvgText>
     </Svg>
   );
 }
@@ -343,6 +327,130 @@ function LogoGaming() {
   );
 }
 
+// Anime — DBZ-style protagonist: golden spiky upward hair + large expressive eyes
+function LogoAnime() {
+  return (
+    <Svg viewBox="0 0 100 100" width="72%" height="72%">
+      {/* ── hair glow aura ── */}
+      <Ellipse cx={50} cy={30} rx={40} ry={34} fill="#FFD700" opacity={0.18} />
+      {/* ── hair base mass ── */}
+      <Path d="M14 46 Q12 22 22 13 Q32 4 50 2 Q68 4 78 13 Q88 22 86 46 Z" fill="#F0C800" />
+      {/* ── spikes pointing upward (classic DBZ/Naruto protagonist) ── */}
+      {/* far-left spike */}
+      <Path d="M16 38 L6 12 L24 32 Z" fill="#F0C800" />
+      {/* left-mid spike */}
+      <Path d="M28 22 L22 0 L38 18 Z" fill="#F0C800" />
+      {/* center spike — tallest */}
+      <Path d="M50 14 L45 0 L55 0 L50 14 Z" fill="#FFE040" />
+      {/* right-mid spike */}
+      <Path d="M72 22 L78 0 L62 18 Z" fill="#F0C800" />
+      {/* far-right spike */}
+      <Path d="M84 38 L94 12 L76 32 Z" fill="#F0C800" />
+      {/* ── face ── */}
+      <Path d="M14 46 Q12 64 16 76 Q24 98 50 100 Q76 98 84 76 Q88 64 86 46 Z" fill="#FFDDB0" />
+      {/* jaw shadow */}
+      <Ellipse cx={50} cy={90} rx={22} ry={8} fill="#E8B888" opacity={0.45} />
+      {/* ── eyebrows — thick, angled, determined ── */}
+      <Path d="M20 56 Q30 51 40 54" stroke="#A07420" strokeWidth={3} fill="none" strokeLinecap="round" />
+      <Path d="M80 56 Q70 51 60 54" stroke="#A07420" strokeWidth={3} fill="none" strokeLinecap="round" />
+      {/* ── left eye ── */}
+      <Ellipse cx={31} cy={66} rx={11} ry={13} fill="#FFFFFF" />
+      <Circle cx={31} cy={66} r={8} fill="#1C42DD" />
+      <Circle cx={31} cy={66} r={5.2} fill="#0A0A1A" />
+      <Circle cx={27} cy={61} r={3} fill="#FFFFFF" opacity={0.95} />
+      <Circle cx={35} cy={63} r={1.4} fill="#FFFFFF" opacity={0.65} />
+      {/* ── right eye ── */}
+      <Ellipse cx={69} cy={66} rx={11} ry={13} fill="#FFFFFF" />
+      <Circle cx={69} cy={66} r={8} fill="#1C42DD" />
+      <Circle cx={69} cy={66} r={5.2} fill="#0A0A1A" />
+      <Circle cx={65} cy={61} r={3} fill="#FFFFFF" opacity={0.95} />
+      <Circle cx={73} cy={63} r={1.4} fill="#FFFFFF" opacity={0.65} />
+      {/* ── nose ── */}
+      <Path d="M46 80 Q50 84 54 80" stroke="#C09050" strokeWidth={1.5} fill="none" strokeLinecap="round" opacity={0.5} />
+      {/* ── determined smile ── */}
+      <Path d="M38 90 Q50 98 62 90" stroke="#C09050" strokeWidth={2} fill="none" strokeLinecap="round" opacity={0.55} />
+    </Svg>
+  );
+}
+
+// TMNT — shoulders-up: shell collar, blue bandana mask, eyes through holes, toothy grin
+function LogoTmnt() {
+  return (
+    <Svg viewBox="0 0 100 100" width="80%" height="80%">
+      {/* ── brown shell collar at shoulders ── */}
+      <Ellipse cx={50} cy={96} rx={48} ry={13} fill="#7A4E2A" />
+      <Path d="M4 94 L12 88 L20 94 L20 102 L12 108 L4 102 Z" fill="#5E3614" opacity={0.7} />
+      <Path d="M22 91 L30 85 L38 91 L38 99 L30 105 L22 99 Z" fill="#5E3614" opacity={0.7} />
+      <Path d="M40 90 L48 84 L56 90 L56 98 L48 104 L40 98 Z" fill="#5E3614" opacity={0.7} />
+      <Path d="M58 91 L66 85 L74 91 L74 99 L66 105 L58 99 Z" fill="#5E3614" opacity={0.7} />
+      <Path d="M76 94 L84 88 L92 94 L92 102 L84 108 L76 102 Z" fill="#5E3614" opacity={0.7} />
+      {/* ── neck ── */}
+      <Rect x={37} y={76} width={26} height={18} rx={3} fill="#52AE36" />
+      {/* ── head ── */}
+      <Ellipse cx={50} cy={46} rx={40} ry={42} fill="#52AE36" />
+      {/* face shading */}
+      <Ellipse cx={50} cy={58} rx={28} ry={20} fill="#3A9020" opacity={0.25} />
+      {/* ── blue bandana mask ── */}
+      <Rect x={9} y={28} width={82} height={30} rx={5} fill="#1C42CC" />
+      {/* top sheen */}
+      <Rect x={9} y={28} width={82} height={11} rx={5} fill="#4468EE" opacity={0.4} />
+      {/* center knot */}
+      <Ellipse cx={50} cy={43} rx={11} ry={8} fill="#0E2B99" />
+      <Ellipse cx={50} cy={41} rx={8} ry={5} fill="#2E52CC" opacity={0.55} />
+      {/* tail 1 — upper-right */}
+      <Path d="M91 32 L102 20 L106 28 L94 38 Z" fill="#122A99" />
+      {/* tail 2 — lower-right */}
+      <Path d="M91 54 L106 64 L102 70 L88 60 Z" fill="#122A99" />
+      {/* ── eyes visible through mask holes ── */}
+      <Ellipse cx={31} cy={40} rx={13} ry={12} fill="#FFFFFF" />
+      <Circle cx={32} cy={40} r={8} fill="#141414" />
+      <Circle cx={28} cy={36} r={3.2} fill="#FFFFFF" opacity={0.88} />
+      <Ellipse cx={69} cy={40} rx={13} ry={12} fill="#FFFFFF" />
+      <Circle cx={70} cy={40} r={8} fill="#141414" />
+      <Circle cx={66} cy={36} r={3.2} fill="#FFFFFF" opacity={0.88} />
+      {/* ── nostrils ── */}
+      <Circle cx={45} cy={66} r={2.8} fill="#2E7A18" />
+      <Circle cx={55} cy={66} r={2.8} fill="#2E7A18" />
+      {/* ── wide toothy grin ── */}
+      <Path d="M26 74 Q50 88 74 74 L72 80 Q50 96 28 80 Z" fill="#2E7A18" />
+      <Path d="M30 75 L32 83 L38 75 L44 83 L50 75 L56 83 L62 75 L68 83 L70 75" fill="#FFFFFF" opacity={0.82} />
+    </Svg>
+  );
+}
+
+// Pop Culture — retro CRT TV with antennas
+function LogoPopcult() {
+  return (
+    <Svg viewBox="0 0 100 100" width="78%" height="78%">
+      {/* left antenna */}
+      <Line x1={34} y1={8} x2={24} y2={28} stroke="#FFFFFF" strokeWidth={3.5} strokeLinecap="round" opacity={0.9} />
+      {/* right antenna */}
+      <Line x1={66} y1={8} x2={76} y2={28} stroke="#FFFFFF" strokeWidth={3.5} strokeLinecap="round" opacity={0.9} />
+      {/* antenna tip dots */}
+      <Circle cx={34} cy={7} r={3} fill="#FFFFFF" opacity={0.9} />
+      <Circle cx={66} cy={7} r={3} fill="#FFFFFF" opacity={0.9} />
+      {/* TV body */}
+      <Rect x={8} y={24} width={84} height={62} rx={10} fill="#FFFFFF" opacity={0.92} />
+      {/* screen bezel */}
+      <Rect x={14} y={30} width={60} height={44} rx={6} fill="#1A1A2E" />
+      {/* screen glow — slight scanline look */}
+      <Rect x={14} y={30} width={60} height={44} rx={6} fill="#0055CC" opacity={0.15} />
+      {/* screen content — classic static/signal lines */}
+      <Line x1={18} y1={42} x2={70} y2={42} stroke="#FFFFFF" strokeWidth={1.5} opacity={0.25} />
+      <Line x1={18} y1={50} x2={70} y2={50} stroke="#FFFFFF" strokeWidth={1.5} opacity={0.25} />
+      <Line x1={18} y1={58} x2={70} y2={58} stroke="#FFFFFF" strokeWidth={1.5} opacity={0.25} />
+      {/* play/star icon on screen */}
+      <Path d="M38 44 L38 62 L58 53 Z" fill="#FFFFFF" opacity={0.88} />
+      {/* right side controls */}
+      <Circle cx={84} cy={44} r={4} fill="#CCCCCC" opacity={0.7} />
+      <Circle cx={84} cy={56} r={4} fill="#CCCCCC" opacity={0.7} />
+      {/* TV base / stand */}
+      <Rect x={36} y={86} width={28} height={6} rx={3} fill="#DDDDDD" opacity={0.8} />
+      <Rect x={30} y={92} width={40} height={4} rx={2} fill="#DDDDDD" opacity={0.7} />
+    </Svg>
+  );
+}
+
 // ── Logo registry ─────────────────────────────────────────────────────────────
 
 type LogoEntry = { bg: string; component: React.ReactNode };
@@ -360,13 +468,31 @@ const LOGOS: Record<string, LogoEntry> = {
   pokemon:  { bg: '#FFCB05', component: <LogoPokemon /> },
   marvel:   { bg: '#EC1D24', component: <LogoMarvel /> },
   mha:      { bg: '#1B3A6B', component: <LogoMha /> },
+  anime:    { bg: '#0D0B2E', component: <LogoAnime /> },
   stranger: { bg: '#0A0A0A', component: <LogoStranger /> },
+  tmnt:     { bg: '#1A5C08', component: <LogoTmnt /> },
   labubu:   { bg: '#F5C0C0', component: <LogoLabubu /> },
   disney:   { bg: '#00007A', component: <LogoDisney /> },
   jjk:      { bg: '#0D0D0D', component: <LogoJjk /> },
   dc:       { bg: '#0074E8', component: <LogoDc /> },
   horror:   { bg: '#1A0000', component: <LogoHorror /> },
   gaming:   { bg: '#107C10', component: <LogoGaming /> },
+  popcult:  { bg: '#0E1B35', component: <LogoPopcult /> },
+};
+
+// ── Static fandom images (require paths must be literals) ─────────────────────
+
+const FANDOM_IMAGES: Record<string, any> = {
+  anime:    require('../assets/fandoms/anime.png'),
+  demon:    require('../assets/fandoms/demon.png'),
+  labubu:   require('../assets/fandoms/labubu.png'),
+  marvel:   require('../assets/fandoms/marvel.png'),
+  onepiece: require('../assets/fandoms/onepiece.png'),
+  pokemon:  require('../assets/fandoms/pokemon.png'),
+  popcult:  require('../assets/fandoms/popcult.png'),
+  starwars: require('../assets/fandoms/starwars.png'),
+  tmnt:     require('../assets/fandoms/tmnt.png'),
+  disney:   require('../assets/fandoms/disney.png'),
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -377,8 +503,21 @@ interface BrowseLogoProps {
 }
 
 export default function BrowseLogo({ id, label }: BrowseLogoProps) {
+  const image = FANDOM_IMAGES[id];
   const entry = LOGOS[id];
   const bg = entry?.bg ?? '#1E2D45';
+
+  if (image) {
+    return (
+      <View style={{ width: '100%', aspectRatio: 1, backgroundColor: bg }}>
+        <Image
+          source={image}
+          style={{ width: '100%', height: '100%' }}
+          resizeMode="cover"
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={{

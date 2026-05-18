@@ -32,7 +32,10 @@ const FUNKO_SEARCHES = [
   'Funko Pop diamond chrome translucent pearlescent rare',
   'Funko Pop 1000 pcs limited sticker rare',
   // Fandom grails & exclusives
-  'Funko Pop anime rare exclusive One Piece Demon Slayer',
+  'Funko Pop One Piece rare exclusive chase grail',
+  'Funko Pop Demon Slayer rare exclusive chase grail',
+  'Funko Pop anime MHA My Hero Academia JJK Naruto Dragon Ball rare exclusive',
+  'Funko Pop TMNT Teenage Mutant Ninja Turtles rare exclusive',
   'Funko Pop horror rare exclusive Halloween vaulted',
   'Funko Pop Marvel rare exclusive chase variant grail',
   'Funko Pop Disney rare exclusive vaulted retired',
@@ -83,7 +86,7 @@ async function classifyWithClaude(
   items: any[],
   existingNames: string[]
 ): Promise<{ candidates: any[]; inputTokens: number; outputTokens: number }> {
-  const FANDOMS = 'onepiece, demon (Demon Slayer), starwars, pokemon, marvel, mha (My Hero Academia), stranger (Stranger Things), labubu, disney, jjk (Jujutsu Kaisen), dc, horror, gaming';
+  const FANDOMS = 'onepiece (One Piece only), demon (Demon Slayer only), starwars, pokemon, marvel, anime (My Hero Academia/MHA, Jujutsu Kaisen/JJK, Naruto, Dragon Ball/DBZ, Attack on Titan, Bleach, or any other anime not covered by onepiece/demon), labubu, disney, jjk (Jujutsu Kaisen), dc, gaming, tmnt (Teenage Mutant Ninja Turtles — use for any TMNT/Ninja Turtles Funko Pop), popcult (Pop Culture: Stranger Things, Terminator, RoboCop, Ghostbusters, Back to the Future, Alien, Predator, Halloween, Friday 13th, Nightmare on Elm Street, IT, any horror franchise, cult classics, movies & shows)';
 
   const prompt = `You are a Funko Pop grail specialist and price tracker. Evaluate these eBay listings to find specific, trackable Funko Pop figures worth monitoring — including exclusives, rare variants, and community grails.
 
@@ -194,15 +197,19 @@ serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
-    // Load existing Funko names to avoid duplicates
+    // Load existing Funko names + pop numbers to avoid duplicates
     const [{ data: existingSkus }, { data: existingCandidates }] = await Promise.all([
-      supabase.from('skus').select('name').eq('category_id', 'funko'),
+      supabase.from('skus').select('name, pop_number').eq('category_id', 'funko'),
       supabase.from('discovery_candidates').select('name').eq('category_id', 'funko').in('status', ['new', 'approved']),
     ]);
     const existingNames: string[] = [
       ...(existingSkus ?? []).map((s: any) => s.name as string),
       ...(existingCandidates ?? []).map((c: any) => c.name as string),
     ];
+    // Set of pop numbers already tracked — used to skip same-number variants
+    const existingPopNumbers = new Set<number>(
+      (existingSkus ?? []).map((s: any) => s.pop_number).filter(Boolean)
+    );
 
     const ebayToken = await getEbayToken();
 
@@ -230,13 +237,21 @@ serve(async (req) => {
       }
     }
 
-    // Pre-filter: drop titles that match existing tracked Funko names
+    // Pre-filter: drop titles that match existing tracked Funko names or pop numbers
     const existingTokens = existingNames.map((n) =>
       n.toLowerCase().replace(/\[#\d+\]/g, '').trim().split(' ').slice(0, 3).join(' ')
     );
     const filtered = allItems.filter((item) => {
       const title = (item.title ?? '').toLowerCase();
-      return !existingTokens.some((token) => token.length > 4 && title.includes(token));
+      // Drop if title matches an existing name token
+      if (existingTokens.some((token) => token.length > 4 && title.includes(token))) return false;
+      // Drop if title contains a pop number we already track (e.g. "874", "#874")
+      const popMatch = title.match(/#?(\d{3,5})\b/);
+      if (popMatch) {
+        const n = parseInt(popMatch[1]);
+        if (existingPopNumbers.has(n)) return false;
+      }
+      return true;
     });
 
     // Classify with Claude in batches of 20
@@ -260,17 +275,28 @@ serve(async (req) => {
     let inserted = 0;
     let autoPromoted = 0;
     let rejected = 0;
+    // Track pop numbers seen in this batch to prevent within-batch duplicates
+    const batchPopNumbers = new Set<number>(existingPopNumbers);
 
     for (const c of candidates) {
       if (!c.name) continue;
 
       // Hard validation — Pop number must be present
-      const hasPopNumber = /\[#\d+\]/i.test(c.name);
-      if (!hasPopNumber) {
+      const popMatch = c.name.match(/\[#(\d+)\]/i);
+      if (!popMatch) {
         console.log(`Rejected — no Pop number in name: ${c.name}`);
         rejected++;
         continue;
       }
+
+      // Reject if this Pop number is already tracked (existing SKU or earlier in this batch)
+      const popNum = parseInt(popMatch[1]);
+      if (batchPopNumbers.has(popNum)) {
+        console.log(`Rejected — duplicate Pop number #${popNum}: ${c.name}`);
+        rejected++;
+        continue;
+      }
+      batchPopNumbers.add(popNum);
 
       const meetsThreshold = Number(c.price_median ?? 0) > 15 && !!c.fandom_id;
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, View, Text, StyleSheet } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { Theme } from '@/lib/theme';
 import { SKU, CardDensity } from '@/lib/types';
 import { catById, fandomById, fmtPriceRange } from '@/lib/appConfig';
@@ -38,11 +38,18 @@ function HeroCard({ sku, theme, onPress, onLongPress }: SKUCardProps) {
     >
       {/* Eyebrow row */}
       <View style={styles.eyebrowRow}>
-        <View style={[styles.topFindPill, { backgroundColor: theme.gold }]}>
-          <Svg width={9} height={9} viewBox="0 0 12 12" fill={theme.goldInk}>
-            <Path d="M6 1.5l1.5 3 3 .4-2.2 2 .6 3.1L6 8.5 3.1 10l.6-3.1L1.5 4.9l3-.4z" />
+        <View style={[styles.topFindPill, { backgroundColor: '#7B1212' }]}>
+          <Svg width={9} height={9} viewBox="0 0 16 16">
+            <Defs>
+              <LinearGradient id="topFindFlameGrad" x1="0" y1="1" x2="0" y2="0">
+                <Stop offset="0" stopColor="#FFCC00" />
+                <Stop offset="0.5" stopColor="#FF6B00" />
+                <Stop offset="1" stopColor="#FF2D00" />
+              </LinearGradient>
+            </Defs>
+            <Path d="M8 16c3.314 0 6-2 6-5.5 0-1.5-.5-4-2.5-6 .25 1.5-1.25 2-1.25 2C11 4 9 .5 6 0c.357 2 .5 4-2 6-1.25 1-2 2.729-2 4.5C2 14 4.686 16 8 16z" fill="url(#topFindFlameGrad)" />
           </Svg>
-          <Text style={[styles.topFindText, { color: theme.goldInk }]}>TOP FIND</Text>
+          <Text style={[styles.topFindText, { color: '#FFFFFF' }]}>TOP FIND</Text>
         </View>
         <Text style={[styles.rankLabel, { color: theme.faint, fontFamily: theme.fontMonoBold }]}>
           NO. 01

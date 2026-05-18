@@ -12,6 +12,7 @@ import Svg, { Path } from 'react-native-svg';
 
 import { useAppStore } from '@/stores/appStore';
 import { buildTheme } from '@/lib/theme';
+import { getFeaturedSku } from '@/lib/featured';
 import { CATEGORIES } from '@/lib/appConfig';
 
 import AppHeader from '@/components/AppHeader';
@@ -82,9 +83,8 @@ export default function HotScreen() {
     }
   }, []);
 
-  const featuredSku = filtered.find((s) => s.isFeatured);
-  const hero = featuredSku ?? filtered[0];
-  const rest = filtered.filter((s) => s !== hero);
+  const hero = getFeaturedSku(filtered);
+  const rest = filtered.filter((s) => s.id !== hero?.id);
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
@@ -95,7 +95,7 @@ export default function HotScreen() {
         scrolled={scrolled}
         trailing={
           <IconButton theme={theme} onPress={() => setFilterSheetOpen(true)} accessibilityLabel="Open filters">
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2} strokeLinecap="round">
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2} strokeLinecap="round">
               <Path d="M3 6h18M6 12h12M10 18h4" />
             </Svg>
           </IconButton>
