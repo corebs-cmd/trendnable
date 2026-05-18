@@ -26,6 +26,7 @@ const CONTEXT_MAP: Record<UpgradeContext, ContextData> = {
   publicProfile: { title: 'Go public',              sub: 'Let other collectors see (and buy from) your collection.' },
   forSale:       { title: 'Mark items for sale',    sub: 'Get reach from collectors browsing public profiles.' },
   feature:       { title: 'Trendnable Premium',     sub: 'The full picture of your collection.' },
+  priceAlerts:   { title: 'Set price alerts',       sub: 'Get notified the moment a watched item hits your target price.' },
 };
 
 const FEATURES = [

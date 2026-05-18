@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { CollectionItem, DBUser, DBCollectionItem, SKU } from './types';
+import { CollectionItem, DBUser, DBCollectionItem, SKU, PriceAlert, AppNotification } from './types';
 
 // ── Users ────────────────────────────────────────────────────────────────────
 
@@ -187,6 +187,67 @@ export async function fetchSkuHistory(
   };
 }
 
+// ── Price Alerts ──────────────────────────────────────────────────────────────
+
+export async function fetchPriceAlerts(userId: string): Promise<PriceAlert[]> {
+  const { data, error } = await supabase
+    .from('price_alerts')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) { console.error('fetchPriceAlerts:', error.message); return []; }
+  return (data ?? []).map(dbToPriceAlert);
+}
+
+export async function createPriceAlert(
+  userId: string,
+  skuId: string,
+  direction: 'above' | 'below',
+  targetPrice: number,
+): Promise<PriceAlert | null> {
+  const { data, error } = await supabase
+    .from('price_alerts')
+    .insert({ user_id: userId, sku_id: skuId, direction, target_price: targetPrice, is_active: true })
+    .select()
+    .single();
+  if (error) { console.error('createPriceAlert:', error.message); return null; }
+  return dbToPriceAlert(data);
+}
+
+export async function deletePriceAlert(alertId: string): Promise<void> {
+  const { error } = await supabase.from('price_alerts').delete().eq('id', alertId);
+  if (error) console.error('deletePriceAlert:', error.message);
+}
+
+export async function reactivatePriceAlert(alertId: string): Promise<void> {
+  const { error } = await supabase
+    .from('price_alerts')
+    .update({ is_active: true, triggered_at: null })
+    .eq('id', alertId);
+  if (error) console.error('reactivatePriceAlert:', error.message);
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+export async function fetchNotifications(userId: string): Promise<AppNotification[]> {
+  const { data, error } = await supabase
+    .from('in_app_notifications')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) { console.error('fetchNotifications:', error.message); return []; }
+  return (data ?? []).map(dbToNotification);
+}
+
+export async function markNotificationRead(notificationId: string): Promise<void> {
+  const { error } = await supabase
+    .from('in_app_notifications')
+    .update({ is_read: true })
+    .eq('id', notificationId);
+  if (error) console.error('markNotificationRead:', error.message);
+}
+
 // ── Mappers ───────────────────────────────────────────────────────────────────
 
 function rowToSku(row: Record<string, unknown>): SKU {
@@ -229,10 +290,36 @@ function rowToSku(row: Record<string, unknown>): SKU {
     popnbeats_url: (row.popnbeats_url as string) ?? undefined,
     isFeatured:         (row.is_featured          as boolean) ?? false,
     forceFeaturedUntil: (row.force_featured_until as string)  ?? null,
+    fandomIds:   Array.isArray(row.fandom_ids) ? (row.fandom_ids as string[]) : [],
     popNumber:   (row.pop_number as number) ?? undefined,
     cardVariant: (row.card_variant as SKU['cardVariant']) ?? undefined,
     cardGrader:  (row.card_grader  as string) ?? undefined,
     cardGrade:   (row.card_grade   as string) ?? undefined,
+  };
+}
+
+function dbToPriceAlert(row: Record<string, unknown>): PriceAlert {
+  return {
+    id:           row.id as string,
+    skuId:        row.sku_id as string,
+    direction:    row.direction as 'above' | 'below',
+    targetPrice:  Number(row.target_price),
+    isActive:     row.is_active as boolean,
+    triggeredAt:  (row.triggered_at as string) ?? null,
+    createdAt:    row.created_at as string,
+  };
+}
+
+function dbToNotification(row: Record<string, unknown>): AppNotification {
+  return {
+    id:        row.id as string,
+    type:      row.type as string,
+    skuId:     (row.sku_id as string) ?? null,
+    title:     row.title as string,
+    body:      row.body as string,
+    metadata:  (row.metadata as Record<string, unknown>) ?? {},
+    isRead:    row.is_read as boolean,
+    createdAt: row.created_at as string,
   };
 }
 

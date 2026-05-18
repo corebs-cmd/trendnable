@@ -51,6 +51,7 @@ export interface SKU {
   popnbeats_url?: string;
   isFeatured?: boolean;
   forceFeaturedUntil?: string | null;
+  fandomIds: string[];
   // Funko Pop only
   popNumber?: number;
   // Trading Cards only
@@ -139,7 +140,29 @@ export type UpgradeContext =
   | 'share'
   | 'publicProfile'
   | 'forSale'
-  | 'feature';
+  | 'feature'
+  | 'priceAlerts';
+
+export interface PriceAlert {
+  id: string;
+  skuId: string;
+  direction: 'above' | 'below';
+  targetPrice: number;
+  isActive: boolean;
+  triggeredAt: string | null;
+  createdAt: string;
+}
+
+export interface AppNotification {
+  id: string;
+  type: string;
+  skuId: string | null;
+  title: string;
+  body: string;
+  metadata: Record<string, unknown>;
+  isRead: boolean;
+  createdAt: string;
+}
 
 export type HotScoreViz = 'bar' | 'ring' | 'components' | 'spark';
 export type CardDensity = 'hero' | 'spacious' | 'medium' | 'cozy' | 'dense';

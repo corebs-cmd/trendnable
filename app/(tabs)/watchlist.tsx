@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import Svg, { Path } from 'react-native-svg';
 
 import { buildTheme } from '@/lib/theme';
 import { useAppStore } from '@/stores/appStore';
@@ -15,21 +16,28 @@ import { SKU, UpgradeContext } from '@/lib/types';
 import AppHeader from '@/components/AppHeader';
 import UpgradeSheet from '@/components/UpgradeSheet';
 import SKUCard from '@/components/SKUCard';
+import PriceAlertSheet from '@/components/PriceAlertSheet';
+import NotificationsSheet from '@/components/NotificationsSheet';
 
 const FREE_CAP = 20;
 
 export default function WatchlistScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const isDark = useAppStore((s) => s.isDark);
-  const isPremium = useAppStore((s) => s.isPremium);
-  const storeWatchlist = useAppStore((s) => s.watchlist);
+  const isDark              = useAppStore((s) => s.isDark);
+  const isPremium           = useAppStore((s) => s.isPremium);
+  const storeWatchlist      = useAppStore((s) => s.watchlist);
   const removeFromWatchlist = useAppStore((s) => s.removeFromWatchlist);
-  const hotSkus = useAppStore((s) => s.hotSkus);
-  const theme = buildTheme(isDark);
+  const deleteAlertsForSku  = useAppStore((s) => s.deleteAlertsForSku);
+  const hotSkus             = useAppStore((s) => s.hotSkus);
+  const priceAlerts         = useAppStore((s) => s.priceAlerts);
+  const unreadCount         = useAppStore((s) => s.unreadCount);
+  const theme               = buildTheme(isDark);
 
-  const [scrolled, setScrolled] = useState(false);
+  const [scrolled, setScrolled]           = useState(false);
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
+  const [alertSkuId, setAlertSkuId]       = useState<string | null>(null);
+  const [notifOpen, setNotifOpen]         = useState(false);
 
   const watched: SKU[] = useMemo(() => {
     return storeWatchlist
@@ -38,11 +46,84 @@ export default function WatchlistScreen() {
       .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
   }, [storeWatchlist, hotSkus]);
 
+  const alertSku = useMemo(
+    () => watched.find((s) => s.id === alertSkuId),
+    [watched, alertSkuId]
+  );
+
   const watchCount = storeWatchlist.length;
+
+  const handleUnwatch = (sku: SKU) => {
+    const skuAlerts = priceAlerts.filter((a) => a.skuId === sku.id && a.isActive);
+    if (skuAlerts.length > 0) {
+      Alert.alert(
+        'Remove from watchlist',
+        `${sku.name} has ${skuAlerts.length} active price alert${skuAlerts.length !== 1 ? 's' : ''}. Removing will delete them.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove & delete alerts',
+            style: 'destructive',
+            onPress: () => {
+              deleteAlertsForSku(sku.id);
+              removeFromWatchlist(sku.id);
+            },
+          },
+        ]
+      );
+    } else {
+      Alert.alert(
+        'Remove from watchlist',
+        `Stop watching ${sku.name}?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Remove', style: 'destructive', onPress: () => removeFromWatchlist(sku.id) },
+        ]
+      );
+    }
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
-      <AppHeader title="Watchlist" theme={theme} scrolled={scrolled} />
+      <AppHeader
+        title="Watchlist"
+        theme={theme}
+        scrolled={scrolled}
+        trailing={
+          <Pressable
+            onPress={() => setNotifOpen(true)}
+            accessibilityLabel={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
+            style={({ pressed }) => ({
+              width: 36, height: 36, borderRadius: 999,
+              backgroundColor: unreadCount > 0 ? `${theme.premium}18` : theme.surface,
+              borderWidth: unreadCount > 0 ? 1 : 0,
+              borderColor: `${theme.premium}44`,
+              alignItems: 'center', justifyContent: 'center',
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none"
+              stroke={unreadCount > 0 ? theme.premium : theme.muted}
+              strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <Path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <Path d="M13.73 21a2 2 0 01-3.46 0" />
+            </Svg>
+            {unreadCount > 0 && (
+              <View style={{
+                position: 'absolute', top: -2, right: -2,
+                minWidth: 16, height: 16, borderRadius: 999,
+                backgroundColor: theme.premium,
+                alignItems: 'center', justifyContent: 'center',
+                paddingHorizontal: 3,
+              }}>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, color: theme.premiumInk }}>
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+        }
+      />
 
       <ScrollView
         contentContainerStyle={{ paddingBottom: insets.bottom + 100, paddingHorizontal: 20 }}
@@ -131,7 +212,6 @@ export default function WatchlistScreen() {
           </View>
         ) : (
           <>
-            {/* Section header */}
             <View style={{ marginBottom: 12 }}>
               <Text style={{
                 fontFamily: 'Inter_700Bold', fontSize: 11, color: theme.gold,
@@ -146,30 +226,57 @@ export default function WatchlistScreen() {
                 Movers
               </Text>
               <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginTop: 2 }}>
-                Sorted by absolute change
+                Sorted by absolute change · long-press to remove
               </Text>
             </View>
 
             <View style={{ gap: 10 }}>
-              {watched.map((sku) => (
-                <SKUCard
-                  key={sku.id}
-                  sku={sku}
-                  theme={theme}
-                  density="medium"
-                  onPress={() => router.push(`/sku/${sku.id}`)}
-                  onLongPress={() =>
-                    Alert.alert(
-                      'Remove from watchlist',
-                      `Stop watching ${sku.name}?`,
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: 'Remove', style: 'destructive', onPress: () => removeFromWatchlist(sku.id) },
-                      ]
-                    )
-                  }
-                />
-              ))}
+              {watched.map((sku) => {
+                const skuAlerts = priceAlerts.filter((a) => a.skuId === sku.id && a.isActive);
+                return (
+                  <View key={sku.id}>
+                    <SKUCard
+                      sku={sku}
+                      theme={theme}
+                      density="medium"
+                      onPress={() => router.push(`/sku/${sku.id}`)}
+                      onLongPress={() => handleUnwatch(sku)}
+                    />
+                    {/* Alert chips row */}
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 2, marginTop: 6 }}>
+                      {skuAlerts.map((alert) => (
+                        <View key={alert.id} style={{
+                          flexDirection: 'row', alignItems: 'center',
+                          backgroundColor: `${theme.premium}15`,
+                          borderWidth: 0.5, borderColor: `${theme.premium}40`,
+                          borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5,
+                        }}>
+                          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11.5, color: theme.premium }}>
+                            {alert.direction === 'above' ? '↑' : '↓'} ${alert.targetPrice.toFixed(0)}
+                          </Text>
+                        </View>
+                      ))}
+                      <Pressable
+                        onPress={() => setAlertSkuId(sku.id)}
+                        style={({ pressed }) => ({
+                          flexDirection: 'row', alignItems: 'center', gap: 4,
+                          backgroundColor: theme.surface2,
+                          borderWidth: 0.5, borderColor: theme.hairline,
+                          borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5,
+                          opacity: pressed ? 0.7 : 1,
+                        })}
+                      >
+                        <Svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={theme.faint} strokeWidth={2.5} strokeLinecap="round">
+                          <Path d="M12 5v14M5 12h14" />
+                        </Svg>
+                        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11.5, color: theme.muted }}>
+                          alert
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                );
+              })}
             </View>
           </>
         )}
@@ -181,6 +288,23 @@ export default function WatchlistScreen() {
         theme={theme}
         onClose={() => setUpgradeContext(null)}
         onConfirm={() => setUpgradeContext(null)}
+      />
+
+      {alertSku && (
+        <PriceAlertSheet
+          open={alertSkuId !== null}
+          sku={alertSku}
+          theme={theme}
+          onClose={() => setAlertSkuId(null)}
+          onUpgrade={() => { setAlertSkuId(null); setUpgradeContext('priceAlerts'); }}
+        />
+      )}
+
+      <NotificationsSheet
+        open={notifOpen}
+        theme={theme}
+        onClose={() => setNotifOpen(false)}
+        onNavigate={(skuId) => router.push(`/sku/${skuId}`)}
       />
     </View>
   );

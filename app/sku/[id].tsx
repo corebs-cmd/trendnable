@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   Linking,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,6 +31,7 @@ import IOSShareSheet from '@/components/IOSShareSheet';
 import AddToCollectionSheet from '@/components/AddToCollectionSheet';
 import ProductPlaceholder from '@/components/ProductPlaceholder';
 import UpgradeSheet from '@/components/UpgradeSheet';
+import PriceAlertSheet from '@/components/PriceAlertSheet';
 import { UpgradeContext } from '@/lib/types';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -159,7 +161,10 @@ export default function SKUDetailScreen() {
   const isPremium = useAppStore((s) => s.isPremium);
   const hotSkus = useAppStore((s) => s.hotSkus);
   const watching = useAppStore((s) => s.watchlist.includes(id ?? ''));
-  const inCollection = useAppStore((s) => s.collection.some((c) => c.skuId === (id ?? '')));
+  const collectionItem = useAppStore((s) => s.collection.find((c) => c.skuId === (id ?? '')));
+  const inCollection = !!collectionItem;
+  const removeFromCollection = useAppStore((s) => s.removeFromCollection);
+  const updateCollectionItem = useAppStore((s) => s.updateCollectionItem);
 
   const theme = buildTheme(isDark);
 
@@ -210,10 +215,15 @@ export default function SKUDetailScreen() {
   const fandom = sku ? fandomById(sku.fandom) : undefined;
   const c = sku ? categoryColor(sku.category, isDark) : undefined;
 
-  const [shareOpen, setShareOpen] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
-  const [historyWindow, setHistoryWindow] = useState<HistoryWindow>('30D');
+  const [shareOpen, setShareOpen]           = useState(false);
+  const [addOpen, setAddOpen]               = useState(false);
+  const [alertOpen, setAlertOpen]           = useState(false);
+  const [historyWindow, setHistoryWindow]   = useState<HistoryWindow>('30D');
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
+
+  const activeAlertCount = useAppStore((s) =>
+    s.priceAlerts.filter((a) => a.skuId === (id ?? '') && a.isActive).length
+  );
 
   const BOTTOM_BAR_H = 76 + insets.bottom;
   const NAV_H = insets.top + (Platform.OS === 'android' ? 8 : 0) + 52;
@@ -384,6 +394,109 @@ export default function SKUDetailScreen() {
             <StatBox label="Median age" value={`${sku.age}d`} theme={theme} />
           )}
         </View>
+
+        {/* ── Your position ── */}
+        {inCollection && collectionItem && (() => {
+          const myQty          = collectionItem.qty;
+          const myTotalCost    = collectionItem.purchased * myQty;
+          const myCurrentValue = sku.price.median * myQty;
+          const myPL           = myCurrentValue - myTotalCost;
+          const myPLPct        = myTotalCost > 0 ? (myPL / myTotalCost) * 100 : 0;
+          const myPLPos        = myPL >= 0;
+          return (
+            <View style={{ marginHorizontal: 20, marginTop: 12, backgroundColor: theme.surface, borderRadius: theme.radius, overflow: 'hidden' }}>
+              <View style={{
+                paddingHorizontal: 16, paddingVertical: 12,
+                flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                borderBottomWidth: 0.5, borderBottomColor: theme.hairline,
+              }}>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.muted, letterSpacing: 1.1, textTransform: 'uppercase' }}>
+                  Your position
+                </Text>
+                {myTotalCost > 0 && (
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ fontFamily: theme.fontMonoBold, fontSize: 16, color: myPLPos ? theme.pos : theme.neg, fontVariant: ['tabular-nums'] }}>
+                      {myPLPos ? '+' : ''}{fmtPrice(myPL)}
+                    </Text>
+                    <Text style={{ fontFamily: theme.fontMono, fontSize: 11, color: myPLPos ? theme.pos : theme.neg, marginTop: 1 }}>
+                      {myPLPos ? '+' : ''}{myPLPct.toFixed(1)}%
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <View style={{ flexDirection: 'row', padding: 14, gap: 0 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10.5, color: theme.muted, letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6 }}>Qty</Text>
+                  <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 17, color: theme.text, fontVariant: ['tabular-nums'] }}>×{myQty}</Text>
+                </View>
+                <View style={{ flex: 1, borderLeftWidth: 0.5, borderLeftColor: theme.hairline, paddingLeft: 14 }}>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10.5, color: theme.muted, letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6 }}>Paid</Text>
+                  <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 17, color: theme.text, fontVariant: ['tabular-nums'] }}>{fmtPrice(myTotalCost)}</Text>
+                </View>
+                <View style={{ flex: 1, borderLeftWidth: 0.5, borderLeftColor: theme.hairline, paddingLeft: 14 }}>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10.5, color: theme.muted, letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6 }}>Value</Text>
+                  <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 17, color: theme.premium, fontVariant: ['tabular-nums'] }}>{fmtPrice(myCurrentValue)}</Text>
+                </View>
+              </View>
+
+              {/* Action row */}
+              <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 14, paddingBottom: 14 }}>
+                <Pressable
+                  onPress={() => updateCollectionItem(collectionItem.skuId, { forSale: !collectionItem.forSale })}
+                  style={({ pressed }) => ({
+                    flex: 1, height: 38, borderRadius: theme.radius,
+                    backgroundColor: collectionItem.forSale ? `${theme.gold}22` : theme.surface2,
+                    alignItems: 'center', justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: collectionItem.forSale ? `${theme.gold}66` : 'transparent',
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12.5, color: collectionItem.forSale ? theme.gold : theme.muted }}>
+                    {collectionItem.forSale ? '✓ For sale' : 'List for sale'}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() =>
+                    Alert.alert('Mark as sold', `Remove ${sku.name} from your collection?`, [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Mark sold', onPress: () => removeFromCollection(collectionItem.skuId) },
+                    ])
+                  }
+                  style={({ pressed }) => ({
+                    flex: 1, height: 38, borderRadius: theme.radius,
+                    backgroundColor: theme.surface2,
+                    alignItems: 'center', justifyContent: 'center',
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12.5, color: theme.muted }}>
+                    Mark as sold
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() =>
+                    Alert.alert('Remove from collection', `Remove ${sku.name}?`, [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Remove', style: 'destructive', onPress: () => removeFromCollection(collectionItem.skuId) },
+                    ])
+                  }
+                  style={({ pressed }) => ({
+                    width: 38, height: 38, borderRadius: theme.radius,
+                    backgroundColor: theme.surface2,
+                    alignItems: 'center', justifyContent: 'center',
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                  accessibilityLabel="Remove from collection"
+                >
+                  <Svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={theme.neg} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <Path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
+                  </Svg>
+                </Pressable>
+              </View>
+            </View>
+          );
+        })()}
 
         {/* ── Why it's hot ── */}
         <SectionHeader title="Why it's hot" theme={theme} />
@@ -637,6 +750,41 @@ export default function SKUDetailScreen() {
           </Text>
         </Pressable>
 
+        {watching && (
+          <Pressable
+            onPress={() => isPremium ? setAlertOpen(true) : setUpgradeContext('priceAlerts')}
+            accessibilityLabel="Set price alert"
+            style={({ pressed }) => ({
+              width: 50, height: 50,
+              borderWidth: 1.5,
+              borderColor: activeAlertCount > 0 ? `${theme.premium}66` : theme.hairline,
+              backgroundColor: activeAlertCount > 0 ? `${theme.premium}12` : 'transparent',
+              borderRadius: RADIUS.button,
+              alignItems: 'center', justifyContent: 'center',
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none"
+              stroke={activeAlertCount > 0 ? theme.premium : theme.faint}
+              strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <Path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <Path d="M13.73 21a2 2 0 01-3.46 0" />
+            </Svg>
+            {activeAlertCount > 0 && (
+              <View style={{
+                position: 'absolute', top: 4, right: 4,
+                width: 14, height: 14, borderRadius: 999,
+                backgroundColor: theme.premium,
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 8, color: theme.premiumInk }}>
+                  {activeAlertCount}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+        )}
+
         <View style={{ flex: 1 }}>
           <PrimaryButton theme={theme} size="md" tone={inCollection ? 'soft' : 'accent'} full onPress={() => setAddOpen(true)}>
             {inCollection ? '✓ In Collection' : 'Add to Collection'}
@@ -668,6 +816,16 @@ export default function SKUDetailScreen() {
         onClose={() => setUpgradeContext(null)}
         onConfirm={() => setUpgradeContext(null)}
       />
+
+      {sku && (
+        <PriceAlertSheet
+          open={alertOpen}
+          sku={sku}
+          theme={theme}
+          onClose={() => setAlertOpen(false)}
+          onUpgrade={() => { setAlertOpen(false); setUpgradeContext('priceAlerts'); }}
+        />
+      )}
     </View>
   );
 }

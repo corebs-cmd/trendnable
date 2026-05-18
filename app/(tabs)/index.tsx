@@ -22,6 +22,8 @@ import SKUCard from '@/components/SKUCard';
 import Sheet from '@/components/Sheet';
 import FilterGroup from '@/components/FilterGroup';
 import PrimaryButton from '@/components/PrimaryButton';
+import NotificationBanner from '@/components/NotificationBanner';
+import NotificationsSheet from '@/components/NotificationsSheet';
 
 type SortBy = 'hot' | 'velocity' | 'price';
 
@@ -51,11 +53,12 @@ export default function HotScreen() {
   const retryLoadHotSkus = useAppStore((s) => s.retryLoadHotSkus);
   const theme = buildTheme(isDark);
 
-  const [sortBy, setSortBy] = useState<SortBy>('hot');
-  const [activeCats, setActiveCats] = useState<string[]>(['all']);
+  const [sortBy, setSortBy]           = useState<SortBy>('hot');
+  const [activeCats, setActiveCats]   = useState<string[]>(['all']);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
+  const [notifOpen, setNotifOpen]     = useState(false);
+  const [scrolled, setScrolled]       = useState(false);
+  const [refreshing, setRefreshing]   = useState(false);
 
   const filtered = useMemo(() => {
     let list = [...hotSkus];
@@ -115,6 +118,9 @@ export default function HotScreen() {
           />
         }
       >
+        {/* ── Price alert banner ───────────────────────────────────────── */}
+        <NotificationBanner theme={theme} onPress={() => setNotifOpen(true)} />
+
         {/* ── Date / context subheader ──────────────────────────────────── */}
         <View style={{ paddingHorizontal: 20, paddingBottom: 14 }}>
           <Text style={{
@@ -322,6 +328,13 @@ export default function HotScreen() {
           )}
         </View>
       </ScrollView>
+
+      <NotificationsSheet
+        open={notifOpen}
+        theme={theme}
+        onClose={() => setNotifOpen(false)}
+        onNavigate={(skuId) => router.push(`/sku/${skuId}`)}
+      />
 
       {/* ── Filter Sheet ─────────────────────────────────────────────────── */}
       <Sheet open={filterSheetOpen} onClose={() => setFilterSheetOpen(false)} theme={theme} title="Filters">
