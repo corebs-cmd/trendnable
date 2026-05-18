@@ -24,13 +24,17 @@ import BrowseLogo from '@/components/BrowseLogo';
 type BrowseMode = 'category' | 'fandom';
 
 function topSkuFor(skus: SKU[], filterKey: 'category' | 'fandom', id: string): SKU | undefined {
-  const list = skus.filter((s) => s[filterKey] === id);
+  const list = skus.filter((s) =>
+    filterKey === 'fandom' ? s.fandomIds.includes(id) : s.category === id
+  );
   if (list.length === 0) return undefined;
   return list.reduce((best, s) => (s.hot > best.hot ? s : best));
 }
 
 function skuCountFor(skus: SKU[], filterKey: 'category' | 'fandom', id: string): number {
-  return skus.filter((s) => s[filterKey] === id).length;
+  return skus.filter((s) =>
+    filterKey === 'fandom' ? s.fandomIds.includes(id) : s.category === id
+  ).length;
 }
 
 export default function BrowseScreen() {

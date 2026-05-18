@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Circle } from 'react-native-svg';
 
 import { buildTheme } from '@/lib/theme';
 import { useAppStore } from '@/stores/appStore';
@@ -33,6 +33,7 @@ export default function CollectionScreen() {
   const isPremium = useAppStore((s) => s.isPremium);
   const storeCollection = useAppStore((s) => s.collection);
   const removeFromCollection = useAppStore((s) => s.removeFromCollection);
+  const updateCollectionItem = useAppStore((s) => s.updateCollectionItem);
   const hotSkus = useAppStore((s) => s.hotSkus);
   const theme = buildTheme(isDark);
 
@@ -141,7 +142,7 @@ export default function CollectionScreen() {
               </Text>
             </View>
 
-            {isPremium ? (
+            {totalCost > 0 && (
               <View style={{ alignItems: 'flex-end', paddingTop: 4 }}>
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.muted, letterSpacing: 0.1 * 11, textTransform: 'uppercase', marginBottom: 4 }}>P&L</Text>
                 <Text style={{ fontFamily: theme.fontMonoBold, fontSize: 22, color: plPositive ? theme.pos : theme.neg, letterSpacing: -0.02 * 22, fontVariant: ['tabular-nums'] }}>
@@ -151,16 +152,6 @@ export default function CollectionScreen() {
                   {plPositive ? '+' : ''}{plPct.toFixed(1)}%
                 </Text>
               </View>
-            ) : (
-              <Pressable
-                onPress={() => setUpgradeContext('pl')}
-                style={{ backgroundColor: theme.premium, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, flexDirection: 'row', alignItems: 'center', gap: 6 }}
-              >
-                <Svg width={11} height={11} viewBox="0 0 12 12" fill={theme.premiumInk}>
-                  <Path d="M6 1.5l1.5 3 3 .4-2.2 2 .6 3.1L6 8.5 3.1 10l.6-3.1L1.5 4.9l3-.4z" />
-                </Svg>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: theme.premiumInk, letterSpacing: 0.02 * 12 }}>Unlock P&L</Text>
-              </Pressable>
             )}
           </View>
 
@@ -259,6 +250,7 @@ export default function CollectionScreen() {
           ) : (
             filteredItems.map((item) => {
               const plPos = item.pl >= 0;
+              const itemPlPct = item.cost > 0 ? (item.pl / item.cost) * 100 : 0;
               return (
                 <Pressable
                   key={item.skuId}
@@ -293,32 +285,48 @@ export default function CollectionScreen() {
                     <Text style={{ fontFamily: theme.fontMonoBold, fontSize: 15, color: theme.text, fontVariant: ['tabular-nums'], letterSpacing: -0.2 }}>
                       ${Math.round(item.current).toLocaleString()}
                     </Text>
-                    {isPremium ? (
+                    {item.cost > 0 && (
                       <Text style={{ fontFamily: theme.fontMono, fontSize: 12, color: plPos ? theme.pos : theme.neg, fontVariant: ['tabular-nums'] }}>
-                        {plPos ? '+' : ''}${Math.abs(Math.round(item.pl))}
+                        {plPos ? '+' : ''}${Math.abs(Math.round(item.pl))} ({plPos ? '+' : ''}{itemPlPct.toFixed(1)}%)
                       </Text>
-                    ) : (
-                      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.faint }}>◆ P&L</Text>
                     )}
                   </View>
                   <Pressable
                     onPress={() =>
                       Alert.alert(
-                        'Remove from collection',
-                        `Remove ${item.sku.name}?`,
+                        item.sku.name,
+                        undefined,
                         [
+                          {
+                            text: item.forSale ? 'Remove from sale listing' : 'List as for sale',
+                            onPress: () => updateCollectionItem(item.skuId, { forSale: !item.forSale }),
+                          },
+                          {
+                            text: 'Mark as sold',
+                            onPress: () => removeFromCollection(item.skuId),
+                          },
+                          {
+                            text: 'Remove from collection',
+                            style: 'destructive',
+                            onPress: () => removeFromCollection(item.skuId),
+                          },
                           { text: 'Cancel', style: 'cancel' },
-                          { text: 'Remove', style: 'destructive', onPress: () => removeFromCollection(item.skuId) },
                         ]
                       )
                     }
                     accessibilityRole="button"
-                    accessibilityLabel={`Remove ${item.sku.name} from collection`}
-                    style={({ pressed }) => ({ padding: 8, marginLeft: 2, opacity: pressed ? 0.5 : 1 })}
-                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                    accessibilityLabel={`Manage ${item.sku.name}`}
+                    style={({ pressed }) => ({
+                      width: 32, height: 32, marginLeft: 2,
+                      alignItems: 'center', justifyContent: 'center',
+                      opacity: pressed ? 0.4 : 1,
+                    })}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
                   >
-                    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={theme.faint} strokeWidth={2.5} strokeLinecap="round">
-                      <Path d="M18 6L6 18M6 6l12 12" />
+                    <Svg width={18} height={4} viewBox="0 0 18 4">
+                      <Circle cx={2} cy={2} r={1.7} fill={theme.faint} />
+                      <Circle cx={9} cy={2} r={1.7} fill={theme.faint} />
+                      <Circle cx={16} cy={2} r={1.7} fill={theme.faint} />
                     </Svg>
                   </Pressable>
                 </Pressable>

@@ -361,7 +361,14 @@ export default function AddToCollectionSheet({
 
           {/* Purchase price */}
           <View style={{ marginBottom: 20 }}>
-            <FieldLabel label="Purchase price" color={theme.faint} />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.faint, letterSpacing: 0.1 * 11, textTransform: 'uppercase' }}>
+                Purchase price
+              </Text>
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: priceNum <= 0 ? theme.neg : theme.faint }}>
+                {priceNum <= 0 ? 'Required' : '✓ set'}
+              </Text>
+            </View>
             <View
               style={{
                 flexDirection: 'row',
@@ -370,6 +377,8 @@ export default function AddToCollectionSheet({
                 borderRadius: RADIUS.card,
                 paddingHorizontal: 14,
                 height: 48,
+                borderWidth: 1,
+                borderColor: priceNum <= 0 ? theme.neg + '55' : 'transparent',
               }}
             >
               <Text
@@ -559,7 +568,7 @@ export default function AddToCollectionSheet({
             theme={theme}
             size="lg"
             onPress={handleConfirm}
-            disabled={!selected}
+            disabled={!selected || priceNum <= 0}
           >
             Add to collection
           </PrimaryButton>

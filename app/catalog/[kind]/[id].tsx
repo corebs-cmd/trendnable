@@ -36,8 +36,9 @@ export default function CatalogListScreen() {
     id ?? '';
 
   const filtered = useMemo(() => {
-    const key = kind === 'category' ? 'category' : 'fandom';
-    const list = hotSkus.filter((s) => s[key] === id);
+    const list = hotSkus.filter((s) =>
+      kind === 'category' ? s.category === id : s.fandomIds.includes(id ?? '')
+    );
     return [...list].sort((a, b) => {
       if (sortBy === 'velocity') return b.delta - a.delta;
       if (sortBy === 'price')    return b.price.median - a.price.median;
