@@ -24,9 +24,8 @@ export default function PriceAlertSheet({ open, sku, theme, onClose, onUpgrade }
   const isPremium        = useAppStore((s) => s.isPremium);
   const addPriceAlert    = useAppStore((s) => s.addPriceAlert);
   const removePriceAlert = useAppStore((s) => s.removePriceAlert);
-  const activeAlerts     = useAppStore((s) =>
-    s.priceAlerts.filter((a) => a.skuId === sku.id && a.isActive)
-  );
+  const allAlerts        = useAppStore((s) => s.priceAlerts);
+  const activeAlerts     = allAlerts.filter((a) => a.skuId === sku.id && a.isActive);
 
   const [direction, setDirection]               = useState<'above' | 'below'>('below');
   const [customInput, setCustomInput]           = useState('');

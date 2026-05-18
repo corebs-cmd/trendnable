@@ -14,9 +14,10 @@ interface Props {
 }
 
 export default function NotificationsSheet({ open, theme, onClose, onNavigate }: Props) {
-  const notifications      = useAppStore((s) => s.notifications.filter((n) => !n.isRead));
+  const allNotifications   = useAppStore((s) => s.notifications);
   const markRead           = useAppStore((s) => s.markNotificationRead);
   const reactivateAlert    = useAppStore((s) => s.reactivatePriceAlert);
+  const notifications      = allNotifications.filter((n) => !n.isRead);
 
   const handleKeepActive = (n: AppNotification) => {
     const alertId = n.metadata.alert_id as string | undefined;
