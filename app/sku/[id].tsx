@@ -351,6 +351,35 @@ export default function SKUDetailScreen() {
                   : `Graded${sku.cardGrader ? ` · ${sku.cardGrader}` : ''}${sku.cardGrade ? ` ${sku.cardGrade}` : ''}`}
               </Chip>
             )}
+            {/* U4 — Exclusive / variant badge */}
+            {sku.exclusiveType && (() => {
+              const BADGE: Record<string, { label: string; bg: string }> = {
+                chase:       { label: 'Chase',          bg: '#F97316' },
+                grail:       { label: 'Grail',          bg: '#F97316' },
+                gitd:        { label: 'GITD',           bg: '#16A34A' },
+                flocked:     { label: 'Flocked',        bg: '#78350F' },
+                sdcc:        { label: 'SDCC',           bg: '#7C3AED' },
+                convention:  { label: 'Con Exclusive',  bg: '#7C3AED' },
+                limited:     { label: 'LE',             bg: '#D97706' },
+                rare_variant:{ label: 'Rare Variant',   bg: '#4338CA' },
+                vaulted:     { label: 'Vaulted',        bg: '#E11D48' },
+                htf:         { label: 'HTF',            bg: '#E11D48' },
+                retailer:    { label: 'Store Exclusive',bg: '#1D4ED8' },
+                signed:      { label: 'Signed',         bg: '#475569' },
+              };
+              const b = BADGE[sku.exclusiveType];
+              if (!b) return null;
+              return (
+                <View style={{
+                  height: 36, paddingHorizontal: 14, borderRadius: 999,
+                  backgroundColor: b.bg, alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#FFFFFF' }}>
+                    {b.label}
+                  </Text>
+                </View>
+              );
+            })()}
           </View>
         </View>
 
@@ -387,13 +416,85 @@ export default function SKUDetailScreen() {
         </View>
 
         {/* ── Stats grid ── */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 12, flexDirection: 'row', gap: 8 }}>
-          <StatBox label="Median"   value={fmtPrice(sku.price.median)} theme={theme} valueColor={theme.premium} />
-          <StatBox label="Listings" value={String(sku.listings)}       theme={theme} />
-          {sku.age >= 1 && (
-            <StatBox label="Median age" value={`${sku.age}d`} theme={theme} />
-          )}
-        </View>
+        {(() => {
+          const totalSoldCount = (sku.priceMintCount ?? 0) + (sku.priceLooseCount ?? 0);
+          const salesLabel = totalSoldCount > 0 ? 'Recent Sales' : 'Listings';
+          const salesValue = totalSoldCount > 0 ? totalSoldCount : sku.listings;
+          return (
+            <View style={{ paddingHorizontal: 20, paddingTop: 12, flexDirection: 'row', gap: 8 }}>
+              <StatBox label="Median"    value={fmtPrice(sku.price.median)} theme={theme} valueColor={theme.premium} />
+              <StatBox label={salesLabel} value={String(salesValue)}         theme={theme} />
+              {sku.age >= 1 && (
+                <StatBox label="Days tracked" value={`${sku.age}d`} theme={theme} />
+              )}
+            </View>
+          );
+        })()}
+
+        {/* ── U2: Condition breakdown ── */}
+        {((sku.priceMint != null && (sku.priceMintCount ?? 0) >= 2) ||
+          (sku.priceLoose != null && (sku.priceLooseCount ?? 0) >= 2)) && (
+          <View style={{
+            marginHorizontal: 20, marginTop: 8,
+            backgroundColor: theme.surface, borderRadius: theme.radius, overflow: 'hidden',
+          }}>
+            <View style={{
+              paddingHorizontal: 16, paddingVertical: 10,
+              borderBottomWidth: 0.5, borderBottomColor: theme.hairline,
+            }}>
+              <Text style={{
+                fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.muted,
+                letterSpacing: 1.1, textTransform: 'uppercase',
+              }}>
+                Condition breakdown
+              </Text>
+            </View>
+            {sku.priceMint != null && (sku.priceMintCount ?? 0) >= 2 && (
+              <View style={{
+                flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                paddingHorizontal: 16, paddingVertical: 13,
+                borderBottomWidth: sku.priceLoose != null && (sku.priceLooseCount ?? 0) >= 2 ? 0.5 : 0,
+                borderBottomColor: theme.hairline,
+              }}>
+                <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: theme.text }}>
+                  Mint / Complete
+                </Text>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{
+                    fontFamily: 'JetBrainsMono_700Bold', fontSize: 15, color: theme.text,
+                    fontVariant: ['tabular-nums'],
+                  }}>
+                    {fmtPrice(sku.priceMint)}
+                  </Text>
+                  <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: theme.muted }}>
+                    {sku.priceMintCount} sales
+                  </Text>
+                </View>
+              </View>
+            )}
+            {sku.priceLoose != null && (sku.priceLooseCount ?? 0) >= 2 && (
+              <View style={{
+                flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                paddingHorizontal: 16, paddingVertical: 13,
+              }}>
+                <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: theme.muted }}>
+                  Loose / OOB
+                </Text>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{
+                    fontFamily: 'JetBrainsMono_700Bold', fontSize: 15, color: theme.muted,
+                    fontVariant: ['tabular-nums'],
+                  }}>
+                    {fmtPrice(sku.priceLoose)}
+                  </Text>
+                  <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: theme.faint }}>
+                    {sku.priceLooseCount} sales
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* ── Your position ── */}
         {inCollection && collectionItem && (() => {

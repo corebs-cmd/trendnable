@@ -291,10 +291,15 @@ function rowToSku(row: Record<string, unknown>): SKU {
     isFeatured:         (row.is_featured          as boolean) ?? false,
     forceFeaturedUntil: (row.force_featured_until as string)  ?? null,
     fandomIds:   Array.isArray(row.fandom_ids) ? (row.fandom_ids as string[]) : [],
-    popNumber:   (row.pop_number as number) ?? undefined,
-    cardVariant: (row.card_variant as SKU['cardVariant']) ?? undefined,
-    cardGrader:  (row.card_grader  as string) ?? undefined,
-    cardGrade:   (row.card_grade   as string) ?? undefined,
+    popNumber:      (row.pop_number as number)   ?? undefined,
+    exclusiveType:  (row.exclusive_type as string) ?? null,
+    cardVariant:    (row.card_variant as SKU['cardVariant']) ?? undefined,
+    cardGrader:     (row.card_grader  as string) ?? undefined,
+    cardGrade:      (row.card_grade   as string) ?? undefined,
+    priceMint:      row.price_mint      != null ? Number(row.price_mint)       : null,
+    priceMintCount: row.price_mint_count != null ? Number(row.price_mint_count) : null,
+    priceLoose:     row.price_loose     != null ? Number(row.price_loose)      : null,
+    priceLooseCount:row.price_loose_count != null ? Number(row.price_loose_count): null,
   };
 }
 

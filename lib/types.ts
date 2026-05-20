@@ -54,10 +54,16 @@ export interface SKU {
   fandomIds: string[];
   // Funko Pop only
   popNumber?: number;
+  exclusiveType?: string | null;
   // Trading Cards only
   cardVariant?: 'raw' | 'graded';
   cardGrader?: string;   // PSA, BGS, CGC, SGC, etc.
   cardGrade?: string;    // 10, 9.5, 9, etc.
+  // Condition price buckets (populated after P1 pipeline runs)
+  priceMint?: number | null;
+  priceMintCount?: number | null;
+  priceLoose?: number | null;
+  priceLooseCount?: number | null;
 }
 
 export interface CollectionItem {
