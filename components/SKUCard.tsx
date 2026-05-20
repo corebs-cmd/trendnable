@@ -3,7 +3,7 @@ import { Pressable, View, Text, StyleSheet } from 'react-native';
 import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { Theme } from '@/lib/theme';
 import { SKU, CardDensity } from '@/lib/types';
-import { catById, fandomById, fmtPriceRange } from '@/lib/appConfig';
+import { catById, fandomById, fmtPrice } from '@/lib/appConfig';
 import ProductPlaceholder from '@/components/ProductPlaceholder';
 import { HotScoreBadge } from '@/components/HotScore';
 import DeltaPill from '@/components/DeltaPill';
@@ -100,10 +100,13 @@ function HeroCard({ sku, theme, onPress, onLongPress }: SKUCardProps) {
       <View style={[styles.heroFooter, { borderTopColor: theme.hairline }]}>
         <View>
           <Text style={[styles.heroPrice, { color: theme.premium, fontFamily: theme.fontMonoBold }]}>
-            {fmtPriceRange(sku.price)}
+            {fmtPrice(sku.price.median)}
           </Text>
           <Text style={[styles.heroListings, { color: theme.muted, fontFamily: 'Inter_400Regular' }]}>
-            {sku.listings} listings
+            {(() => {
+              const sold = (sku.priceMintCount ?? 0) + (sku.priceLooseCount ?? 0);
+              return sold > 0 ? `${sold} recent sales` : `${sku.listings} listed`;
+            })()}
           </Text>
         </View>
         <View style={styles.footerRight}>
@@ -182,11 +185,14 @@ function StandardCard({ sku, theme, rank, onPress, onLongPress }: SKUCardProps) 
         {/* Footer: price + delta */}
         <View style={[styles.standardFooter, { borderTopColor: theme.hairline }]}>
           <Text style={[styles.standardPrice, { color: theme.premium, fontFamily: theme.fontMonoBold }]}>
-            {fmtPriceRange(sku.price)}
+            {fmtPrice(sku.price.median)}
           </Text>
           <View style={styles.footerRight}>
             <Text style={[styles.standardListings, { color: theme.muted, fontFamily: theme.fontMono }]}>
-              {sku.listings}
+              {(() => {
+                const sold = (sku.priceMintCount ?? 0) + (sku.priceLooseCount ?? 0);
+                return sold > 0 ? `${sold} sales` : `${sku.listings}`;
+              })()}
             </Text>
             <DeltaPill delta={sku.delta} theme={theme} size="sm" />
           </View>
