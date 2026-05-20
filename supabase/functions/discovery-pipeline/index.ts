@@ -8,6 +8,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { titlePassesTier1, tcgMultiQty } from '../_shared/pipeline-utils.ts';
 
 const SUPABASE_URL              = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -223,16 +224,38 @@ serve(async (req) => {
       }
     }
 
-    // Pre-filter: drop items below $5 or whose title matches an existing SKU's first two words
+    // Pre-filter: Tier 1 keywords, TCG multi-quantity, price floor, existing-SKU dedup
     const existingTokens = existingNames.map((n) =>
       n.toLowerCase().split(' ').slice(0, 2).join(' ')
     );
-    const filtered = allItems.filter((item) => {
-      const price = parseFloat(item.price?.value ?? '0');
-      if (price < 5) return false;
-      const title = (item.title ?? '').toLowerCase();
-      return !existingTokens.some((token) => title.includes(token));
-    });
+    const filtered: any[] = [];
+    for (const item of allItems) {
+      const title = item.title ?? '';
+      if (!titlePassesTier1(title)) continue;
+
+      let effectiveItem = item;
+
+      // TCG multi-quantity: divide price by N or drop entirely
+      if (item._category_id === 'tcg') {
+        const { drop, divisor } = tcgMultiQty(title);
+        if (drop) continue;
+        if (divisor > 1) {
+          const rawPrice = parseFloat(item.price?.value ?? '0');
+          effectiveItem = {
+            ...item,
+            price: { ...item.price, value: (rawPrice / divisor).toFixed(2) },
+          };
+        }
+      }
+
+      const price = parseFloat(effectiveItem.price?.value ?? '0');
+      if (price < 5) continue;
+
+      const lowerTitle = title.toLowerCase();
+      if (existingTokens.some((token) => lowerTitle.includes(token))) continue;
+
+      filtered.push(effectiveItem);
+    }
 
     // Classify with Claude in batches of 20 — accumulate token usage
     const candidates: any[] = [];

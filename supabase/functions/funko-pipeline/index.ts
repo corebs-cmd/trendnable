@@ -6,6 +6,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { titlePassesTier1 } from '../_shared/pipeline-utils.ts';
 
 const SUPABASE_URL              = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -247,18 +248,18 @@ serve(async (req) => {
       }
     }
 
-    // Pre-filter: drop items below $5 or titles matching existing tracked Funko names / pop numbers
+    // Pre-filter: Tier 1 keywords, price floor, existing-name dedup, existing pop-number dedup
     const existingTokens = existingNames.map((n) =>
       n.toLowerCase().replace(/\[#\d+\]/g, '').trim().split(' ').slice(0, 3).join(' ')
     );
     const filtered = allItems.filter((item) => {
+      const title = item.title ?? '';
+      if (!titlePassesTier1(title)) return false;
       const price = parseFloat(item.price?.value ?? '0');
       if (price < 5) return false;
-      const title = (item.title ?? '').toLowerCase();
-      // Drop if title matches an existing name token
-      if (existingTokens.some((token) => token.length > 4 && title.includes(token))) return false;
-      // Drop if title contains a pop number we already track (e.g. "874", "#874")
-      const popMatch = title.match(/#?(\d{3,5})\b/);
+      const lowerTitle = title.toLowerCase();
+      if (existingTokens.some((token) => token.length > 4 && lowerTitle.includes(token))) return false;
+      const popMatch = lowerTitle.match(/#?(\d{3,5})\b/);
       if (popMatch) {
         const n = parseInt(popMatch[1]);
         if (existingPopNumbers.has(n)) return false;

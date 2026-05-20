@@ -11,6 +11,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { titlePassesTier1, effectivePrice, iqrMedian } from '../_shared/pipeline-utils.ts';
 
 const SUPABASE_URL             = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -223,18 +224,23 @@ serve(async (req) => {
         if (!listings) continue;
 
         const listingCount = listings.length;
-        const allPrices = listings
-          .map((l: any) => parseFloat(l.price?.value ?? '0'))
-          .filter((p: number) => p > 0)
-          .sort((a: number, b: number) => a - b);
 
-        // Trim top 15% to remove speculator/inflated asking prices
-        const trimCount = Math.floor(allPrices.length * 0.15);
-        const prices = allPrices.slice(0, allPrices.length - trimCount);
+        // P2 Tier 1 keyword filter + P4 shipping normalisation + P3 IQR median
+        const rawPrices: number[] = [];
+        for (const l of listings) {
+          if (!titlePassesTier1(l.title ?? '')) continue;
+          const itemPrice = parseFloat(l.price?.value ?? '0');
+          if (itemPrice <= 0) continue;
+          const shippingOpt = l.shippingOptions?.[0];
+          const shippingCost = shippingOpt?.shippingCost?.value != null
+            ? parseFloat(shippingOpt.shippingCost.value)
+            : null;
+          const shippingType: string | null = shippingOpt?.shippingCostType ?? null;
+          rawPrices.push(effectivePrice(itemPrice, shippingCost, shippingType, sku.category_id));
+        }
 
-        const priceMedian = prices.length > 0 ? prices[Math.floor((prices.length - 1) / 2)] : 0;
-        const priceLow    = prices[0] ?? 0;
-        const priceHigh   = prices[prices.length - 1] ?? 0;
+        const { median: priceMedian, count: _mintCount, low: priceLow, high: priceHigh } =
+          iqrMedian(rawPrices);
 
         const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
         const { data: prevSnap } = await supabase
