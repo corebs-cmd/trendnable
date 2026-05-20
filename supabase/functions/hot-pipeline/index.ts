@@ -59,29 +59,41 @@ async function fetchEbayListings(query: string, token: string) {
 // Finding API — completed/sold listings only.
 // Uses convertedCurrentPrice for USD-normalised pricing regardless of seller currency.
 async function fetchSoldListings(query: string, appId: string): Promise<any[]> {
-  const params = new URLSearchParams({
-    'OPERATION-NAME':        'findCompletedItems',
-    'SERVICE-VERSION':       '1.13.0',
-    'SECURITY-APPNAME':      appId,
-    'RESPONSE-DATA-FORMAT':  'JSON',
-    'REST-PAYLOAD':          '',
-    'keywords':              query,
-    'itemFilter(0).name':    'SoldItemsOnly',
-    'itemFilter(0).value':   'true',
-    'itemFilter(1).name':    'ListingType',
-    'itemFilter(1).value':   'FixedPrice',
-    'paginationInput.entriesPerPage': '100',
-    'sortOrder':             'EndTimeSoonest',
-  });
-  const res = await fetch(
-    `https://svcs.ebay.com/services/search/FindingService/v1?${params.toString()}`
-  );
+  // Build URL manually — URLSearchParams percent-encodes () which some eBay
+  // Finding API endpoints reject. Literal parentheses are required for itemFilter(N).
+  const qs = [
+    `OPERATION-NAME=findCompletedItems`,
+    `SERVICE-VERSION=1.13.0`,
+    `SECURITY-APPNAME=${encodeURIComponent(appId)}`,
+    `RESPONSE-DATA-FORMAT=JSON`,
+    `keywords=${encodeURIComponent(query)}`,
+    `itemFilter(0).name=SoldItemsOnly`,
+    `itemFilter(0).value=true`,
+    `itemFilter(1).name=ListingType`,
+    `itemFilter(1).value=FixedPrice`,
+    `paginationInput.entriesPerPage=100`,
+    `sortOrder=EndTimeSoonest`,
+  ].join('&');
+
+  const url = `https://svcs.ebay.com/services/search/FindingService/v1?${qs}`;
+  const res = await fetch(url);
+
   if (!res.ok) {
-    console.error(`Finding API error for "${query}":`, res.status);
+    console.error(`[findSold] HTTP ${res.status} for "${query}"`);
     return [];
   }
+
   const data = await res.json();
-  return data?.findCompletedItemsResponse?.[0]?.searchResult?.[0]?.item ?? [];
+  const ack  = data?.findCompletedItemsResponse?.[0]?.ack?.[0];
+  if (ack !== 'Success') {
+    const errMsg = data?.findCompletedItemsResponse?.[0]?.errorMessage?.[0]?.error?.[0]?.message?.[0];
+    console.error(`[findSold] ack=${ack} for "${query}": ${errMsg ?? JSON.stringify(data).slice(0, 200)}`);
+    return [];
+  }
+
+  const items = data?.findCompletedItemsResponse?.[0]?.searchResult?.[0]?.item ?? [];
+  console.log(`[findSold] "${query}" → ${items.length} sold items`);
+  return items;
 }
 
 // ── Scoring ───────────────────────────────────────────────────────────────────
