@@ -86,7 +86,7 @@ function TrendnableTabBar({ state, descriptors, navigation }: BottomTabBarProps)
         const cfg = TAB_CONFIG.find((t) => t.name === route.name);
         if (!cfg) return null;
 
-        const color = focused ? theme.accent : theme.muted;
+        const color = focused ? theme.accent : isDark ? 'rgba(245,240,228,0.72)' : 'rgba(21,23,26,0.65)';
 
         return (
           <Pressable

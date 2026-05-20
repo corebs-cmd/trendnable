@@ -263,10 +263,10 @@ export default function CollectionScreen() {
                 >
                   <ProductThumb sku={item.sku} theme={theme} size={60} />
 
-                  <View style={{ flex: 1, gap: 4 }}>
+                  <View style={{ flex: 1, gap: 2 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Text style={{ fontFamily: theme.fontDispBold, fontSize: 15, color: theme.text, letterSpacing: -0.2, flex: 1 }} numberOfLines={1}>
-                        {item.sku.name}
+                        {item.sku.short}
                       </Text>
                       {item.forSale && (
                         <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999, borderWidth: 0.5, borderColor: theme.gold }}>
@@ -276,7 +276,12 @@ export default function CollectionScreen() {
                         </View>
                       )}
                     </View>
-                    <Text style={{ fontFamily: theme.fontMono, fontSize: 12, color: theme.muted }}>
+                    {!!item.sku.series && (
+                      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11.5, color: theme.muted, letterSpacing: -0.1 }} numberOfLines={1}>
+                        {item.sku.series}
+                      </Text>
+                    )}
+                    <Text style={{ fontFamily: theme.fontMono, fontSize: 11.5, color: theme.faint }}>
                       ×{item.qty} · {item.condition}
                     </Text>
                   </View>
