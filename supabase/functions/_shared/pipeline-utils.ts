@@ -28,6 +28,23 @@ export function titlePassesTier1(title: string): boolean {
   return !TIER1_PATTERNS.some((re) => re.test(title));
 }
 
+// ── P2 Tier 2 — Condition segmentation ───────────────────────────────────────
+// Titles matching these patterns indicate a loose/incomplete item.
+// Used to route sold listings into separate price buckets (price_mint / price_loose).
+const TIER2_LOOSE_PATTERNS: RegExp[] = [
+  /\bloose\b/i,
+  /\boob\b/i,
+  /\bout\s+of\s+box\b/i,
+  /\bincomplete\b/i,
+  /\bdamaged\b/i,
+  /\bmissing\b/i,
+  /\bno\s+box\b/i,
+];
+
+export function isLooseCondition(title: string): boolean {
+  return TIER2_LOOSE_PATTERNS.some((re) => re.test(title));
+}
+
 // ── TCG multi-quantity filter ─────────────────────────────────────────────────
 // Returns drop=true for lot/playset listings that can't be normalised.
 // Returns divisor>1 for "4x Charizard" style listings (divide price by N).

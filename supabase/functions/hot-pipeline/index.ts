@@ -11,7 +11,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { titlePassesTier1, effectivePrice, iqrMedian } from '../_shared/pipeline-utils.ts';
+import { titlePassesTier1, isLooseCondition, effectivePrice, iqrMedian } from '../_shared/pipeline-utils.ts';
 
 const SUPABASE_URL             = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -257,9 +257,10 @@ serve(async (req) => {
 
         const listingCount = listings.length;
 
-        // P1: Build price set from sold listings (Finding API, convertedCurrentPrice = USD-normalised)
-        // P2 Tier 1 + P4 shipping + P3 IQR applied to sold prices
-        const soldPrices: number[] = [];
+        // P1: Build price sets from sold listings (Finding API, convertedCurrentPrice = USD-normalised)
+        // P2 Tier 1 (junk filter) + Tier 2 (condition segment) + P4 shipping + P3 IQR
+        const mintPrices: number[] = [];
+        const loosePrices: number[] = [];
         for (const s of soldItems) {
           const title: string = s.title?.[0] ?? '';
           if (!titlePassesTier1(title)) continue;
@@ -271,13 +272,19 @@ serve(async (req) => {
             s.shippingInfo?.[0]?.shippingServiceCost?.[0]?.['__value__'] ?? '-1'
           );
           const shippingType: string | null = s.shippingInfo?.[0]?.shippingType?.[0] ?? null;
-          soldPrices.push(effectivePrice(
+          const ep = effectivePrice(
             itemPrice,
             shippingCost >= 0 ? shippingCost : null,
             shippingType,
             sku.category_id,
-          ));
+          );
+          if (isLooseCondition(title)) {
+            loosePrices.push(ep);
+          } else {
+            mintPrices.push(ep);
+          }
         }
+        const soldPrices = [...mintPrices, ...loosePrices];
 
         // If sold data is too thin, fall back to Browse API active-listing prices
         let rawPrices: number[];
@@ -328,15 +335,22 @@ serve(async (req) => {
 
         const delta = Math.round(scores.hot - (prevHotRow?.hot_score ?? scores.hot));
 
+        const mintResult  = iqrMedian(mintPrices);
+        const looseResult = iqrMedian(loosePrices);
+
         await supabase.from('daily_snapshots').upsert({
-          sku_id: sku.id,
-          snapshot_date: today,
-          listing_count: listingCount,
-          price_low: priceLow,
-          price_median: priceMedian,
-          price_high: priceHigh,
-          velocity_score: scores.velocity,
-          hot_score: scores.hot,
+          sku_id:            sku.id,
+          snapshot_date:     today,
+          listing_count:     listingCount,
+          price_low:         priceLow,
+          price_median:      priceMedian,
+          price_high:        priceHigh,
+          velocity_score:    scores.velocity,
+          hot_score:         scores.hot,
+          price_mint:        mintResult.count  > 0 ? mintResult.median  : null,
+          price_mint_count:  mintResult.count  > 0 ? mintResult.count   : null,
+          price_loose:       looseResult.count > 0 ? looseResult.median : null,
+          price_loose_count: looseResult.count > 0 ? looseResult.count  : null,
         });
 
         if (!hasImage.has(sku.id)) {
