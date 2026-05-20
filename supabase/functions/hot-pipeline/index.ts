@@ -205,6 +205,7 @@ serve(async (req) => {
 
     const today = new Date().toISOString().split('T')[0];
     const processed: string[] = [];
+    const zeroPriceSkuIds: string[] = [];
     const skuMarketData: SkuMarketData[] = [];
 
     for (const sku of skus ?? []) {
@@ -316,10 +317,30 @@ serve(async (req) => {
           });
         }
 
+        // Mark zero-price/no-listing SKUs for auto-deactivation
+        if (priceMedian === 0 && listingCount === 0) {
+          zeroPriceSkuIds.push(sku.id);
+        }
+
         processed.push(sku.id);
         await new Promise((r) => setTimeout(r, 500));
       } catch (skuErr) {
         console.error(`Failed SKU ${sku.id}:`, skuErr);
+      }
+    }
+
+    // Auto-deactivate SKUs that returned zero listings — likely delisted or bad query
+    let autoDeactivated = 0;
+    if (zeroPriceSkuIds.length > 0) {
+      const { error: deactivateErr } = await supabase
+        .from('skus')
+        .update({ is_active: false })
+        .in('id', zeroPriceSkuIds);
+      if (deactivateErr) {
+        console.error('Auto-deactivate error:', deactivateErr.message);
+      } else {
+        autoDeactivated = zeroPriceSkuIds.length;
+        console.log(`Auto-deactivated ${autoDeactivated} zero-price SKUs:`, zeroPriceSkuIds.join(', '));
       }
     }
 
@@ -354,6 +375,7 @@ serve(async (req) => {
       meta: {
         processed: processed.length,
         narratives_generated: narrativesGenerated,
+        auto_deactivated: autoDeactivated,
         date: today,
       },
     }).then(({ error: logErr }) => {
@@ -365,6 +387,7 @@ serve(async (req) => {
         ok: true,
         processed: processed.length,
         narratives_generated: narrativesGenerated,
+        auto_deactivated: autoDeactivated,
         input_tokens: totalInputTokens,
         output_tokens: totalOutputTokens,
         cost_usd: Number(costUsd.toFixed(8)),

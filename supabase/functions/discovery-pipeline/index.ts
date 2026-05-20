@@ -177,14 +177,24 @@ serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
-    // Load existing names to avoid duplicates
-    const [{ data: existingSkus }, { data: existingCandidates }] = await Promise.all([
+    // Load existing names + deleted SKU blocklist to avoid duplicates
+    const [{ data: existingSkus }, { data: existingCandidates }, { data: deletedSkus }] = await Promise.all([
       supabase.from('skus').select('name'),
-      supabase.from('discovery_candidates').select('name').in('status', ['new', 'approved']),
+      supabase.from('discovery_candidates').select('name').in('status', ['new', 'approved', 'rejected']),
+      supabase.from('deleted_skus').select('name'),
     ]);
     const existingNames: string[] = [
       ...(existingSkus ?? []).map((s: any) => s.name as string),
       ...(existingCandidates ?? []).map((c: any) => c.name as string),
+    ];
+    // Blocklist for post-Claude name filter (exact, case-insensitive)
+    const deletedNameSet = new Set<string>(
+      (deletedSkus ?? []).map((d: any) => (d.name as string).toLowerCase())
+    );
+    // Pass deleted names to Claude so it can skip them during classification
+    const allKnownNames = [
+      ...existingNames,
+      ...(deletedSkus ?? []).map((d: any) => d.name as string),
     ];
 
     const ebayToken = await getEbayToken();
@@ -213,11 +223,13 @@ serve(async (req) => {
       }
     }
 
-    // Pre-filter: drop items whose title contains an existing SKU's first two words
+    // Pre-filter: drop items below $5 or whose title matches an existing SKU's first two words
     const existingTokens = existingNames.map((n) =>
       n.toLowerCase().split(' ').slice(0, 2).join(' ')
     );
     const filtered = allItems.filter((item) => {
+      const price = parseFloat(item.price?.value ?? '0');
+      if (price < 5) return false;
       const title = (item.title ?? '').toLowerCase();
       return !existingTokens.some((token) => title.includes(token));
     });
@@ -230,7 +242,7 @@ serve(async (req) => {
 
     for (let i = 0; i < Math.min(filtered.length, 320); i += BATCH) {
       const batch = filtered.slice(i, i + BATCH);
-      const { candidates: approved, inputTokens, outputTokens } = await classifyWithClaude(batch, existingNames);
+      const { candidates: approved, inputTokens, outputTokens } = await classifyWithClaude(batch, allKnownNames);
       candidates.push(...approved);
       totalInputTokens  += inputTokens;
       totalOutputTokens += outputTokens;
@@ -247,6 +259,13 @@ serve(async (req) => {
     for (const c of candidates) {
       if (!c.name) continue;
 
+      // Skip names on the deleted-SKU blocklist (trigger also blocks the insert, but check here first)
+      if (deletedNameSet.has(c.name.toLowerCase())) {
+        console.log(`Blocked — deleted-SKU blocklist: ${c.name}`);
+        skipped++;
+        continue;
+      }
+
       const missingPopNumber = c.category_id === 'funko' && !/\[#\d+\]/i.test(c.name);
       if (missingPopNumber) {
         console.log(`Funko candidate flagged — pop# missing: ${c.name}`);
@@ -258,10 +277,11 @@ serve(async (req) => {
       }
 
       const meetsThreshold =
-        Number(c.price_median ?? 0) > 20 &&
+        Number(c.price_median ?? 0) >= 25 &&
         !!c.fandom_id &&
         !!c.category_id &&
-        !missingTcgVariant;
+        !missingTcgVariant &&
+        !missingPopNumber;
 
       const { data, error } = await supabase
         .from('discovery_candidates')
