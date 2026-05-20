@@ -56,6 +56,34 @@ async function fetchEbayListings(query: string, token: string) {
   return data.itemSummaries ?? [];
 }
 
+// Finding API — completed/sold listings only.
+// Uses convertedCurrentPrice for USD-normalised pricing regardless of seller currency.
+async function fetchSoldListings(query: string, appId: string): Promise<any[]> {
+  const params = new URLSearchParams({
+    'OPERATION-NAME':        'findCompletedItems',
+    'SERVICE-VERSION':       '1.13.0',
+    'SECURITY-APPNAME':      appId,
+    'RESPONSE-DATA-FORMAT':  'JSON',
+    'REST-PAYLOAD':          '',
+    'keywords':              query,
+    'itemFilter(0).name':    'SoldItemsOnly',
+    'itemFilter(0).value':   'true',
+    'itemFilter(1).name':    'ListingType',
+    'itemFilter(1).value':   'FixedPrice',
+    'paginationInput.entriesPerPage': '100',
+    'sortOrder':             'EndTimeSoonest',
+  });
+  const res = await fetch(
+    `https://svcs.ebay.com/services/search/FindingService/v1?${params.toString()}`
+  );
+  if (!res.ok) {
+    console.error(`Finding API error for "${query}":`, res.status);
+    return [];
+  }
+  const data = await res.json();
+  return data?.findCompletedItemsResponse?.[0]?.searchResult?.[0]?.item ?? [];
+}
+
 // ── Scoring ───────────────────────────────────────────────────────────────────
 
 function computeHotScore(params: {
@@ -220,23 +248,53 @@ serve(async (req) => {
           }
         }
 
-        const listings = await fetchEbayListings(query, token);
+        // P5: Browse API = velocity/volume signal; Finding API = price signal
+        const [listings, soldItems] = await Promise.all([
+          fetchEbayListings(query, token),
+          fetchSoldListings(query, EBAY_CLIENT_ID),
+        ]);
         if (!listings) continue;
 
         const listingCount = listings.length;
 
-        // P2 Tier 1 keyword filter + P4 shipping normalisation + P3 IQR median
-        const rawPrices: number[] = [];
-        for (const l of listings) {
-          if (!titlePassesTier1(l.title ?? '')) continue;
-          const itemPrice = parseFloat(l.price?.value ?? '0');
+        // P1: Build price set from sold listings (Finding API, convertedCurrentPrice = USD-normalised)
+        // P2 Tier 1 + P4 shipping + P3 IQR applied to sold prices
+        const soldPrices: number[] = [];
+        for (const s of soldItems) {
+          const title: string = s.title?.[0] ?? '';
+          if (!titlePassesTier1(title)) continue;
+          const itemPrice = parseFloat(
+            s.sellingStatus?.[0]?.convertedCurrentPrice?.[0]?.['__value__'] ?? '0'
+          );
           if (itemPrice <= 0) continue;
-          const shippingOpt = l.shippingOptions?.[0];
-          const shippingCost = shippingOpt?.shippingCost?.value != null
-            ? parseFloat(shippingOpt.shippingCost.value)
-            : null;
-          const shippingType: string | null = shippingOpt?.shippingCostType ?? null;
-          rawPrices.push(effectivePrice(itemPrice, shippingCost, shippingType, sku.category_id));
+          const shippingCost = parseFloat(
+            s.shippingInfo?.[0]?.shippingServiceCost?.[0]?.['__value__'] ?? '-1'
+          );
+          const shippingType: string | null = s.shippingInfo?.[0]?.shippingType?.[0] ?? null;
+          soldPrices.push(effectivePrice(
+            itemPrice,
+            shippingCost >= 0 ? shippingCost : null,
+            shippingType,
+            sku.category_id,
+          ));
+        }
+
+        // If sold data is too thin, fall back to Browse API active-listing prices
+        let rawPrices: number[];
+        if (soldPrices.length >= 3) {
+          rawPrices = soldPrices;
+        } else {
+          rawPrices = [];
+          for (const l of listings) {
+            if (!titlePassesTier1(l.title ?? '')) continue;
+            const itemPrice = parseFloat(l.price?.value ?? '0');
+            if (itemPrice <= 0) continue;
+            const shippingOpt = l.shippingOptions?.[0];
+            const shippingCost = shippingOpt?.shippingCost?.value != null
+              ? parseFloat(shippingOpt.shippingCost.value) : null;
+            const shippingType: string | null = shippingOpt?.shippingCostType ?? null;
+            rawPrices.push(effectivePrice(itemPrice, shippingCost, shippingType, sku.category_id));
+          }
         }
 
         const { median: priceMedian, count: _mintCount, low: priceLow, high: priceHigh } =

@@ -60,20 +60,17 @@ export function effectivePrice(
   shippingType: string | null,
   categoryId: string,
 ): number {
-  let shipping: number;
-  if (shippingType === 'FREE_SHIPPING' || shippingCost === 0) {
-    shipping = 0;
-  } else if (
-    shippingCost != null &&
-    shippingCost > 0 &&
-    shippingType !== 'CALCULATED' &&
-    shippingType !== 'NOT_SPECIFIED'
-  ) {
-    shipping = Math.min(shippingCost, SHIPPING_CAP);
-  } else {
-    shipping = SHIPPING_DEFAULTS[categoryId] ?? DEFAULT_SHIPPING;
+  const typeNorm = (shippingType ?? '').toLowerCase();
+  // Free shipping — Browse API: "FREE_SHIPPING"; Finding API: "Free", "FreeDomestic..."
+  if (typeNorm.startsWith('free') || shippingCost === 0) {
+    return itemPrice;
   }
-  return itemPrice + shipping;
+  // Known non-zero cost — use it capped at $50
+  if (shippingCost != null && shippingCost > 0) {
+    return itemPrice + Math.min(shippingCost, SHIPPING_CAP);
+  }
+  // Unknown/calculated — category-aware default
+  return itemPrice + (SHIPPING_DEFAULTS[categoryId] ?? DEFAULT_SHIPPING);
 }
 
 // ── P3 — IQR median with low-sample fallback ──────────────────────────────────
