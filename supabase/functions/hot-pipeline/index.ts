@@ -11,7 +11,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { titlePassesTier1, isLooseCondition, effectivePrice, iqrMedian } from '../_shared/pipeline-utils.ts';
+import { titlePassesTier1, effectivePrice, iqrMedian } from '../_shared/pipeline-utils.ts';
 
 const SUPABASE_URL             = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -54,46 +54,6 @@ async function fetchEbayListings(query: string, token: string) {
   if (!res.ok) return null;
   const data = await res.json();
   return data.itemSummaries ?? [];
-}
-
-// Finding API — completed/sold listings only.
-// Uses convertedCurrentPrice for USD-normalised pricing regardless of seller currency.
-async function fetchSoldListings(query: string, appId: string): Promise<any[]> {
-  // Build URL manually — URLSearchParams percent-encodes () which some eBay
-  // Finding API endpoints reject. Literal parentheses are required for itemFilter(N).
-  const qs = [
-    `OPERATION-NAME=findCompletedItems`,
-    `SERVICE-VERSION=1.13.0`,
-    `SECURITY-APPNAME=${encodeURIComponent(appId)}`,
-    `RESPONSE-DATA-FORMAT=JSON`,
-    `keywords=${encodeURIComponent(query)}`,
-    `itemFilter(0).name=SoldItemsOnly`,
-    `itemFilter(0).value=true`,
-    `itemFilter(1).name=ListingType`,
-    `itemFilter(1).value=FixedPrice`,
-    `paginationInput.entriesPerPage=100`,
-    `sortOrder=EndTimeSoonest`,
-  ].join('&');
-
-  const url = `https://svcs.ebay.com/services/search/FindingService/v1?${qs}`;
-  const res = await fetch(url);
-
-  if (!res.ok) {
-    console.error(`[findSold] HTTP ${res.status} for "${query}"`);
-    return [];
-  }
-
-  const data = await res.json();
-  const ack  = data?.findCompletedItemsResponse?.[0]?.ack?.[0];
-  if (ack !== 'Success') {
-    const errMsg = data?.findCompletedItemsResponse?.[0]?.errorMessage?.[0]?.error?.[0]?.message?.[0];
-    console.error(`[findSold] ack=${ack} for "${query}": ${errMsg ?? JSON.stringify(data).slice(0, 200)}`);
-    return [];
-  }
-
-  const items = data?.findCompletedItemsResponse?.[0]?.searchResult?.[0]?.item ?? [];
-  console.log(`[findSold] "${query}" → ${items.length} sold items`);
-  return items;
 }
 
 // ── Scoring ───────────────────────────────────────────────────────────────────
@@ -260,60 +220,22 @@ serve(async (req) => {
           }
         }
 
-        // P5: Browse API = velocity/volume signal; Finding API = price signal
-        const [listings, soldItems] = await Promise.all([
-          fetchEbayListings(query, token),
-          fetchSoldListings(query, EBAY_CLIENT_ID),
-        ]);
+        // Browse API: velocity/volume signal + price signal (P2 Tier 1 + P4 shipping + P3 IQR)
+        const listings = await fetchEbayListings(query, token);
         if (!listings) continue;
 
         const listingCount = listings.length;
 
-        // P1: Build price sets from sold listings (Finding API, convertedCurrentPrice = USD-normalised)
-        // P2 Tier 1 (junk filter) + Tier 2 (condition segment) + P4 shipping + P3 IQR
-        const mintPrices: number[] = [];
-        const loosePrices: number[] = [];
-        for (const s of soldItems) {
-          const title: string = s.title?.[0] ?? '';
-          if (!titlePassesTier1(title)) continue;
-          const itemPrice = parseFloat(
-            s.sellingStatus?.[0]?.convertedCurrentPrice?.[0]?.['__value__'] ?? '0'
-          );
+        const rawPrices: number[] = [];
+        for (const l of listings) {
+          if (!titlePassesTier1(l.title ?? '')) continue;
+          const itemPrice = parseFloat(l.price?.value ?? '0');
           if (itemPrice <= 0) continue;
-          const shippingCost = parseFloat(
-            s.shippingInfo?.[0]?.shippingServiceCost?.[0]?.['__value__'] ?? '-1'
-          );
-          const shippingType: string | null = s.shippingInfo?.[0]?.shippingType?.[0] ?? null;
-          const ep = effectivePrice(
-            itemPrice,
-            shippingCost >= 0 ? shippingCost : null,
-            shippingType,
-            sku.category_id,
-          );
-          if (isLooseCondition(title)) {
-            loosePrices.push(ep);
-          } else {
-            mintPrices.push(ep);
-          }
-        }
-        const soldPrices = [...mintPrices, ...loosePrices];
-
-        // If sold data is too thin, fall back to Browse API active-listing prices
-        let rawPrices: number[];
-        if (soldPrices.length >= 3) {
-          rawPrices = soldPrices;
-        } else {
-          rawPrices = [];
-          for (const l of listings) {
-            if (!titlePassesTier1(l.title ?? '')) continue;
-            const itemPrice = parseFloat(l.price?.value ?? '0');
-            if (itemPrice <= 0) continue;
-            const shippingOpt = l.shippingOptions?.[0];
-            const shippingCost = shippingOpt?.shippingCost?.value != null
-              ? parseFloat(shippingOpt.shippingCost.value) : null;
-            const shippingType: string | null = shippingOpt?.shippingCostType ?? null;
-            rawPrices.push(effectivePrice(itemPrice, shippingCost, shippingType, sku.category_id));
-          }
+          const shippingOpt = l.shippingOptions?.[0];
+          const shippingCost = shippingOpt?.shippingCost?.value != null
+            ? parseFloat(shippingOpt.shippingCost.value) : null;
+          const shippingType: string | null = shippingOpt?.shippingCostType ?? null;
+          rawPrices.push(effectivePrice(itemPrice, shippingCost, shippingType, sku.category_id));
         }
 
         const { median: priceMedian, count: _mintCount, low: priceLow, high: priceHigh } =
@@ -347,9 +269,6 @@ serve(async (req) => {
 
         const delta = Math.round(scores.hot - (prevHotRow?.hot_score ?? scores.hot));
 
-        const mintResult  = iqrMedian(mintPrices);
-        const looseResult = iqrMedian(loosePrices);
-
         await supabase.from('daily_snapshots').upsert({
           sku_id:            sku.id,
           snapshot_date:     today,
@@ -359,10 +278,10 @@ serve(async (req) => {
           price_high:        priceHigh,
           velocity_score:    scores.velocity,
           hot_score:         scores.hot,
-          price_mint:        mintResult.count  > 0 ? mintResult.median  : null,
-          price_mint_count:  mintResult.count  > 0 ? mintResult.count   : null,
-          price_loose:       looseResult.count > 0 ? looseResult.median : null,
-          price_loose_count: looseResult.count > 0 ? looseResult.count  : null,
+          price_mint:        null,
+          price_mint_count:  null,
+          price_loose:       null,
+          price_loose_count: null,
         });
 
         if (!hasImage.has(sku.id)) {

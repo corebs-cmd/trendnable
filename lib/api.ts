@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { CollectionItem, DBUser, DBCollectionItem, SKU, PriceAlert, AppNotification } from './types';
+import { CollectionItem, DBUser, DBCollectionItem, SKU, PriceAlert, AppNotification, ScanResult, CatalogWatchlistItem, CatalogCollectionItem } from './types';
 
 // ── Users ────────────────────────────────────────────────────────────────────
 
@@ -122,7 +122,7 @@ export async function deleteCollectionItem(userId: string, skuId: string): Promi
 export async function fetchWatchlist(userId: string): Promise<string[]> {
   const { data, error } = await supabase
     .from('user_watchlists')
-    .select('sku_id')
+    .select('sku_id, catalog_id')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
@@ -130,7 +130,10 @@ export async function fetchWatchlist(userId: string): Promise<string[]> {
     console.error('fetchWatchlist:', error.message);
     return [];
   }
-  return (data as { sku_id: string }[]).map((r) => r.sku_id);
+  // Return only SKU-based watchlist items for backwards compatibility
+  return (data as { sku_id: string | null; catalog_id: string | null }[])
+    .filter((r) => r.sku_id != null)
+    .map((r) => r.sku_id as string);
 }
 
 export async function addWatchlistItem(userId: string, skuId: string): Promise<void> {
@@ -341,4 +344,208 @@ function dbToCollectionItem(row: DBCollectionItem): CollectionItem {
     cardGrader: row.card_grader ?? undefined,
     cardGrade: row.card_grade ?? undefined,
   };
+}
+
+// ── Scan pipeline ─────────────────────────────────────────────────────────────
+
+export async function callScanPipeline(barcode: string, accessToken: string): Promise<ScanResult> {
+  const url = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/scan-pipeline`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ barcode }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok || data.ok === false) {
+    const err = new Error(data.message ?? data.error ?? 'Scan failed') as Error & { errorCode?: string };
+    err.errorCode = data.error;
+    throw err;
+  }
+
+  return {
+    catalogId:      data.catalog_id,
+    skuId:          data.sku_id ?? null,
+    name:           data.name,
+    short:          data.short,
+    series:         data.series ?? null,
+    categoryId:     data.category_id,
+    fandomId:       data.fandom_id ?? null,
+    variantType:    data.variant_type ?? null,
+    popNumber:      data.pop_number ?? null,
+    price: {
+      low:    data.price.low,
+      median: data.price.median,
+      high:   data.price.high,
+    },
+    listings:       data.listings,
+    scoreEstimate:  data.score_estimate,
+    scoreBreakdown: {
+      velocity:     data.score_breakdown.velocity,
+      volume:       data.score_breakdown.volume,
+      confirmation: data.score_breakdown.confirmation,
+      freshness:    data.score_breakdown.freshness,
+    },
+    isNewToCatalog:    data.is_new_to_catalog,
+    qualityGatePassed: data.quality_gate_passed,
+    barcode:           data.barcode,
+    ebayQuery:         data.ebay_query,
+    imageUrl:          data.image_url ?? null,
+  };
+}
+
+// ── Catalog watchlist ─────────────────────────────────────────────────────────
+
+export async function fetchCatalogWatchlist(userId: string): Promise<CatalogWatchlistItem[]> {
+  const { data, error } = await supabase
+    .from('user_watchlists')
+    .select('catalog_id, created_at, product_catalog(name, short, category_id, fandom_id, price_latest, image_url)')
+    .eq('user_id', userId)
+    .not('catalog_id', 'is', null)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('fetchCatalogWatchlist:', error.message);
+    return [];
+  }
+
+  return (data ?? []).map((row: Record<string, unknown>) => {
+    const cat = row.product_catalog as Record<string, unknown> | null;
+    return {
+      catalogId:     row.catalog_id as string,
+      name:          (cat?.name as string) ?? '',
+      short:         (cat?.short as string) ?? '',
+      categoryId:    (cat?.category_id as string) ?? '',
+      fandomId:      (cat?.fandom_id as string) ?? null,
+      price:         cat?.price_latest != null ? Number(cat.price_latest) : null,
+      scoreEstimate: null,
+      addedAt:       row.created_at as string,
+      imageUrl:      (cat?.image_url as string) ?? null,
+    };
+  });
+}
+
+export async function addCatalogWatchlistItem(userId: string, catalogId: string): Promise<void> {
+  const { error } = await supabase
+    .from('user_watchlists')
+    .insert({ user_id: userId, catalog_id: catalogId });
+  if (error && !error.message.includes('duplicate') && error.code !== '23505') {
+    console.error('addCatalogWatchlistItem:', error.message);
+  }
+}
+
+export async function removeCatalogWatchlistItem(userId: string, catalogId: string): Promise<void> {
+  const { error } = await supabase
+    .from('user_watchlists')
+    .delete()
+    .eq('user_id', userId)
+    .eq('catalog_id', catalogId);
+  if (error) console.error('removeCatalogWatchlistItem:', error.message);
+}
+
+// ── Catalog collection ────────────────────────────────────────────────────────
+
+export async function fetchCatalogCollection(userId: string): Promise<CatalogCollectionItem[]> {
+  const { data, error } = await supabase
+    .from('user_collections')
+    .select('catalog_id, qty, purchased_price, purchase_date, condition, notes, created_at, product_catalog(name, short, category_id, price_latest, image_url)')
+    .eq('user_id', userId)
+    .not('catalog_id', 'is', null)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('fetchCatalogCollection:', error.message);
+    return [];
+  }
+
+  return (data ?? []).map((row: Record<string, unknown>) => {
+    const cat = row.product_catalog as Record<string, unknown> | null;
+    return {
+      catalogId:    row.catalog_id as string,
+      name:         (cat?.name as string) ?? '',
+      short:        (cat?.short as string) ?? '',
+      categoryId:   (cat?.category_id as string) ?? '',
+      qty:          Number(row.qty ?? 1),
+      purchased:    Number(row.purchased_price ?? 0),
+      purchaseDate: row.purchase_date as string,
+      condition:    (row.condition as string) ?? 'Good',
+      notes:        (row.notes as string) ?? undefined,
+      currentPrice: cat?.price_latest != null ? Number(cat.price_latest) : null,
+      imageUrl:     (cat?.image_url as string) ?? null,
+    };
+  });
+}
+
+export async function fetchCatalogItemById(catalogId: string): Promise<{
+  id: string; name: string; short: string; categoryId: string; fandomId: string | null;
+  series: string | null; priceLatest: number | null; imageUrl: string | null;
+  barcode: string | null; scanCount: number; skuId: string | null; ebayQuery: string | null;
+} | null> {
+  const { data, error } = await supabase
+    .from('product_catalog')
+    .select('id, name, short, category_id, fandom_id, series, price_latest, image_url, barcode, scan_count, sku_id, ebay_query')
+    .eq('id', catalogId)
+    .single();
+  if (error || !data) return null;
+  return {
+    id:           data.id,
+    name:         data.name,
+    short:        data.short,
+    categoryId:   data.category_id,
+    fandomId:     data.fandom_id ?? null,
+    series:       data.series ?? null,
+    priceLatest:  data.price_latest != null ? Number(data.price_latest) : null,
+    imageUrl:     data.image_url ?? null,
+    barcode:      data.barcode ?? null,
+    scanCount:    data.scan_count ?? 0,
+    skuId:        data.sku_id ?? null,
+    ebayQuery:    data.ebay_query ?? null,
+  };
+}
+
+export async function upsertCatalogCollectionItem(
+  userId: string,
+  catalogId: string,
+  item: Pick<CatalogCollectionItem, 'qty' | 'purchased' | 'purchaseDate' | 'condition' | 'notes'>
+): Promise<void> {
+  const payload = {
+    qty:             item.qty,
+    purchased_price: item.purchased,
+    purchase_date:   item.purchaseDate,
+    condition:       item.condition,
+    notes:           item.notes ?? null,
+  };
+
+  const { data: existing } = await supabase
+    .from('user_collections')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('catalog_id', catalogId)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from('user_collections')
+      .update(payload)
+      .eq('id', existing.id);
+    if (error) console.error('upsertCatalogCollectionItem update:', error.message);
+  } else {
+    const { error } = await supabase
+      .from('user_collections')
+      .insert({ user_id: userId, catalog_id: catalogId, ...payload });
+    if (error) console.error('upsertCatalogCollectionItem insert:', error.message);
+  }
+}
+
+export async function deleteCatalogCollectionItem(userId: string, catalogId: string): Promise<void> {
+  const { error } = await supabase
+    .from('user_collections')
+    .delete()
+    .eq('user_id', userId)
+    .eq('catalog_id', catalogId);
+  if (error) console.error('deleteCatalogCollectionItem:', error.message);
 }

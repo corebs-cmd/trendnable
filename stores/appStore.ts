@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CollectionItem, DBUser, SKU, PriceAlert, AppNotification } from '../lib/types';
+import { CollectionItem, DBUser, SKU, PriceAlert, AppNotification, CatalogWatchlistItem, CatalogCollectionItem } from '../lib/types';
 import * as api from '../lib/api';
 
 interface AppState {
@@ -25,6 +25,10 @@ interface AppState {
 
   // Watchlist
   watchlist: string[];
+
+  // Catalog watchlist + collection (scan-based, no SKU yet)
+  catalogWatchlist: CatalogWatchlistItem[];
+  catalogCollection: CatalogCollectionItem[];
 
   // Price alerts + notifications
   priceAlerts: PriceAlert[];
@@ -63,6 +67,16 @@ interface AppState {
   isWatching: (skuId: string) => boolean;
   isInCollection: (skuId: string) => boolean;
 
+  // Catalog watchlist actions
+  addCatalogToWatchlist: (item: CatalogWatchlistItem) => boolean;
+  removeCatalogFromWatchlist: (catalogId: string) => void;
+  isWatchingCatalog: (catalogId: string) => boolean;
+
+  // Catalog collection actions
+  addCatalogToCollection: (item: CatalogCollectionItem) => void;
+  removeCatalogFromCollection: (catalogId: string) => void;
+  isCatalogInCollection: (catalogId: string) => boolean;
+
   // Price alerts
   loadPriceAlerts: (userId: string) => Promise<void>;
   addPriceAlert: (skuId: string, direction: 'above' | 'below', targetPrice: number) => Promise<void>;
@@ -86,6 +100,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   skusError: null,
   collection: [],
   watchlist: [],
+  catalogWatchlist: [],
+  catalogCollection: [],
   priceAlerts: [],
   notifications: [],
   unreadCount: 0,
@@ -125,11 +141,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   loadUserData: async (userId) => {
-    const [collection, watchlist, priceAlerts, notifications] = await Promise.all([
+    const [collection, watchlist, priceAlerts, notifications, catalogWatchlist, catalogCollection] = await Promise.all([
       api.fetchCollection(userId),
       api.fetchWatchlist(userId),
       api.fetchPriceAlerts(userId),
       api.fetchNotifications(userId),
+      api.fetchCatalogWatchlist(userId),
+      api.fetchCatalogCollection(userId),
     ]);
     set({
       collection,
@@ -137,6 +155,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       priceAlerts,
       notifications,
       unreadCount: notifications.filter((n) => !n.isRead).length,
+      catalogWatchlist,
+      catalogCollection,
     });
   },
 
@@ -181,9 +201,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   addToWatchlist: (skuId) => {
-    const { watchlist, isPremium } = get();
+    const { watchlist, catalogWatchlist, isPremium } = get();
     if (watchlist.includes(skuId)) return true;
-    if (!isPremium && watchlist.length >= 20) return false;
+    if (!isPremium && watchlist.length + catalogWatchlist.length >= 20) return false;
     set({ watchlist: [...watchlist, skuId] });
     const userId = get().user?.id;
     if (userId) api.addWatchlistItem(userId, skuId).catch(console.error);
@@ -209,6 +229,55 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   isWatching: (skuId) => get().watchlist.includes(skuId),
   isInCollection: (skuId) => get().collection.some((c) => c.skuId === skuId),
+
+  addCatalogToWatchlist: (item) => {
+    const { watchlist, catalogWatchlist, isPremium } = get();
+    if (catalogWatchlist.some((c) => c.catalogId === item.catalogId)) return true;
+    if (!isPremium && watchlist.length + catalogWatchlist.length >= 20) return false;
+    set({ catalogWatchlist: [item, ...catalogWatchlist] });
+    const userId = get().user?.id;
+    if (userId) api.addCatalogWatchlistItem(userId, item.catalogId).catch(console.error);
+    return true;
+  },
+
+  removeCatalogFromWatchlist: (catalogId) => {
+    set((state) => ({
+      catalogWatchlist: state.catalogWatchlist.filter((c) => c.catalogId !== catalogId),
+    }));
+    const userId = get().user?.id;
+    if (userId) api.removeCatalogWatchlistItem(userId, catalogId).catch(console.error);
+  },
+
+  isWatchingCatalog: (catalogId) => get().catalogWatchlist.some((c) => c.catalogId === catalogId),
+
+  addCatalogToCollection: (item) => {
+    set((state) => {
+      const existing = state.catalogCollection.find((c) => c.catalogId === item.catalogId);
+      if (existing) {
+        return {
+          catalogCollection: state.catalogCollection.map((c) =>
+            c.catalogId === item.catalogId ? { ...c, qty: c.qty + item.qty } : c
+          ),
+        };
+      }
+      return { catalogCollection: [item, ...state.catalogCollection] };
+    });
+    const userId = get().user?.id;
+    if (userId) {
+      const updated = get().catalogCollection.find((c) => c.catalogId === item.catalogId) ?? item;
+      api.upsertCatalogCollectionItem(userId, item.catalogId, updated).catch(console.error);
+    }
+  },
+
+  removeCatalogFromCollection: (catalogId) => {
+    set((state) => ({
+      catalogCollection: state.catalogCollection.filter((c) => c.catalogId !== catalogId),
+    }));
+    const userId = get().user?.id;
+    if (userId) api.deleteCatalogCollectionItem(userId, catalogId).catch(console.error);
+  },
+
+  isCatalogInCollection: (catalogId) => get().catalogCollection.some((c) => c.catalogId === catalogId),
 
   loadPriceAlerts: async (userId) => {
     const priceAlerts = await api.fetchPriceAlerts(userId);

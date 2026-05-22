@@ -6,25 +6,31 @@ import {
   Pressable,
   StyleSheet,
   Alert,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Svg, { Path, Circle } from 'react-native-svg';
 
-import { buildTheme } from '@/lib/theme';
+import { buildTheme, categoryColor } from '@/lib/theme';
 import { useAppStore } from '@/stores/appStore';
 import { catById, fmtPrice } from '@/lib/appConfig';
-import { CollectionItemEnriched, UpgradeContext } from '@/lib/types';
+import { CollectionItemEnriched, UpgradeContext, CatalogCollectionItem } from '@/lib/types';
 import AppHeader from '@/components/AppHeader';
 import IconButton from '@/components/IconButton';
 import Sparkline from '@/components/Sparkline';
 import UpgradeSheet from '@/components/UpgradeSheet';
 import { ProductThumb } from '@/components/ProductPlaceholder';
 import AddToCollectionSheet from '@/components/AddToCollectionSheet';
+import CatalogItemSheet from '@/components/CatalogItemSheet';
 
 const VALUE_HISTORY_BASE = [0.72, 0.74, 0.75, 0.77, 0.79, 0.81, 0.83, 0.86, 0.89, 0.92, 0.94, 0.96, 0.98, 1.0];
 
 type ChartWindow = '7d' | '30d' | '90d' | '1y';
+
+type CollectionRow =
+  | { type: 'sku'; item: CollectionItemEnriched }
+  | { type: 'catalog'; item: CatalogCollectionItem };
 
 export default function CollectionScreen() {
   const router = useRouter();
@@ -35,6 +41,8 @@ export default function CollectionScreen() {
   const removeFromCollection = useAppStore((s) => s.removeFromCollection);
   const updateCollectionItem = useAppStore((s) => s.updateCollectionItem);
   const hotSkus = useAppStore((s) => s.hotSkus);
+  const catalogCollection = useAppStore((s) => s.catalogCollection);
+  const removeCatalogFromCollection = useAppStore((s) => s.removeCatalogFromCollection);
   const theme = buildTheme(isDark);
 
   const [filter, setFilter] = useState<string>('all');
@@ -42,6 +50,7 @@ export default function CollectionScreen() {
   const [scrolled, setScrolled] = useState(false);
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [catalogDetailId, setCatalogDetailId] = useState<string | null>(null);
 
   const items: CollectionItemEnriched[] = useMemo(() => {
     return storeCollection.map((item) => {
@@ -53,10 +62,20 @@ export default function CollectionScreen() {
     }).filter(Boolean) as CollectionItemEnriched[];
   }, [storeCollection, hotSkus]);
 
-  const total = useMemo(() => items.reduce((s, i) => s + i.current, 0), [items]);
-  const totalCost = useMemo(() => items.reduce((s, i) => s + i.cost, 0), [items]);
+  const catalogTotal = useMemo(() =>
+    catalogCollection.reduce((s, i) => s + (i.currentPrice != null ? i.currentPrice * i.qty : 0), 0),
+  [catalogCollection]);
+  const catalogCost = useMemo(() =>
+    catalogCollection.reduce((s, i) => s + i.purchased * i.qty, 0),
+  [catalogCollection]);
+  const catalogQty = useMemo(() =>
+    catalogCollection.reduce((s, i) => s + i.qty, 0),
+  [catalogCollection]);
+
+  const total = useMemo(() => items.reduce((s, i) => s + i.current, 0) + catalogTotal, [items, catalogTotal]);
+  const totalCost = useMemo(() => items.reduce((s, i) => s + i.cost, 0) + catalogCost, [items, catalogCost]);
   const totalPL = total - totalCost;
-  const totalQty = useMemo(() => items.reduce((s, i) => s + i.qty, 0), [items]);
+  const totalQty = useMemo(() => items.reduce((s, i) => s + i.qty, 0) + catalogQty, [items, catalogQty]);
   const plPositive = totalPL >= 0;
   const plPct = totalCost > 0 ? (totalPL / totalCost) * 100 : 0;
 
@@ -65,14 +84,25 @@ export default function CollectionScreen() {
   const collectionCategoryIds = useMemo(() => {
     const ids = new Set<string>();
     items.forEach((i) => ids.add(i.sku.category));
+    catalogCollection.forEach((i) => ids.add(i.categoryId));
     return Array.from(ids);
-  }, [items]);
+  }, [items, catalogCollection]);
 
-  const filteredItems = useMemo(() => {
-    if (filter === 'all') return items;
-    if (filter === 'forsale') return items.filter((i) => i.forSale);
-    return items.filter((i) => i.sku.category === filter);
-  }, [items, filter]);
+  const filteredRows = useMemo((): CollectionRow[] => {
+    const skuRows: CollectionRow[] = (() => {
+      if (filter === 'forsale') return items.filter((i) => i.forSale).map((item) => ({ type: 'sku' as const, item }));
+      if (filter !== 'all') return items.filter((i) => i.sku.category === filter).map((item) => ({ type: 'sku' as const, item }));
+      return items.map((item) => ({ type: 'sku' as const, item }));
+    })();
+
+    const catalogRows: CollectionRow[] = filter === 'forsale'
+      ? []
+      : catalogCollection
+          .filter((i) => filter === 'all' || i.categoryId === filter)
+          .map((item) => ({ type: 'catalog' as const, item }));
+
+    return [...skuRows, ...catalogRows];
+  }, [items, catalogCollection, filter]);
 
   const filterChips = [
     { key: 'all', label: 'All' },
@@ -138,7 +168,7 @@ export default function CollectionScreen() {
                 ${total.toLocaleString(undefined, { maximumFractionDigits: 0 })}
               </Text>
               <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.muted, marginTop: 8 }}>
-                {totalQty} item{totalQty !== 1 ? 's' : ''} · {items.length} SKU{items.length !== 1 ? 's' : ''}
+                {totalQty} item{totalQty !== 1 ? 's' : ''} · {items.length + catalogCollection.length} product{(items.length + catalogCollection.length) !== 1 ? 's' : ''}
               </Text>
             </View>
 
@@ -224,16 +254,16 @@ export default function CollectionScreen() {
 
         {/* Items list */}
         <View style={{ gap: 8 }}>
-          {filteredItems.length === 0 ? (
+          {filteredRows.length === 0 ? (
             <View style={{
               padding: 36, alignItems: 'center', backgroundColor: theme.surface,
               borderRadius: theme.radius, borderWidth: 0.5, borderStyle: 'dashed', borderColor: theme.hairline,
             }}>
               <Text style={{ fontFamily: theme.fontDispBold, fontSize: 17, color: theme.text }}>No items</Text>
-              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.muted, marginTop: 4, marginBottom: items.length === 0 ? 16 : 0 }}>
-                {items.length === 0 ? 'Start tracking what you own.' : 'Try a different filter.'}
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.muted, marginTop: 4, marginBottom: (items.length + catalogCollection.length) === 0 ? 16 : 0 }}>
+                {(items.length + catalogCollection.length) === 0 ? 'Start tracking what you own.' : 'Try a different filter.'}
               </Text>
-              {items.length === 0 && (
+              {(items.length + catalogCollection.length) === 0 && (
                 <Pressable
                   onPress={() => setAddOpen(true)}
                   style={({ pressed }) => ({
@@ -248,79 +278,178 @@ export default function CollectionScreen() {
               )}
             </View>
           ) : (
-            filteredItems.map((item) => {
-              const plPos = item.pl >= 0;
-              const itemPlPct = item.cost > 0 ? (item.pl / item.cost) * 100 : 0;
+            filteredRows.map((row) => {
+              if (row.type === 'sku') {
+                const item = row.item;
+                const plPos = item.pl >= 0;
+                const itemPlPct = item.cost > 0 ? (item.pl / item.cost) * 100 : 0;
+                return (
+                  <Pressable
+                    key={`sku-${item.skuId}`}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row', alignItems: 'center', gap: 12,
+                      backgroundColor: theme.surface, borderRadius: theme.radius,
+                      padding: 12, opacity: pressed ? 0.78 : 1,
+                    })}
+                    onPress={() => router.push(`/sku/${item.skuId}`)}
+                  >
+                    <ProductThumb sku={item.sku} theme={theme} size={60} />
+
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={{ fontFamily: theme.fontDispBold, fontSize: 15, color: theme.text, letterSpacing: -0.2, flex: 1 }} numberOfLines={1}>
+                          {item.sku.short}
+                        </Text>
+                        {item.forSale && (
+                          <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999, borderWidth: 0.5, borderColor: theme.gold }}>
+                            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, color: theme.gold, letterSpacing: 0.1 * 9, textTransform: 'uppercase' }}>
+                              For sale
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      {!!item.sku.series && (
+                        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11.5, color: theme.muted, letterSpacing: -0.1 }} numberOfLines={1}>
+                          {item.sku.series}
+                        </Text>
+                      )}
+                      <Text style={{ fontFamily: theme.fontMono, fontSize: 11.5, color: theme.faint }}>
+                        ×{item.qty} · {item.condition}
+                      </Text>
+                    </View>
+
+                    <View style={{ alignItems: 'flex-end', gap: 3 }}>
+                      <Text style={{ fontFamily: theme.fontMonoBold, fontSize: 15, color: theme.text, fontVariant: ['tabular-nums'], letterSpacing: -0.2 }}>
+                        ${Math.round(item.current).toLocaleString()}
+                      </Text>
+                      {item.cost > 0 && (
+                        <Text style={{ fontFamily: theme.fontMono, fontSize: 12, color: plPos ? theme.pos : theme.neg, fontVariant: ['tabular-nums'] }}>
+                          {plPos ? '+' : ''}${Math.abs(Math.round(item.pl))} ({plPos ? '+' : ''}{itemPlPct.toFixed(1)}%)
+                        </Text>
+                      )}
+                    </View>
+                    <Pressable
+                      onPress={() =>
+                        Alert.alert(
+                          item.sku.name,
+                          undefined,
+                          [
+                            {
+                              text: item.forSale ? 'Remove from sale listing' : 'List as for sale',
+                              onPress: () => updateCollectionItem(item.skuId, { forSale: !item.forSale }),
+                            },
+                            {
+                              text: 'Mark as sold',
+                              onPress: () => removeFromCollection(item.skuId),
+                            },
+                            {
+                              text: 'Remove from collection',
+                              style: 'destructive',
+                              onPress: () => removeFromCollection(item.skuId),
+                            },
+                            { text: 'Cancel', style: 'cancel' },
+                          ]
+                        )
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={`Manage ${item.sku.name}`}
+                      style={({ pressed }) => ({
+                        width: 32, height: 32, marginLeft: 2,
+                        alignItems: 'center', justifyContent: 'center',
+                        opacity: pressed ? 0.4 : 1,
+                      })}
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+                    >
+                      <Svg width={18} height={4} viewBox="0 0 18 4">
+                        <Circle cx={2} cy={2} r={1.7} fill={theme.faint} />
+                        <Circle cx={9} cy={2} r={1.7} fill={theme.faint} />
+                        <Circle cx={16} cy={2} r={1.7} fill={theme.faint} />
+                      </Svg>
+                    </Pressable>
+                  </Pressable>
+                );
+              }
+
+              // Catalog item row
+              const item = row.item;
+              const c = categoryColor(item.categoryId, theme.dark);
+              const cat = catById(item.categoryId);
+              const currentVal = item.currentPrice != null ? item.currentPrice * item.qty : null;
               return (
                 <Pressable
-                  key={item.skuId}
+                  key={`catalog-${item.catalogId}`}
+                  onPress={() => setCatalogDetailId(item.catalogId)}
                   style={({ pressed }) => ({
                     flexDirection: 'row', alignItems: 'center', gap: 12,
                     backgroundColor: theme.surface, borderRadius: theme.radius,
                     padding: 12, opacity: pressed ? 0.78 : 1,
                   })}
-                  onPress={() => router.push(`/sku/${item.skuId}`)}
                 >
-                  <ProductThumb sku={item.sku} theme={theme} size={60} />
+                  {/* Thumbnail: real image or category fallback */}
+                  {item.imageUrl ? (
+                    <Image
+                      source={{ uri: item.imageUrl }}
+                      style={{ width: 60, height: 60, borderRadius: 10, flexShrink: 0 }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={{
+                      width: 60, height: 60, borderRadius: 10,
+                      backgroundColor: c.tint,
+                      alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, color: c.ink, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        {cat?.short?.slice(0, 3) ?? '???'}
+                      </Text>
+                    </View>
+                  )}
 
                   <View style={{ flex: 1, gap: 2 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={{ fontFamily: theme.fontDispBold, fontSize: 15, color: theme.text, letterSpacing: -0.2, flex: 1 }} numberOfLines={1}>
-                        {item.sku.short}
-                      </Text>
-                      {item.forSale && (
-                        <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999, borderWidth: 0.5, borderColor: theme.gold }}>
-                          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, color: theme.gold, letterSpacing: 0.1 * 9, textTransform: 'uppercase' }}>
-                            For sale
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    {!!item.sku.series && (
-                      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11.5, color: theme.muted, letterSpacing: -0.1 }} numberOfLines={1}>
-                        {item.sku.series}
-                      </Text>
-                    )}
+                    <Text style={{ fontFamily: theme.fontDispBold, fontSize: 15, color: theme.text, letterSpacing: -0.2 }} numberOfLines={1}>
+                      {item.short}
+                    </Text>
                     <Text style={{ fontFamily: theme.fontMono, fontSize: 11.5, color: theme.faint }}>
                       ×{item.qty} · {item.condition}
                     </Text>
+                    <View style={{
+                      paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999,
+                      backgroundColor: theme.surface2, borderWidth: 0.5, borderColor: theme.hairline,
+                      alignSelf: 'flex-start', marginTop: 2,
+                    }}>
+                      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 9, color: theme.faint, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        Pending
+                      </Text>
+                    </View>
                   </View>
 
                   <View style={{ alignItems: 'flex-end', gap: 3 }}>
-                    <Text style={{ fontFamily: theme.fontMonoBold, fontSize: 15, color: theme.text, fontVariant: ['tabular-nums'], letterSpacing: -0.2 }}>
-                      ${Math.round(item.current).toLocaleString()}
-                    </Text>
-                    {item.cost > 0 && (
-                      <Text style={{ fontFamily: theme.fontMono, fontSize: 12, color: plPos ? theme.pos : theme.neg, fontVariant: ['tabular-nums'] }}>
-                        {plPos ? '+' : ''}${Math.abs(Math.round(item.pl))} ({plPos ? '+' : ''}{itemPlPct.toFixed(1)}%)
+                    {currentVal != null ? (
+                      <Text style={{ fontFamily: theme.fontMonoBold, fontSize: 15, color: theme.text, fontVariant: ['tabular-nums'], letterSpacing: -0.2 }}>
+                        {fmtPrice(currentVal)}
                       </Text>
+                    ) : (
+                      <Text style={{ fontFamily: theme.fontMono, fontSize: 12, color: theme.faint }}>—</Text>
                     )}
                   </View>
+
                   <Pressable
                     onPress={() =>
                       Alert.alert(
-                        item.sku.name,
+                        item.name,
                         undefined,
                         [
                           {
-                            text: item.forSale ? 'Remove from sale listing' : 'List as for sale',
-                            onPress: () => updateCollectionItem(item.skuId, { forSale: !item.forSale }),
-                          },
-                          {
-                            text: 'Mark as sold',
-                            onPress: () => removeFromCollection(item.skuId),
-                          },
-                          {
                             text: 'Remove from collection',
                             style: 'destructive',
-                            onPress: () => removeFromCollection(item.skuId),
+                            onPress: () => removeCatalogFromCollection(item.catalogId),
                           },
                           { text: 'Cancel', style: 'cancel' },
                         ]
                       )
                     }
                     accessibilityRole="button"
-                    accessibilityLabel={`Manage ${item.sku.name}`}
+                    accessibilityLabel={`Manage ${item.name}`}
                     style={({ pressed }) => ({
                       width: 32, height: 32, marginLeft: 2,
                       alignItems: 'center', justifyContent: 'center',
@@ -354,6 +483,13 @@ export default function CollectionScreen() {
         theme={theme}
         onClose={() => setAddOpen(false)}
         onConfirm={() => setAddOpen(false)}
+      />
+
+      <CatalogItemSheet
+        open={catalogDetailId !== null}
+        catalogId={catalogDetailId}
+        theme={theme}
+        onClose={() => setCatalogDetailId(null)}
       />
     </View>
   );

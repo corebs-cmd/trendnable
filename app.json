@@ -16,9 +16,10 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.trendnable.app",
-      "buildNumber": "7",
+      "buildNumber": "9",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Allow Trendnable to use the camera to scan product barcodes."
       }
     },
     "android": {
@@ -26,7 +27,8 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A1426"
       },
-      "package": "com.trendnable.app"
+      "package": "com.trendnable.app",
+      "permissions": ["android.permission.CAMERA"]
     },
     "web": {
       "bundler": "metro",
@@ -35,7 +37,8 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      ["expo-camera", { "cameraPermission": "Allow Trendnable to use the camera to scan product barcodes." }]
     ],
     "experiments": {
       "typedRoutes": true

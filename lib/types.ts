@@ -172,3 +172,52 @@ export interface AppNotification {
 
 export type HotScoreViz = 'bar' | 'ring' | 'components' | 'spark';
 export type CardDensity = 'hero' | 'spacious' | 'medium' | 'cozy' | 'dense';
+
+// ── Scan pipeline ─────────────────────────────────────────────────────────────
+
+export interface ScanResult {
+  catalogId: string;
+  skuId: string | null;
+  name: string;
+  short: string;
+  series: string | null;
+  categoryId: string;
+  fandomId: string | null;
+  variantType: string | null;
+  popNumber: number | null;
+  price: { low: number; median: number; high: number };
+  listings: number;
+  scoreEstimate: number;
+  scoreBreakdown: { velocity: number; volume: number; confirmation: number; freshness: number };
+  isNewToCatalog: boolean;
+  qualityGatePassed: boolean;
+  barcode: string;
+  ebayQuery: string;
+  imageUrl: string | null;
+}
+
+export interface CatalogWatchlistItem {
+  catalogId: string;
+  name: string;
+  short: string;
+  categoryId: string;
+  fandomId: string | null;
+  price: number | null;
+  scoreEstimate: number | null;
+  addedAt: string;
+  imageUrl: string | null;
+}
+
+export interface CatalogCollectionItem {
+  catalogId: string;
+  name: string;
+  short: string;
+  categoryId: string;
+  qty: number;
+  purchased: number;
+  purchaseDate: string;
+  condition: string;
+  notes?: string;
+  currentPrice: number | null;
+  imageUrl: string | null;
+}

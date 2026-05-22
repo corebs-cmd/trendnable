@@ -80,8 +80,10 @@ async function classifyWithClaude(
 - Identify exclusive_type: "chase" | "gitd" | "convention" | "retailer" | "vaulted" | "grail" | "rare_variant" | "signed" | "limited" | "htf" | null`,
 
     tcg: `TCG RULES:
+- Do NOT include card print numbers (e.g. "272/217") in the canonical name or short. Identify the card as: Card Name + Set Name + Rarity/Variant. Example: "Mega Meganium EX Stellar Crown Secret Rare Full Art", NOT "Mega Meganium EX 272/217 Stellar Crown Secret Rare Full Art".
 - Identify card_variant: "raw" (ungraded) or "graded" (PSA/BGS/CGC/SGC).
-- If graded, extract card_grader (e.g. "PSA") and card_grade (e.g. "10").`,
+- If graded, extract card_grader (e.g. "PSA") and card_grade (e.g. "10").
+- The ebay_query may include the card number for more accurate price lookups.`,
 
     popmart: `POP MART RULES:
 - Identify the specific figure name and series.

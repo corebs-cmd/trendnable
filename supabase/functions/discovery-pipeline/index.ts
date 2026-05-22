@@ -8,7 +8,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { titlePassesTier1, tcgMultiQty } from '../_shared/pipeline-utils.ts';
+import { titlePassesTier1, tcgMultiQty, catalogFingerprint, exclusiveTypeToVariantType } from '../_shared/pipeline-utils.ts';
 
 const SUPABASE_URL              = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -341,6 +341,43 @@ serve(async (req) => {
       }
 
       inserted++;
+
+      // Upsert to product_catalog — fire and forget
+      {
+        const cat     = c.category_id ?? '';
+        const popNum  = cat === 'funko' ? parseInt((c.name.match(/\[#(\d+)\]/)?.[1] ?? '')) : NaN;
+        const vt      = cat === 'funko' ? exclusiveTypeToVariantType(c.exclusive_type) : null;
+        const fp      = catalogFingerprint(cat, c.name, {
+          popNumber:   !isNaN(popNum) ? popNum : null,
+          variantType: vt,
+          cardVariant: c.card_variant ?? null,
+          cardGrader:  c.card_grader  ?? null,
+          cardGrade:   c.card_grade   ?? null,
+        });
+        supabase.from('product_catalog').upsert({
+          fingerprint:      fp,
+          name:             c.name,
+          short:            c.short ?? c.name.slice(0, 18),
+          category_id:      cat,
+          fandom_id:        c.fandom_id   ?? null,
+          series:           c.series      ?? null,
+          pop_number:       !isNaN(popNum) ? popNum : null,
+          variant_type:     vt,
+          exclusive_type:   c.exclusive_type ?? null,
+          card_variant:     c.card_variant   ?? null,
+          card_grader:      c.card_grader    ?? null,
+          card_grade:       c.card_grade     ?? null,
+          ebay_query:       c.ebay_query ?? c.name,
+          price_first_seen: c.price_median ?? null,
+          price_latest:     c.price_median ?? null,
+          price_updated_at: new Date().toISOString(),
+          source:           'discovery',
+          last_seen_at:     new Date().toISOString(),
+          first_seen_at:    new Date().toISOString(),
+        }, { onConflict: 'fingerprint' }).then(({ error: catErr }) => {
+          if (catErr) console.error(`[catalog] discovery upsert failed for "${c.name}":`, catErr.message);
+        });
+      }
 
       if (meetsThreshold) {
         const { data: result, error: promoteError } = await supabase

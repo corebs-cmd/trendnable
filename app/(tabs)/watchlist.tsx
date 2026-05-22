@@ -5,39 +5,45 @@ import {
   ScrollView,
   Pressable,
   Alert,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 
-import { buildTheme } from '@/lib/theme';
+import { buildTheme, categoryColor } from '@/lib/theme';
 import { useAppStore } from '@/stores/appStore';
-import { SKU, UpgradeContext } from '@/lib/types';
+import { SKU, UpgradeContext, CatalogWatchlistItem } from '@/lib/types';
+import { catById, fmtPrice } from '@/lib/appConfig';
 import AppHeader from '@/components/AppHeader';
 import UpgradeSheet from '@/components/UpgradeSheet';
 import SKUCard from '@/components/SKUCard';
 import PriceAlertSheet from '@/components/PriceAlertSheet';
 import NotificationsSheet from '@/components/NotificationsSheet';
+import CatalogItemSheet from '@/components/CatalogItemSheet';
 
 const FREE_CAP = 20;
 
 export default function WatchlistScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const isDark              = useAppStore((s) => s.isDark);
-  const isPremium           = useAppStore((s) => s.isPremium);
-  const storeWatchlist      = useAppStore((s) => s.watchlist);
-  const removeFromWatchlist = useAppStore((s) => s.removeFromWatchlist);
-  const deleteAlertsForSku  = useAppStore((s) => s.deleteAlertsForSku);
-  const hotSkus             = useAppStore((s) => s.hotSkus);
-  const priceAlerts         = useAppStore((s) => s.priceAlerts);
-  const unreadCount         = useAppStore((s) => s.unreadCount);
-  const theme               = buildTheme(isDark);
+  const isDark                   = useAppStore((s) => s.isDark);
+  const isPremium                = useAppStore((s) => s.isPremium);
+  const storeWatchlist           = useAppStore((s) => s.watchlist);
+  const removeFromWatchlist      = useAppStore((s) => s.removeFromWatchlist);
+  const deleteAlertsForSku       = useAppStore((s) => s.deleteAlertsForSku);
+  const hotSkus                  = useAppStore((s) => s.hotSkus);
+  const priceAlerts              = useAppStore((s) => s.priceAlerts);
+  const unreadCount              = useAppStore((s) => s.unreadCount);
+  const catalogWatchlist         = useAppStore((s) => s.catalogWatchlist);
+  const removeCatalogFromWatchlist = useAppStore((s) => s.removeCatalogFromWatchlist);
+  const theme                    = buildTheme(isDark);
 
   const [scrolled, setScrolled]           = useState(false);
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
   const [alertSkuId, setAlertSkuId]       = useState<string | null>(null);
   const [notifOpen, setNotifOpen]         = useState(false);
+  const [catalogDetailId, setCatalogDetailId] = useState<string | null>(null);
 
   const watched: SKU[] = useMemo(() => {
     return storeWatchlist
@@ -51,7 +57,7 @@ export default function WatchlistScreen() {
     [watched, alertSkuId]
   );
 
-  const watchCount = storeWatchlist.length;
+  const totalWatchCount = storeWatchlist.length + catalogWatchlist.length;
 
   const handleUnwatch = (sku: SKU) => {
     const skuAlerts = priceAlerts.filter((a) => a.skuId === sku.id && a.isActive);
@@ -155,7 +161,7 @@ export default function WatchlistScreen() {
                 fontFamily: theme.fontDispBold, fontSize: 24,
                 color: theme.text, letterSpacing: -0.02 * 24,
               }}>
-                {watchCount}
+                {totalWatchCount}
               </Text>
               {!isPremium && (
                 <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.faint }}>
@@ -185,7 +191,7 @@ export default function WatchlistScreen() {
           )}
         </View>
 
-        {watched.length === 0 ? (
+        {watched.length === 0 && catalogWatchlist.length === 0 ? (
           <View style={{
             padding: 36, alignItems: 'center',
             backgroundColor: theme.surface, borderRadius: theme.radius,
@@ -212,72 +218,186 @@ export default function WatchlistScreen() {
           </View>
         ) : (
           <>
-            <View style={{ marginBottom: 12 }}>
-              <Text style={{
-                fontFamily: 'Inter_700Bold', fontSize: 11, color: theme.gold,
-                letterSpacing: 0.14 * 11, textTransform: 'uppercase', marginBottom: 4,
-              }}>
-                Today
-              </Text>
-              <Text style={{
-                fontFamily: theme.fontDispBold, fontSize: 26,
-                color: theme.text, letterSpacing: -0.52, lineHeight: 30,
-              }}>
-                Movers
-              </Text>
-              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginTop: 2 }}>
-                Sorted by absolute change · long-press to remove
-              </Text>
-            </View>
+            {watched.length > 0 && (
+              <>
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={{
+                    fontFamily: 'Inter_700Bold', fontSize: 11, color: theme.gold,
+                    letterSpacing: 0.14 * 11, textTransform: 'uppercase', marginBottom: 4,
+                  }}>
+                    Today
+                  </Text>
+                  <Text style={{
+                    fontFamily: theme.fontDispBold, fontSize: 26,
+                    color: theme.text, letterSpacing: -0.52, lineHeight: 30,
+                  }}>
+                    Movers
+                  </Text>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginTop: 2 }}>
+                    Sorted by absolute change · long-press to remove
+                  </Text>
+                </View>
 
-            <View style={{ gap: 10 }}>
-              {watched.map((sku) => {
-                const skuAlerts = priceAlerts.filter((a) => a.skuId === sku.id && a.isActive);
-                return (
-                  <View key={sku.id}>
-                    <SKUCard
-                      sku={sku}
-                      theme={theme}
-                      density="medium"
-                      onPress={() => router.push(`/sku/${sku.id}`)}
-                      onLongPress={() => handleUnwatch(sku)}
-                    />
-                    {/* Alert chips row */}
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 2, marginTop: 6 }}>
-                      {skuAlerts.map((alert) => (
-                        <View key={alert.id} style={{
-                          flexDirection: 'row', alignItems: 'center',
-                          backgroundColor: `${theme.premium}15`,
-                          borderWidth: 0.5, borderColor: `${theme.premium}40`,
-                          borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5,
-                        }}>
-                          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11.5, color: theme.premium }}>
-                            {alert.direction === 'above' ? '↑' : '↓'} ${alert.targetPrice.toFixed(0)}
-                          </Text>
+                <View style={{ gap: 10 }}>
+                  {watched.map((sku) => {
+                    const skuAlerts = priceAlerts.filter((a) => a.skuId === sku.id && a.isActive);
+                    return (
+                      <View key={sku.id}>
+                        <SKUCard
+                          sku={sku}
+                          theme={theme}
+                          density="medium"
+                          onPress={() => router.push(`/sku/${sku.id}`)}
+                          onLongPress={() => handleUnwatch(sku)}
+                        />
+                        {/* Alert chips row */}
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 2, marginTop: 6 }}>
+                          {skuAlerts.map((alert) => (
+                            <View key={alert.id} style={{
+                              flexDirection: 'row', alignItems: 'center',
+                              backgroundColor: `${theme.premium}15`,
+                              borderWidth: 0.5, borderColor: `${theme.premium}40`,
+                              borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5,
+                            }}>
+                              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11.5, color: theme.premium }}>
+                                {alert.direction === 'above' ? '↑' : '↓'} ${alert.targetPrice.toFixed(0)}
+                              </Text>
+                            </View>
+                          ))}
+                          <Pressable
+                            onPress={() => setAlertSkuId(sku.id)}
+                            style={({ pressed }) => ({
+                              flexDirection: 'row', alignItems: 'center', gap: 4,
+                              backgroundColor: theme.surface2,
+                              borderWidth: 0.5, borderColor: theme.hairline,
+                              borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5,
+                              opacity: pressed ? 0.7 : 1,
+                            })}
+                          >
+                            <Svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={theme.faint} strokeWidth={2.5} strokeLinecap="round">
+                              <Path d="M12 5v14M5 12h14" />
+                            </Svg>
+                            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11.5, color: theme.muted }}>
+                              alert
+                            </Text>
+                          </Pressable>
                         </View>
-                      ))}
+                      </View>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+
+            {/* ── Catalog / scanned products section ──────────────────── */}
+            {catalogWatchlist.length > 0 && (
+              <View style={{ marginTop: watched.length > 0 ? 28 : 0 }}>
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={{
+                    fontFamily: 'Inter_700Bold', fontSize: 11, color: theme.gold,
+                    letterSpacing: 0.14 * 11, textTransform: 'uppercase', marginBottom: 4,
+                  }}>
+                    Scanned
+                  </Text>
+                  <Text style={{
+                    fontFamily: theme.fontDispBold, fontSize: 26,
+                    color: theme.text, letterSpacing: -0.52, lineHeight: 30,
+                  }}>
+                    Scanned Products
+                  </Text>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginTop: 2 }}>
+                    Pending SKU data · long-press to remove
+                  </Text>
+                </View>
+
+                <View style={{ gap: 10 }}>
+                  {catalogWatchlist.map((item) => {
+                    const c = categoryColor(item.categoryId, theme.dark);
+                    const cat = catById(item.categoryId);
+                    return (
                       <Pressable
-                        onPress={() => setAlertSkuId(sku.id)}
+                        key={item.catalogId}
+                        onPress={() => setCatalogDetailId(item.catalogId)}
+                        onLongPress={() =>
+                          Alert.alert(
+                            'Remove from watchlist',
+                            `Stop watching ${item.name}?`,
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: 'Remove',
+                                style: 'destructive',
+                                onPress: () => removeCatalogFromWatchlist(item.catalogId),
+                              },
+                            ]
+                          )
+                        }
                         style={({ pressed }) => ({
-                          flexDirection: 'row', alignItems: 'center', gap: 4,
-                          backgroundColor: theme.surface2,
-                          borderWidth: 0.5, borderColor: theme.hairline,
-                          borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5,
-                          opacity: pressed ? 0.7 : 1,
+                          flexDirection: 'row', alignItems: 'center', gap: 12,
+                          backgroundColor: theme.surface, borderRadius: theme.radius,
+                          padding: 12, opacity: pressed ? 0.78 : 1,
                         })}
                       >
-                        <Svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={theme.faint} strokeWidth={2.5} strokeLinecap="round">
-                          <Path d="M12 5v14M5 12h14" />
-                        </Svg>
-                        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11.5, color: theme.muted }}>
-                          alert
-                        </Text>
+                        {/* Thumbnail: real image or category fallback */}
+                        {item.imageUrl ? (
+                          <Image
+                            source={{ uri: item.imageUrl }}
+                            style={{ width: 48, height: 48, borderRadius: 10, flexShrink: 0 }}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={{
+                            width: 48, height: 48, borderRadius: 10,
+                            backgroundColor: c.tint,
+                            alignItems: 'center', justifyContent: 'center',
+                            flexShrink: 0,
+                          }}>
+                            <Text style={{
+                              fontFamily: 'Inter_700Bold', fontSize: 11,
+                              color: c.ink, textTransform: 'uppercase', letterSpacing: 0.5,
+                            }}>
+                              {cat?.short?.slice(0, 3) ?? '???'}
+                            </Text>
+                          </View>
+                        )}
+
+                        <View style={{ flex: 1, gap: 3 }}>
+                          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: theme.text, letterSpacing: -0.2 }} numberOfLines={1}>
+                            {item.name}
+                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <View style={{
+                              paddingHorizontal: 6, paddingVertical: 2,
+                              borderRadius: 999, backgroundColor: c.tint,
+                            }}>
+                              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, color: c.ink, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                {cat?.short ?? item.categoryId}
+                              </Text>
+                            </View>
+                            <View style={{
+                              paddingHorizontal: 6, paddingVertical: 2,
+                              borderRadius: 999,
+                              backgroundColor: theme.surface2,
+                              borderWidth: 0.5, borderColor: theme.hairline,
+                            }}>
+                              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 9, color: theme.faint, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                Pending SKU
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+
+                        {item.price != null && (
+                          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: theme.text }}>
+                            {fmtPrice(item.price)}
+                          </Text>
+                        )}
                       </Pressable>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
           </>
         )}
       </ScrollView>
@@ -305,6 +425,13 @@ export default function WatchlistScreen() {
         theme={theme}
         onClose={() => setNotifOpen(false)}
         onNavigate={(skuId) => router.push(`/sku/${skuId}`)}
+      />
+
+      <CatalogItemSheet
+        open={catalogDetailId !== null}
+        catalogId={catalogDetailId}
+        theme={theme}
+        onClose={() => setCatalogDetailId(null)}
       />
     </View>
   );

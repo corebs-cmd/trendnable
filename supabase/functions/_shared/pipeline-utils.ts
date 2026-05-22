@@ -90,6 +90,81 @@ export function effectivePrice(
   return itemPrice + (SHIPPING_DEFAULTS[categoryId] ?? DEFAULT_SHIPPING);
 }
 
+// ── Sold listing title verifier ───────────────────────────────────────────────
+// Requires all "meaningful" tokens from the eBay query to appear in the sold
+// listing title.  Prevents variant cross-contamination: e.g. a query for
+// "Darth Maul Shadow Lord Poster Variation SP" should never count base-card
+// sales that lack "Poster" and "Variation" in their title.
+//
+// Meaningful = ≥4 chars, not a negative flag ("-PSA"), not a pure number, and
+// not a card print number (X/Y). Card print numbers are stripped so that price
+// data from all prints of the same card is aggregated rather than siloed.
+export function soldTitleMatchesQuery(title: string, query: string): boolean {
+  const titleLower = title.toLowerCase();
+  const tokens = query.toLowerCase()
+    .split(/\s+/)
+    .filter(t => {
+      if (t.length < 4)              return false;   // too short
+      if (t.startsWith('-'))         return false;   // eBay negative flag
+      if (/^\d+$/.test(t))           return false;   // pure number — pop#, edition size, year
+      if (/^\d{1,4}\/\d{1,4}$/.test(t)) return false; // card print number e.g. "272/217"
+      return true;
+    });
+  if (tokens.length === 0) return true;
+  return tokens.every(t => titleLower.includes(t));
+}
+
+// ── TCG name normalisation ────────────────────────────────────────────────────
+// Strips card print numbers (e.g. "272/217", "113/111") from TCG card names
+// so that every print of the same card collapses to a single catalog entry.
+export function normalizeTcgName(name: string): string {
+  return name
+    .replace(/\b\d{1,4}\/\d{1,4}\b/g, '')  // remove "272/217"-style numbers
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+// ── Catalog fingerprint + variant helpers ─────────────────────────────────────
+
+export function catalogFingerprint(
+  category: string,
+  name: string,
+  opts: {
+    popNumber?: number | null;
+    variantType?: string | null;
+    cardVariant?: string | null;
+    cardGrader?: string | null;
+    cardGrade?: string | null;
+  } = {},
+): string {
+  const slug = (s: string) =>
+    s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+  if (category === 'funko') {
+    const popPart    = opts.popNumber != null ? String(opts.popNumber) : slug(name);
+    const variantPart = (opts.variantType ?? 'common').toLowerCase();
+    return `funko-${popPart}-${variantPart}`;
+  }
+
+  if (category === 'tcg') {
+    const namePart    = slug(normalizeTcgName(name));
+    const variantPart = (opts.cardVariant ?? 'raw').toLowerCase();
+    const graderPart  = opts.cardGrader ? `-${opts.cardGrader.toLowerCase()}` : '';
+    const gradePart   = opts.cardGrade  ? `-${opts.cardGrade.toLowerCase()}`  : '';
+    return `tcg-${namePart}-${variantPart}${graderPart}${gradePart}`;
+  }
+
+  return `${category}-${slug(name)}`;
+}
+
+// Maps funko-pipeline exclusive_type values to catalog variant_type.
+// chase/gitd are their own variant_type; everything else is 'exclusive'; null → 'common'.
+export function exclusiveTypeToVariantType(exclusiveType: string | null | undefined): string {
+  if (!exclusiveType) return 'common';
+  if (exclusiveType === 'chase' || exclusiveType === 'gitd') return exclusiveType;
+  return 'exclusive';
+}
+
 // ── P3 — IQR median with low-sample fallback ──────────────────────────────────
 // If fewer than 5 prices: skip IQR, return simple median of the raw set.
 // If IQR removes all values (degenerate): fall back to raw set.

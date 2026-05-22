@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Circle } from 'react-native-svg';
 
 import { useAppStore } from '@/stores/appStore';
 import { buildTheme } from '@/lib/theme';
@@ -97,11 +97,19 @@ export default function HotScreen() {
         brandLogo
         scrolled={scrolled}
         trailing={
-          <IconButton theme={theme} onPress={() => setFilterSheetOpen(true)} accessibilityLabel="Open filters">
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2} strokeLinecap="round">
-              <Path d="M3 6h18M6 12h12M10 18h4" />
-            </Svg>
-          </IconButton>
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            <IconButton theme={theme} onPress={() => router.push('/scan')} accessibilityLabel="Scan barcode">
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2} strokeLinecap="round">
+                <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <Circle cx="12" cy="13" r="4" />
+              </Svg>
+            </IconButton>
+            <IconButton theme={theme} onPress={() => setFilterSheetOpen(true)} accessibilityLabel="Open filters">
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2} strokeLinecap="round">
+                <Path d="M3 6h18M6 12h12M10 18h4" />
+              </Svg>
+            </IconButton>
+          </View>
         }
       />
 
