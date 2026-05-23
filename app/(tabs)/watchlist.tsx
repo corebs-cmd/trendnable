@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Circle } from 'react-native-svg';
 
 import { buildTheme, categoryColor } from '@/lib/theme';
 import { useAppStore } from '@/stores/appStore';
@@ -306,7 +306,7 @@ export default function WatchlistScreen() {
                     Scanned Products
                   </Text>
                   <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginTop: 2 }}>
-                    Pending SKU data · long-press to remove
+                    Tap to view · ··· to remove
                   </Text>
                 </View>
 
@@ -318,20 +318,6 @@ export default function WatchlistScreen() {
                       <Pressable
                         key={item.catalogId}
                         onPress={() => setCatalogDetailId(item.catalogId)}
-                        onLongPress={() =>
-                          Alert.alert(
-                            'Remove from watchlist',
-                            `Stop watching ${item.name}?`,
-                            [
-                              { text: 'Cancel', style: 'cancel' },
-                              {
-                                text: 'Remove',
-                                style: 'destructive',
-                                onPress: () => removeCatalogFromWatchlist(item.catalogId),
-                              },
-                            ]
-                          )
-                        }
                         style={({ pressed }) => ({
                           flexDirection: 'row', alignItems: 'center', gap: 12,
                           backgroundColor: theme.surface, borderRadius: theme.radius,
@@ -392,6 +378,36 @@ export default function WatchlistScreen() {
                             {fmtPrice(item.price)}
                           </Text>
                         )}
+                        <Pressable
+                          onPress={() =>
+                            Alert.alert(
+                              item.name,
+                              undefined,
+                              [
+                                {
+                                  text: 'Remove from watchlist',
+                                  style: 'destructive',
+                                  onPress: () => removeCatalogFromWatchlist(item.catalogId),
+                                },
+                                { text: 'Cancel', style: 'cancel' },
+                              ]
+                            )
+                          }
+                          accessibilityRole="button"
+                          accessibilityLabel={`Manage ${item.name}`}
+                          style={({ pressed }) => ({
+                            width: 32, height: 32, marginLeft: 2,
+                            alignItems: 'center', justifyContent: 'center',
+                            opacity: pressed ? 0.4 : 1,
+                          })}
+                          hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+                        >
+                          <Svg width={18} height={4} viewBox="0 0 18 4">
+                            <Circle cx={2} cy={2} r={1.7} fill={theme.faint} />
+                            <Circle cx={9} cy={2} r={1.7} fill={theme.faint} />
+                            <Circle cx={16} cy={2} r={1.7} fill={theme.faint} />
+                          </Svg>
+                        </Pressable>
                       </Pressable>
                     );
                   })}

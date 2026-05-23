@@ -167,6 +167,16 @@ export async function fetchHotSkus(): Promise<SKU[]> {
   return (data as Record<string, unknown>[]).map(rowToSku);
 }
 
+export async function fetchSkuById(skuId: string): Promise<SKU | null> {
+  const { data, error } = await supabase
+    .from('v_hot_skus')
+    .select('*')
+    .eq('id', skuId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return rowToSku(data as Record<string, unknown>);
+}
+
 export async function fetchSkuHistory(
   skuId: string,
   days = 14
@@ -432,6 +442,7 @@ export async function fetchCatalogWatchlist(userId: string): Promise<CatalogWatc
     .select('catalog_id, created_at, product_catalog(name, short, category_id, fandom_id, price_latest, image_url)')
     .eq('user_id', userId)
     .not('catalog_id', 'is', null)
+    .is('sku_id', null)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -481,6 +492,7 @@ export async function fetchCatalogCollection(userId: string): Promise<CatalogCol
     .select('catalog_id, qty, purchased_price, purchase_date, condition, notes, created_at, product_catalog(name, short, category_id, price_latest, image_url)')
     .eq('user_id', userId)
     .not('catalog_id', 'is', null)
+    .is('sku_id', null)
     .order('created_at', { ascending: false });
 
   if (error) {

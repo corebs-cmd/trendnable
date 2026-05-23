@@ -19,7 +19,7 @@ import Svg, { Path, Circle, Defs, Pattern, Rect } from 'react-native-svg';
 import { buildTheme, categoryColor, RADIUS } from '@/lib/theme';
 import { catById, fandomById, fmtPrice } from '@/lib/appConfig';
 import { useAppStore } from '@/stores/appStore';
-import { fetchSkuHistory } from '@/lib/api';
+import { fetchSkuHistory, fetchSkuById } from '@/lib/api';
 import { SKU } from '@/lib/types';
 
 import { HotScoreBadge } from '@/components/HotScore';
@@ -185,13 +185,25 @@ export default function SKUDetailScreen() {
     router.replace(`/sku/${nextId}?filterKind=${filterKind}&filterId=${filterId}`);
   };
 
-  const baseSku = id ? hotSkus.find((s) => s.id === id) : undefined;
+  const storeBaseSku = id ? hotSkus.find((s) => s.id === id) : undefined;
+  const [fetchedSku, setFetchedSku] = useState<SKU | null | undefined>(undefined);
 
   const [history, setHistory] = useState<number[]>([]);
   const [listingsHist, setListingsHist] = useState<number[]>([]);
   const [priceHist, setPriceHist] = useState<number[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
+
+  // If the SKU isn't in the hot feed (e.g. just promoted from a scan),
+  // fetch it directly from the DB so the page renders instead of spinning forever.
+  useEffect(() => {
+    if (!id) return;
+    if (storeBaseSku) { setFetchedSku(null); return; }
+    setFetchedSku(undefined);
+    fetchSkuById(id)
+      .then((s) => setFetchedSku(s ?? null))
+      .catch(() => setFetchedSku(null));
+  }, [id, storeBaseSku]);
 
   useEffect(() => {
     if (!id) return;
@@ -207,9 +219,13 @@ export default function SKUDetailScreen() {
       .finally(() => setHistoryLoading(false));
   }, [id]);
 
+  const baseSku = storeBaseSku ?? (fetchedSku ?? undefined);
   const sku: SKU | undefined = baseSku
     ? { ...baseSku, history, listingsHist, priceHist }
     : undefined;
+
+  // Still waiting on the DB fetch — keep showing the spinner
+  const stillFetching = !storeBaseSku && fetchedSku === undefined;
 
   const cat = sku ? catById(sku.category) : undefined;
   const fandom = sku ? fandomById(sku.fandom) : undefined;
@@ -228,10 +244,32 @@ export default function SKUDetailScreen() {
   const BOTTOM_BAR_H = 76 + insets.bottom;
   const NAV_H = insets.top + (Platform.OS === 'android' ? 8 : 0) + 52;
 
-  if (!sku || !c) {
+  if (stillFetching || (!sku && !fetchedSku && fetchedSku !== null)) {
     return (
       <View style={{ flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={theme.accent} />
+      </View>
+    );
+  }
+
+  if (!sku || !c) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+        <Text style={{ fontFamily: theme.fontDispBold, fontSize: 20, color: theme.text, textAlign: 'center', marginBottom: 8 }}>
+          Item not found
+        </Text>
+        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: theme.muted, textAlign: 'center', marginBottom: 24 }}>
+          This item may still be processing. Check back in a few minutes.
+        </Text>
+        <Pressable
+          onPress={() => router.back()}
+          style={({ pressed }) => ({
+            backgroundColor: theme.accent, borderRadius: theme.radius,
+            paddingHorizontal: 24, paddingVertical: 12, opacity: pressed ? 0.8 : 1,
+          })}
+        >
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: theme.accentInk }}>Go back</Text>
+        </Pressable>
       </View>
     );
   }

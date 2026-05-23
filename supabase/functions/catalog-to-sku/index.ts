@@ -67,6 +67,32 @@ serve(async (req) => {
       return json({ ok: true, sku_id: cat.sku_id, already_existed: true });
     }
 
+    // ── Check if a matching SKU already exists (same name + category) ─────────
+    // Prevents duplicates when the item was already discovered by a pipeline.
+    const { data: existingSku } = await svc
+      .from('skus')
+      .select('id')
+      .ilike('name', cat.name)
+      .eq('category_id', cat.category_id)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (existingSku) {
+      // Link the existing SKU back to this catalog entry and watchlist/collection rows
+      await svc.from('product_catalog')
+        .update({ sku_id: existingSku.id })
+        .eq('id', catalog_id);
+      await svc.from('user_watchlists')
+        .update({ sku_id: existingSku.id })
+        .eq('catalog_id', catalog_id)
+        .is('sku_id', null);
+      await svc.from('user_collections')
+        .update({ sku_id: existingSku.id })
+        .eq('catalog_id', catalog_id)
+        .is('sku_id', null);
+      return json({ ok: true, sku_id: existingSku.id, already_existed: true });
+    }
+
     // ── Generate collision-free SKU id ────────────────────────────────────────
     const { count } = await svc
       .from('skus')

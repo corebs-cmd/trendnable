@@ -47,6 +47,9 @@ interface AppState {
   setHasOnboarded: (v: boolean) => void;
   setFollowedFandoms: (fandoms: string[]) => void;
   setFollowedCategories: (cats: string[]) => void;
+  // Removes a catalog entry from local state after it's been promoted to a SKU
+  // (no DB call — the sku_id IS NULL filter handles it on next load)
+  purgeCatalogEntry: (catalogId: string) => void;
 
   // Loads hot SKU catalog from Supabase (no auth required)
   loadHotSkus: () => Promise<void>;
@@ -124,6 +127,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setFollowedFandoms: (followedFandoms) => set({ followedFandoms }),
   setFollowedCategories: (followedCategories) => set({ followedCategories }),
+
+  purgeCatalogEntry: (catalogId) => set((state) => ({
+    catalogWatchlist:  state.catalogWatchlist.filter((c) => c.catalogId !== catalogId),
+    catalogCollection: state.catalogCollection.filter((c) => c.catalogId !== catalogId),
+  })),
 
   loadHotSkus: async () => {
     set({ skusLoading: true, skusError: null });

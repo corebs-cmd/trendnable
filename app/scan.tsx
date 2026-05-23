@@ -147,6 +147,9 @@ export default function ScanScreen() {
       ? await promoteCatalogToSku(scanResult.catalogId, session.access_token)
       : null;
     const skuId = promotion?.skuId ?? scanResult.skuId;
+    if (promotion?.skuId) {
+      useAppStore.getState().purgeCatalogEntry(scanResult.catalogId);
+    }
 
     Alert.alert(
       'Added to Watchlist',
@@ -180,6 +183,9 @@ export default function ScanScreen() {
       ? await promoteCatalogToSku(scanResult.catalogId, session.access_token)
       : null;
     const skuId = promotion?.skuId ?? scanResult.skuId;
+    if (promotion?.skuId) {
+      useAppStore.getState().purgeCatalogEntry(scanResult.catalogId);
+    }
 
     Alert.alert(
       'Added to Collection',
