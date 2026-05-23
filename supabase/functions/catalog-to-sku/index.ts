@@ -124,7 +124,7 @@ serve(async (req) => {
       card_grader:    cat.card_grader ?? null,
       card_grade:     cat.card_grade ?? null,
       image_url:      cat.image_url ?? null,
-      is_active:      true,
+      is_active:      false,  // hidden from hot feed until the pipeline processes it
     });
 
     if (skuErr) {

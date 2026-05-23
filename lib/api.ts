@@ -168,13 +168,55 @@ export async function fetchHotSkus(): Promise<SKU[]> {
 }
 
 export async function fetchSkuById(skuId: string): Promise<SKU | null> {
-  const { data, error } = await supabase
+  // Try the hot feed view first (active, fully processed SKUs)
+  const { data: hotData } = await supabase
     .from('v_hot_skus')
     .select('*')
     .eq('id', skuId)
     .maybeSingle();
-  if (error || !data) return null;
-  return rowToSku(data as Record<string, unknown>);
+  if (hotData) return rowToSku(hotData as Record<string, unknown>);
+
+  // Fallback: inactive SKU (e.g. just promoted from a scan, not yet in hot feed)
+  const { data } = await supabase
+    .from('skus')
+    .select(`
+      id, name, short, series, category_id, fandom_id,
+      ebay_query, ebay_url, image_url, pop_number, exclusive_type,
+      card_variant, card_grader, card_grade, created_at,
+      hot_index(hot_score, delta_24h, momentum, velocity_score, volume_score, confirmation_score, freshness_score),
+      daily_snapshots(price_low, price_median, price_high, listing_count, snapshot_date)
+    `)
+    .eq('id', skuId)
+    .order('snapshot_date', { referencedTable: 'daily_snapshots', ascending: false })
+    .limit(1, { referencedTable: 'daily_snapshots' })
+    .maybeSingle();
+
+  if (!data) return null;
+
+  const d = data as Record<string, unknown>;
+  const hi  = d.hot_index as Record<string, unknown> | null;
+  const dsArr = d.daily_snapshots as Record<string, unknown>[] | null;
+  const ds = Array.isArray(dsArr) ? dsArr[0] : null;
+
+  return rowToSku({
+    ...d,
+    hot_score:            hi?.hot_score          ?? 0,
+    delta_24h:            hi?.delta_24h           ?? 0,
+    momentum:             hi?.momentum            ?? 'flat',
+    velocity_score:       hi?.velocity_score      ?? 0,
+    volume_score:         hi?.volume_score        ?? 0,
+    confirmation_score:   hi?.confirmation_score  ?? 0,
+    freshness_score:      hi?.freshness_score     ?? 0,
+    price_low:            ds?.price_low           ?? 0,
+    price_median:         ds?.price_median        ?? 0,
+    price_high:           ds?.price_high          ?? 0,
+    listing_count:        ds?.listing_count       ?? 0,
+    snapshot_date:        ds?.snapshot_date       ?? null,
+    narrative:            null,
+    is_featured:          false,
+    force_featured_until: null,
+    fandom_ids:           [],
+  } as Record<string, unknown>);
 }
 
 export async function fetchSkuHistory(
