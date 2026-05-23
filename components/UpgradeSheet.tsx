@@ -244,7 +244,7 @@ export default function UpgradeSheet({ open, context, theme, onClose, onConfirm 
         </View>
 
         {/* Purchase CTA */}
-        <PrimaryButton theme={theme} tone="premium" size="lg" onPress={handlePurchase} disabled={purchasing || restoring}>
+        <PrimaryButton theme={theme} tone="premium" size="lg" full onPress={handlePurchase} disabled={purchasing || restoring}>
           {purchasing ? 'One moment…' : `Start Premium · ${PLAN_PRICE[plan]} / ${plan === 'annual' ? 'year' : 'month'}`}
         </PrimaryButton>
 
