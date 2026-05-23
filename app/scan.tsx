@@ -16,7 +16,7 @@ import Svg, { Path } from 'react-native-svg';
 
 import { buildTheme } from '@/lib/theme';
 import { useAppStore } from '@/stores/appStore';
-import { callScanPipeline } from '@/lib/api';
+import { callScanPipeline, promoteCatalogToSku } from '@/lib/api';
 import { ScanResult } from '@/lib/types';
 import ScanResultSheet from '@/components/ScanResultSheet';
 import { supabase } from '@/lib/supabase';
@@ -122,7 +122,7 @@ export default function ScanScreen() {
     }
   };
 
-  const handleWatch = () => {
+  const handleWatch = async () => {
     if (!scanResult) return;
     const added = addCatalogToWatchlist({
       catalogId:     scanResult.catalogId,
@@ -140,17 +140,26 @@ export default function ScanScreen() {
       return;
     }
     setSheetOpen(false);
+
+    // Promote to SKU in the background — then alert with "View Item" option
+    const { data: { session } } = await supabase.auth.getSession();
+    const promotion = session?.access_token
+      ? await promoteCatalogToSku(scanResult.catalogId, session.access_token)
+      : null;
+    const skuId = promotion?.skuId ?? scanResult.skuId;
+
     Alert.alert(
       'Added to Watchlist',
       `${scanResult.name} is now in your watchlist.`,
       [
+        ...(skuId ? [{ text: 'View Item', onPress: () => router.replace(`/sku/${skuId}` as any) }] : []),
         { text: 'Go to Watchlist', onPress: () => router.replace('/(tabs)/watchlist') },
         { text: 'Done', style: 'cancel', onPress: () => router.back() },
       ]
     );
   };
 
-  const handleCollect = () => {
+  const handleCollect = async () => {
     if (!scanResult) return;
     addCatalogToCollection({
       catalogId:    scanResult.catalogId,
@@ -165,10 +174,18 @@ export default function ScanScreen() {
       imageUrl:     scanResult.imageUrl,
     });
     setSheetOpen(false);
+
+    const { data: { session } } = await supabase.auth.getSession();
+    const promotion = session?.access_token
+      ? await promoteCatalogToSku(scanResult.catalogId, session.access_token)
+      : null;
+    const skuId = promotion?.skuId ?? scanResult.skuId;
+
     Alert.alert(
       'Added to Collection',
       `${scanResult.name} is now in your collection.`,
       [
+        ...(skuId ? [{ text: 'View Item', onPress: () => router.replace(`/sku/${skuId}` as any) }] : []),
         { text: 'Go to Collection', onPress: () => router.replace('/(tabs)/collection') },
         { text: 'Done', style: 'cancel', onPress: () => router.back() },
       ]

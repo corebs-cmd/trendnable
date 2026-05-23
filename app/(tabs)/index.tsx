@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -12,6 +12,7 @@ import Svg, { Path, Circle } from 'react-native-svg';
 
 import { useAppStore } from '@/stores/appStore';
 import { buildTheme } from '@/lib/theme';
+import * as api from '@/lib/api';
 import { getFeaturedSku } from '@/lib/featured';
 import { CATEGORIES } from '@/lib/appConfig';
 
@@ -51,10 +52,27 @@ export default function HotScreen() {
   const skusLoading = useAppStore((s) => s.skusLoading);
   const skusError = useAppStore((s) => s.skusError);
   const retryLoadHotSkus = useAppStore((s) => s.retryLoadHotSkus);
+  const followedCategories = useAppStore((s) => s.followedCategories);
+  const setFollowedCategories = useAppStore((s) => s.setFollowedCategories);
+  const user = useAppStore((s) => s.user);
   const theme = buildTheme(isDark);
 
   const [sortBy, setSortBy]           = useState<SortBy>('hot');
-  const [activeCats, setActiveCats]   = useState<string[]>(['all']);
+  const [activeCats, setActiveCats]   = useState<string[]>(
+    () => followedCategories.length > 0 ? followedCategories : ['all']
+  );
+
+  // Persist chip selection to store + DB whenever user changes it
+  const isMounted = useRef(false);
+  useEffect(() => {
+    if (!isMounted.current) { isMounted.current = true; return; }
+    const cats = activeCats.includes('all') ? [] : activeCats;
+    setFollowedCategories(cats.length > 0 ? cats : []);
+    if (user) {
+      api.updateUserPreferences(user.id, { followedCategories: cats.length > 0 ? cats : undefined });
+    }
+  }, [activeCats]);
+
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [notifOpen, setNotifOpen]     = useState(false);
   const [scrolled, setScrolled]       = useState(false);

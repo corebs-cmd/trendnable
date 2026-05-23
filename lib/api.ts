@@ -398,6 +398,32 @@ export async function callScanPipeline(barcode: string, accessToken: string): Pr
   };
 }
 
+export async function promoteCatalogToSku(
+  catalogId: string,
+  accessToken: string,
+): Promise<{ skuId: string } | null> {
+  const url = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/catalog-to-sku`;
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ catalog_id: catalogId }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      console.error('promoteCatalogToSku failed:', data.error ?? response.status);
+      return null;
+    }
+    return { skuId: data.sku_id };
+  } catch (err) {
+    console.error('promoteCatalogToSku error:', err);
+    return null;
+  }
+}
+
 // ── Catalog watchlist ─────────────────────────────────────────────────────────
 
 export async function fetchCatalogWatchlist(userId: string): Promise<CatalogWatchlistItem[]> {

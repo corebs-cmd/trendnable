@@ -5,7 +5,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAppStore } from '../../stores/appStore';
-import { buildTheme } from '../../lib/theme';
+import { buildTheme, categoryColor } from '../../lib/theme';
 import { CATEGORIES, FANDOMS } from '../../lib/appConfig';
 import * as api from '../../lib/api';
 
@@ -178,6 +178,7 @@ function CategoriesStep({ theme, selected, onToggle }: { theme: any; selected: s
       <View style={styles.categoryGrid}>
         {CATEGORIES.map((c) => {
           const active = selected.includes(c.id);
+          const colors = categoryColor(c.id, theme.dark);
           return (
             <Pressable
               key={c.id}
@@ -195,9 +196,15 @@ function CategoriesStep({ theme, selected, onToggle }: { theme: any; selected: s
                 },
               ]}
             >
-              <View style={[styles.categoryImagePlaceholder, { backgroundColor: theme.surface2 }]}>
-                <Text style={[styles.categoryGlyph, { color: theme.faint, fontFamily: 'JetBrainsMono_400Regular' }]}>
-                  {c.type === 'figure' ? '◎' : c.type === 'card' ? '▭' : c.type === 'box' ? '⬡' : '🚗'}
+              <View style={[styles.categoryImagePlaceholder, { backgroundColor: colors.tint }]}>
+                <Text style={{
+                  color: colors.ink,
+                  fontFamily: 'Inter_700Bold',
+                  fontSize: 15,
+                  letterSpacing: -0.3,
+                  textAlign: 'center',
+                }}>
+                  {c.short}
                 </Text>
                 {active && (
                   <View style={[styles.checkBadge, { backgroundColor: theme.accent }]}>
