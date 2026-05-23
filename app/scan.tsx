@@ -412,7 +412,10 @@ export default function ScanScreen() {
         theme={theme}
         result={scanResult}
         isPremium={isPremium}
-        onUnlockSellability={() => setUpgradeOpen(true)}
+        onUnlockSellability={() => {
+          setSheetOpen(false);
+          setTimeout(() => setUpgradeOpen(true), 300);
+        }}
         onWatch={handleWatch}
         onCollect={handleCollect}
         onDiscard={handleDiscard}
