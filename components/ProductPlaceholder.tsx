@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ViewStyle, Image } from 'react-native';
-import Svg, { Path, Circle, Ellipse, G, Rect, Text as SvgText } from 'react-native-svg';
+import Svg, { Path, Circle, Ellipse, G, Rect, Polygon, Text as SvgText } from 'react-native-svg';
 import { Theme, categoryColor } from '@/lib/theme';
 import { SKU } from '@/lib/types';
 import { catById } from '@/lib/appConfig';
@@ -120,6 +120,25 @@ function CarGlyph({ ink, dark }: { ink: string; dark: boolean }) {
   );
 }
 
+// ── Signed glyph (Autographed) — certification star seal ─────────────────────
+function SignedGlyph({ ink, dark }: { ink: string; dark: boolean }) {
+  return (
+    <Svg viewBox="0 0 100 100" width="62%" height="62%">
+      {/* outer seal ring */}
+      <Circle cx={50} cy={50} r={46} fill="none" stroke={ink} strokeWidth={2.5} opacity={0.28} />
+      <Circle cx={50} cy={50} r={40} fill="none" stroke={ink} strokeWidth={1} opacity={0.18} />
+      {/* 5-pointed star */}
+      <Polygon
+        points="50,12 59.4,37.1 86.1,38.3 65.2,54.9 72.3,80.7 50,66 27.7,80.7 34.8,54.9 13.9,38.3 40.6,37.1"
+        fill={ink}
+        opacity={0.92}
+      />
+      {/* centre pip */}
+      <Circle cx={50} cy={50} r={5.5} fill={dark ? '#0F1A2E' : '#FFFFFF'} opacity={0.7} />
+    </Svg>
+  );
+}
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 interface ProductPlaceholderProps {
   sku: SKU;
@@ -220,6 +239,8 @@ export default function ProductPlaceholder({
             <BlindBoxGlyph ink={c.ink} dark={theme.dark} />
           ) : kind === 'car' ? (
             <CarGlyph ink={c.ink} dark={theme.dark} />
+          ) : kind === 'signed' ? (
+            <SignedGlyph ink={c.ink} dark={theme.dark} />
           ) : (
             <FigureGlyph ink={c.ink} variant={variant} dark={theme.dark} />
           )}
@@ -285,6 +306,8 @@ export function ProductThumb({ sku, theme, size = 56, radius, style }: ProductTh
             <BlindBoxGlyph ink={c.ink} dark={theme.dark} />
           ) : kind === 'car' ? (
             <CarGlyph ink={c.ink} dark={theme.dark} />
+          ) : kind === 'signed' ? (
+            <SignedGlyph ink={c.ink} dark={theme.dark} />
           ) : (
             <FigureGlyph ink={c.ink} variant={variant} dark={theme.dark} />
           )}

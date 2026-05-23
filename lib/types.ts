@@ -147,7 +147,8 @@ export type UpgradeContext =
   | 'publicProfile'
   | 'forSale'
   | 'feature'
-  | 'priceAlerts';
+  | 'priceAlerts'
+  | 'sellability';
 
 export interface PriceAlert {
   id: string;
@@ -187,6 +188,7 @@ export interface ScanResult {
   popNumber: number | null;
   price: { low: number; median: number; high: number };
   listings: number;
+  soldCount: number;
   scoreEstimate: number;
   scoreBreakdown: { velocity: number; volume: number; confirmation: number; freshness: number };
   isNewToCatalog: boolean;

@@ -5,9 +5,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAppStore } from '../../stores/appStore';
-import { buildTheme, categoryColor } from '../../lib/theme';
+import { buildTheme } from '../../lib/theme';
 import { CATEGORIES, FANDOMS } from '../../lib/appConfig';
 import * as api from '../../lib/api';
+import BrowseLogo from '../../components/BrowseLogo';
 
 type Step = 'welcome' | 'categories' | 'fandoms' | 'ready';
 const STEPS: Step[] = ['welcome', 'categories', 'fandoms', 'ready'];
@@ -178,7 +179,6 @@ function CategoriesStep({ theme, selected, onToggle }: { theme: any; selected: s
       <View style={styles.categoryGrid}>
         {CATEGORIES.map((c) => {
           const active = selected.includes(c.id);
-          const colors = categoryColor(c.id, theme.dark);
           return (
             <Pressable
               key={c.id}
@@ -196,16 +196,8 @@ function CategoriesStep({ theme, selected, onToggle }: { theme: any; selected: s
                 },
               ]}
             >
-              <View style={[styles.categoryImagePlaceholder, { backgroundColor: colors.tint }]}>
-                <Text style={{
-                  color: colors.ink,
-                  fontFamily: 'Inter_700Bold',
-                  fontSize: 15,
-                  letterSpacing: -0.3,
-                  textAlign: 'center',
-                }}>
-                  {c.short}
-                </Text>
+              <View style={styles.categoryImagePlaceholder}>
+                <BrowseLogo id={c.id} label={c.label} />
                 {active && (
                   <View style={[styles.checkBadge, { backgroundColor: theme.accent }]}>
                     <Text style={{ color: theme.accentInk, fontSize: 12, fontWeight: '700' }}>✓</Text>
@@ -374,7 +366,7 @@ const styles = StyleSheet.create({
   },
   categoryImagePlaceholder: {
     width: '100%', aspectRatio: 1,
-    borderRadius: 4, alignItems: 'center', justifyContent: 'center',
+    borderRadius: 4, overflow: 'hidden',
     position: 'relative',
   },
   categoryGlyph: { fontSize: 36 },

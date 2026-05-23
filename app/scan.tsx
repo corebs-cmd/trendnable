@@ -38,7 +38,8 @@ export default function ScanScreen() {
   const router  = useRouter();
   const insets  = useSafeAreaInsets();
   const isDark  = useAppStore((s) => s.isDark);
-  const user    = useAppStore((s) => s.user);
+  const user      = useAppStore((s) => s.user);
+  const isPremium = useAppStore((s) => s.isPremium);
   const theme   = buildTheme(isDark);
 
   const addCatalogToWatchlist   = useAppStore((s) => s.addCatalogToWatchlist);
@@ -408,6 +409,7 @@ export default function ScanScreen() {
         onClose={() => { setSheetOpen(false); setScanResult(null); resetScan(); }}
         theme={theme}
         result={scanResult}
+        isPremium={isPremium}
         onWatch={handleWatch}
         onCollect={handleCollect}
         onDiscard={handleDiscard}

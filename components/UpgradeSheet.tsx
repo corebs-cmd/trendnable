@@ -27,6 +27,7 @@ const CONTEXT_MAP: Record<UpgradeContext, ContextData> = {
   forSale:       { title: 'Mark items for sale',    sub: 'Get reach from collectors browsing public profiles.' },
   feature:       { title: 'Trendnable Premium',     sub: 'The full picture of your collection.' },
   priceAlerts:   { title: 'Set price alerts',       sub: 'Get notified the moment a watched item hits your target price.' },
+  sellability:   { title: 'Unlock Sellability Score', sub: 'See sell-through rate, demand tier, and how quickly an item is likely to sell.' },
 };
 
 const FEATURES = [

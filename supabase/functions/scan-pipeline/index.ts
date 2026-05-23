@@ -38,6 +38,7 @@ interface ScanResult {
   pop_number: number | null;
   price: { low: number; median: number; high: number };
   listings: number;
+  sold_count: number;
   score_estimate: number;
   score_breakdown: { velocity: number; volume: number; confirmation: number; freshness: number };
   is_new_to_catalog: boolean;
@@ -120,6 +121,38 @@ async function lookupBarcodeOnUpcItemDb(barcode: string): Promise<string | null>
   } catch (err) {
     console.warn('UPCitemdb error:', err);
     return null;
+  }
+}
+
+/**
+ * Step 6b: eBay Finding API — completed/sold listings count (last 90 days).
+ * Uses App ID auth (same as lookupBarcodeOnEbay), no OAuth token required.
+ */
+async function searchEbaySold(query: string): Promise<number> {
+  const url = new URL('https://svcs.ebay.com/services/search/FindingService/v1');
+  url.searchParams.set('OPERATION-NAME',      'findCompletedItems');
+  url.searchParams.set('SERVICE-VERSION',     '1.0.0');
+  url.searchParams.set('SECURITY-APPNAME',    EBAY_CLIENT_ID);
+  url.searchParams.set('RESPONSE-DATA-FORMAT','JSON');
+  url.searchParams.set('keywords',            query);
+  url.searchParams.set('itemFilter(0).name',  'SoldItemsOnly');
+  url.searchParams.set('itemFilter(0).value', 'true');
+  url.searchParams.set('paginationInput.entriesPerPage', '5');
+  url.searchParams.set('paginationInput.pageNumber',     '1');
+
+  try {
+    const res = await fetch(url.toString());
+    if (!res.ok) {
+      console.warn('eBay findCompletedItems non-OK:', res.status);
+      return 0;
+    }
+    const data = await res.json();
+    const totalStr = data?.findCompletedItemsResponse?.[0]
+      ?.paginationOutput?.[0]?.totalEntries?.[0];
+    return parseInt(totalStr ?? '0', 10) || 0;
+  } catch (err) {
+    console.warn('eBay findCompletedItems error:', err);
+    return 0;
   }
 }
 
@@ -458,6 +491,7 @@ serve(async (req) => {
           high:   Number(cached.price_latest ?? 0),
         },
         listings: 0,
+        sold_count: 0,
         score_estimate: score,
         score_breakdown: breakdown,
         is_new_to_catalog: false,
@@ -498,8 +532,11 @@ serve(async (req) => {
     const inferredCategory = inferCategoryFromName(productName);
     const ebayQueryInitial = buildEbayQuery(productName, inferredCategory);
 
-    const ebayToken  = await getEbayToken();
-    const listings   = await searchEbay(ebayQueryInitial, ebayToken);
+    const ebayToken = await getEbayToken();
+    const [listings, soldCount] = await Promise.all([
+      searchEbay(ebayQueryInitial, ebayToken),
+      searchEbaySold(ebayQueryInitial),
+    ]);
     const imageUrl   = listings.find((l: any) => l?.image?.imageUrl)?.image?.imageUrl ?? null;
 
     // ── Step 7: Claude classification ─────────────────────────────────────────
@@ -690,6 +727,7 @@ serve(async (req) => {
       pop_number: popNumber,
       price: { low: priceLow, median: priceMedian, high: priceHigh },
       listings: listings.length,
+      sold_count: soldCount,
       score_estimate: scoreEstimate,
       score_breakdown: scoreBreakdown,
       is_new_to_catalog: isNewToCache,

@@ -435,6 +435,7 @@ export async function callScanPipeline(barcode: string, accessToken: string): Pr
       high:   data.price.high,
     },
     listings:       data.listings,
+    soldCount:      data.sold_count ?? 0,
     scoreEstimate:  data.score_estimate,
     scoreBreakdown: {
       velocity:     data.score_breakdown.velocity,

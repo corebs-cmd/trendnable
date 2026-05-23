@@ -451,6 +451,57 @@ function LogoPopcult() {
   );
 }
 
+// Signed & Autographed — 3D blind box with a signature flourish on the front face
+function LogoAutographed() {
+  return (
+    <Svg viewBox="0 0 100 100" width="64%" height="64%">
+      <G fill="#FFFFFF" opacity={0.95}>
+        {/* lid */}
+        <Path d="M50 12 L85 28 L50 44 L15 28 Z" opacity={0.75} />
+        {/* front face */}
+        <Path d="M15 28 L50 44 L50 90 L15 74 Z" opacity={0.9} />
+        {/* side face */}
+        <Path d="M85 28 L50 44 L50 90 L85 74 Z" opacity={0.7} />
+      </G>
+      {/* signature flourish — rotated ~25° to follow the face's horizontal axis */}
+      <Path
+        d="M22 70 C20 62 26 56 33 60 C40 64 35 74 40 70 L47 64"
+        stroke="#fa0ed5"
+        strokeWidth={3}
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity={0.95}
+        transform="rotate(25, 32, 65)"
+      />
+    </Svg>
+  );
+}
+
+// ThrillJoy — smiley face with star eyes inside a thick ring
+function LogoThrilljoy() {
+  return (
+    <Svg viewBox="0 0 100 100" width="69%" height="69%">
+      {/* face ring */}
+      <Circle cx={50} cy={50} r={44} fill="none" stroke="#FFFFFF" strokeWidth={7} opacity={0.95} />
+      {/* left 4-pointed star eye — centre (34, 41) outer R=8 inner R=3.5 */}
+      <Polygon
+        points="34,33 36.5,38.5 42,41 36.5,43.5 34,49 31.5,43.5 26,41 31.5,38.5"
+        fill="#FFFFFF"
+        opacity={0.95}
+      />
+      {/* right 4-pointed star eye — centre (66, 41) */}
+      <Polygon
+        points="66,33 68.5,38.5 74,41 68.5,43.5 66,49 63.5,43.5 58,41 63.5,38.5"
+        fill="#FFFFFF"
+        opacity={0.95}
+      />
+      {/* smile arc */}
+      <Path d="M28 60 Q50 82 72 60" stroke="#FFFFFF" strokeWidth={5.5} fill="none" strokeLinecap="round" opacity={0.95} />
+    </Svg>
+  );
+}
+
 // ── Logo registry ─────────────────────────────────────────────────────────────
 
 type LogoEntry = { bg: string; component: React.ReactNode };
@@ -476,8 +527,10 @@ const LOGOS: Record<string, LogoEntry> = {
   jjk:      { bg: '#0D0D0D', component: <LogoJjk /> },
   dc:       { bg: '#0074E8', component: <LogoDc /> },
   horror:   { bg: '#1A0000', component: <LogoHorror /> },
-  gaming:   { bg: '#107C10', component: <LogoGaming /> },
-  popcult:  { bg: '#0E1B35', component: <LogoPopcult /> },
+  gaming:      { bg: '#107C10', component: <LogoGaming /> },
+  popcult:     { bg: '#0E1B35', component: <LogoPopcult /> },
+  autographed: { bg: '#fa0ed5', component: <LogoAutographed /> },
+  thrilljoy:   { bg: '#5FD551', component: <LogoThrilljoy /> },
 };
 
 // ── Static fandom images (require paths must be literals) ─────────────────────
