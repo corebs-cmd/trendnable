@@ -629,3 +629,13 @@ export async function deleteCatalogCollectionItem(userId: string, catalogId: str
     .eq('catalog_id', catalogId);
   if (error) console.error('deleteCatalogCollectionItem:', error.message);
 }
+
+// ── Push notifications ────────────────────────────────────────────────────────
+
+export async function savePushToken(userId: string, token: string): Promise<void> {
+  const { error } = await supabase
+    .from('users')
+    .update({ push_token: token })
+    .eq('id', userId);
+  if (error) console.error('savePushToken:', error.message);
+}

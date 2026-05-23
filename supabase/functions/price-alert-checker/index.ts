@@ -1,9 +1,10 @@
 // price-alert-checker — runs daily at 6 PM UTC via pg_cron
 // Checks all active price alerts against latest daily_snapshots.price_median.
-// For triggered alerts: creates in_app_notifications, then deactivates the alert.
+// For triggered alerts: writes in_app_notifications + sends APNs push directly.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { sendApnsNotification } from '../_shared/apns.ts';
 
 const SUPABASE_URL              = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -71,7 +72,19 @@ serve(async (req) => {
       );
     }
 
-    // Build notification rows
+    // Fetch push tokens for all affected users in one query
+    const userIds = [...new Set(triggered.map((a) => a.user_id))];
+    const { data: userRows } = await supabase
+      .from('users')
+      .select('id, push_token')
+      .in('id', userIds);
+
+    const pushTokenMap: Record<string, string | null> = {};
+    for (const u of userRows ?? []) {
+      pushTokenMap[u.id] = u.push_token ?? null;
+    }
+
+    // Build in-app notification rows + send APNs pushes
     const now           = new Date().toISOString();
     const notifications = triggered.map((alert) => {
       const price    = latestPrice[alert.sku_id];
@@ -95,16 +108,41 @@ serve(async (req) => {
       };
     });
 
+    // Write in-app notifications
     await supabase.from('in_app_notifications').insert(notifications);
 
-    // Deactivate triggered alerts (one-shot — user must opt back in)
+    // Send APNs push to each user that has a registered device token
+    const pushResults = await Promise.allSettled(
+      triggered.map((alert) => {
+        const token = pushTokenMap[alert.user_id];
+        if (!token) return Promise.resolve(false);
+
+        const price    = latestPrice[alert.sku_id];
+        const skuData  = alert.skus as { name?: string; short?: string } | null;
+        const skuName  = skuData?.short ?? skuData?.name ?? alert.sku_id;
+        const dirLabel = alert.direction === 'above' ? 'rose above' : 'dropped below';
+        const target   = Number(alert.target_price);
+
+        return sendApnsNotification(token, {
+          title: `${skuName} alert`,
+          body:  `Median price ${dirLabel} your $${target.toFixed(0)} target — now $${price.toFixed(0)}`,
+          data:  { skuId: alert.sku_id },
+        });
+      }),
+    );
+
+    const pushSent = pushResults.filter(
+      (r) => r.status === 'fulfilled' && r.value === true,
+    ).length;
+
+    // Deactivate triggered alerts (one-shot — user must re-enable)
     await supabase
       .from('price_alerts')
       .update({ is_active: false, triggered_at: now })
       .in('id', triggered.map((a) => a.id));
 
     return new Response(
-      JSON.stringify({ ok: true, checked: alerts.length, triggered: triggered.length }),
+      JSON.stringify({ ok: true, checked: alerts.length, triggered: triggered.length, pushSent }),
       { headers: { ...cors, 'Content-Type': 'application/json' } },
     );
   } catch (err) {

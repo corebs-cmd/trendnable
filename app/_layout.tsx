@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { Stack } from 'expo-router';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -24,6 +25,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppStore } from '../stores/appStore';
 import { supabase } from '../lib/supabase';
 import * as api from '../lib/api';
+import { registerForPushNotifications } from '../lib/notifications';
 
 export default function RootLayout() {
   const isDark = useAppStore((s) => s.isDark);
@@ -88,6 +90,13 @@ export default function RootLayout() {
           store.setFollowedFandoms(profile.followed_fandoms);
           store.setFollowedCategories(profile.followed_categories);
           await store.loadUserData(session.user.id);
+
+          // Register for push notifications and save native APNs token
+          registerForPushNotifications()
+            .then((token) => {
+              if (token) api.savePushToken(profile.id, token).catch(console.error);
+            })
+            .catch(console.error);
         }
 
         store.setIsAuthReady(true);
@@ -112,6 +121,12 @@ export default function RootLayout() {
       }
     });
 
+    // Navigate to SKU screen when user taps a price alert notification
+    const notifSub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const skuId = response.notification.request.content.data?.skuId as string | undefined;
+      if (skuId) router.push(`/sku/${skuId}` as any);
+    });
+
     // Refresh SKU catalog whenever the app returns to the foreground
     const appStateSub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
       if (appStateRef.current.match(/inactive|background/) && nextState === 'active') {
@@ -122,6 +137,7 @@ export default function RootLayout() {
 
     return () => {
       subscription.unsubscribe();
+      notifSub.remove();
       appStateSub.remove();
     };
   }, [fontsLoaded]);
