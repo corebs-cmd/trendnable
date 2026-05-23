@@ -19,6 +19,7 @@ import { useAppStore } from '@/stores/appStore';
 import { callScanPipeline, promoteCatalogToSku } from '@/lib/api';
 import { ScanResult } from '@/lib/types';
 import ScanResultSheet from '@/components/ScanResultSheet';
+import UpgradeSheet from '@/components/UpgradeSheet';
 import { supabase } from '@/lib/supabase';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -51,6 +52,7 @@ export default function ScanScreen() {
   const [step, setStep]                 = useState<ScanStep>('reading');
   const [scanResult, setScanResult]     = useState<ScanResult | null>(null);
   const [sheetOpen, setSheetOpen]       = useState(false);
+  const [upgradeOpen, setUpgradeOpen]   = useState(false);
 
   const lockRef = useRef(false);
 
@@ -410,9 +412,18 @@ export default function ScanScreen() {
         theme={theme}
         result={scanResult}
         isPremium={isPremium}
+        onUnlockSellability={() => setUpgradeOpen(true)}
         onWatch={handleWatch}
         onCollect={handleCollect}
         onDiscard={handleDiscard}
+      />
+
+      <UpgradeSheet
+        open={upgradeOpen}
+        context="sellability"
+        theme={theme}
+        onClose={() => setUpgradeOpen(false)}
+        onConfirm={() => setUpgradeOpen(false)}
       />
     </View>
   );

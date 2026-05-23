@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,6 @@ import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
 
 import Sheet from '@/components/Sheet';
-import UpgradeSheet from '@/components/UpgradeSheet';
 import { Theme, categoryColor } from '@/lib/theme';
 import { ScanResult } from '@/lib/types';
 import { catById, fmtPrice } from '@/lib/appConfig';
@@ -283,25 +282,24 @@ interface ScanResultSheetProps {
   theme: Theme;
   result: ScanResult | null;
   isPremium: boolean;
+  onUnlockSellability: () => void;
   onWatch: () => void;
   onCollect: () => void;
   onDiscard: () => void;
 }
 
 export default function ScanResultSheet({
-  open, onClose, theme, result, isPremium,
+  open, onClose, theme, result, isPremium, onUnlockSellability,
   onWatch, onCollect, onDiscard,
 }: ScanResultSheetProps) {
   const router = useRouter();
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   if (!result) return null;
 
   const isHot = result.scoreEstimate >= 65;
 
   return (
-    <>
-      <Sheet open={open} onClose={onClose} theme={theme} title="Scan Result">
+    <Sheet open={open} onClose={onClose} theme={theme} title="Scan Result">
         {/* ── Identity ──────────────────────────────────────────────────── */}
         <View style={{ flexDirection: 'row', gap: 14, marginBottom: 16 }}>
           {result.imageUrl
@@ -346,7 +344,7 @@ export default function ScanResultSheet({
           activeCount={result.listings}
           theme={theme}
           isPremium={isPremium}
-          onUnlock={() => setUpgradeOpen(true)}
+          onUnlock={onUnlockSellability}
         />
 
         {/* ── Estimated Hot Score ────────────────────────────────────────── */}
@@ -453,15 +451,6 @@ export default function ScanResultSheet({
           </Pressable>
         </View>
       </Sheet>
-
-      <UpgradeSheet
-        open={upgradeOpen}
-        context="sellability"
-        theme={theme}
-        onClose={() => setUpgradeOpen(false)}
-        onConfirm={() => setUpgradeOpen(false)}
-      />
-    </>
   );
 }
 
