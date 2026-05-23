@@ -23,22 +23,30 @@ const HAIKU_OUTPUT_RATE = 4.00 / 1_000_000;
 
 // Broad searches per category — Funko Pop handled by dedicated funko-pipeline
 const CATEGORY_SEARCHES = [
-  { category_id: 'tcg',     query: 'Pokemon card rare holo graded PSA' },
-  { category_id: 'tcg',     query: 'Pokemon TCG ex full art secret rare' },
-  { category_id: 'popmart', query: 'Pop Mart Labubu blind box figure' },
-  { category_id: 'popmart', query: 'Pop Mart Skull Panda Dimoo figure' },
-  { category_id: 'hottoys', query: 'Hot Toys 1/6 scale figure MMS' },
-  { category_id: 'hottoys', query: 'Hot Toys Marvel Avengers Iron Man Spider-Man 1/6' },
-  { category_id: 'hottoys', query: 'Hot Toys Star Wars Mandalorian Darth Vader 1/6' },
-  { category_id: 'hottoys', query: 'Hot Toys Disney Pixar 1/6 scale figure MMS' },
+  { category_id: 'tcg',          query: 'Pokemon card rare holo graded PSA' },
+  { category_id: 'tcg',          query: 'Pokemon TCG ex full art secret rare' },
+  { category_id: 'popmart',      query: 'Pop Mart Labubu blind box figure' },
+  { category_id: 'popmart',      query: 'Pop Mart Skull Panda Dimoo figure' },
+  { category_id: 'hottoys',      query: 'Hot Toys 1/6 scale figure MMS' },
+  { category_id: 'hottoys',      query: 'Hot Toys Marvel Avengers Iron Man Spider-Man 1/6' },
+  { category_id: 'hottoys',      query: 'Hot Toys Star Wars Mandalorian Darth Vader 1/6' },
+  { category_id: 'hottoys',      query: 'Hot Toys Disney Pixar 1/6 scale figure MMS' },
   // NECA — general + dedicated franchise/theme lines
-  { category_id: 'neca',    query: 'NECA ultimate action figure 7 inch' },
-  { category_id: 'neca',    query: 'NECA TMNT Teenage Mutant Ninja Turtles figure' },
-  { category_id: 'neca',    query: 'NECA Alien Predator Xenomorph horror figure' },
-  { category_id: 'neca',    query: 'NECA Terminator RoboCop Escape New York sci-fi figure' },
-  { category_id: 'neca',    query: 'NECA Stranger Things Breaking Bad pop culture figure' },
-  { category_id: 'hwheels', query: 'Hot Wheels Super Treasure Hunt 2024 2025' },
-  { category_id: 'hwheels', query: 'Hot Wheels Real Riders premium' },
+  { category_id: 'neca',         query: 'NECA ultimate action figure 7 inch' },
+  { category_id: 'neca',         query: 'NECA TMNT Teenage Mutant Ninja Turtles figure' },
+  { category_id: 'neca',         query: 'NECA Alien Predator Xenomorph horror figure' },
+  { category_id: 'neca',         query: 'NECA Terminator RoboCop Escape New York sci-fi figure' },
+  { category_id: 'neca',         query: 'NECA Stranger Things Breaking Bad pop culture figure' },
+  { category_id: 'hwheels',      query: 'Hot Wheels Super Treasure Hunt 2024 2025' },
+  { category_id: 'hwheels',      query: 'Hot Wheels Real Riders premium' },
+  // Signed & Autographed — cross-format signed collectibles with authentication
+  { category_id: 'autographed',  query: 'signed autographed sports card COA JSA Beckett BGS' },
+  { category_id: 'autographed',  query: 'autographed signed figure COA certificate authenticity JSA' },
+  { category_id: 'autographed',  query: 'signed autographed comic book COA JSA Beckett authentication' },
+  { category_id: 'autographed',  query: 'signed autographed Pop figure COA JSA rare collectible' },
+  // ThrillJoy — designer toy brand
+  { category_id: 'thrilljoy',    query: 'ThrillJoy figure collectible blind box' },
+  { category_id: 'thrilljoy',    query: 'ThrillJoy toy limited edition rare' },
 ];
 
 // ── eBay ─────────────────────────────────────────────────────────────────────
@@ -84,7 +92,7 @@ async function classifyWithClaude(
 ): Promise<{ candidates: any[]; inputTokens: number; outputTokens: number }> {
   const FANDOMS = 'onepiece (One Piece only), demon (Demon Slayer only), starwars, pokemon, marvel, anime (use for: My Hero Academia/MHA, Jujutsu Kaisen/JJK, Naruto, Dragon Ball/DBZ, Attack on Titan, Bleach, Fairy Tail, Black Clover, Chainsaw Man, Solo Leveling, or any anime franchise not covered by another fandom), labubu, disney, jjk (Jujutsu Kaisen), dc, gaming, tmnt (Teenage Mutant Ninja Turtles — use for any TMNT/Ninja Turtles figure), popcult (Pop Culture — use for: Stranger Things, Terminator, RoboCop, Escape from New York, They Live, Blade Runner, The Warriors, Big Trouble in Little China, Ghostbusters, Back to the Future, Pulp Fiction, Breaking Bad, The Office, Alien, Predator, Halloween, Friday the 13th, Nightmare on Elm Street, IT, The Thing, Hellraiser, Scream, Chucky, any horror franchise, any cult classic TV/film not covered by another fandom)';
   const NECA_FANDOM_HINTS = 'NECA fandom mapping hints — TMNT/Ninja Turtles/Donatello/Leonardo/Raphael/Michelangelo: tmnt. Terminator/RoboCop/Escape from New York/They Live/Blade Runner: popcult. Alien/Predator/AVP/Halloween/Jason/Freddy/Pennywise/Chucky/Leatherface/horror franchise: popcult. Stranger Things: popcult. Star Wars: starwars. Marvel/Spider-Man/Wolverine/X-Men/Deadpool: marvel. DC/Batman/Joker: dc. My Hero Academia/MHA/Deku/Bakugo: anime. Jujutsu Kaisen/JJK/Gojo/Itadori: anime. Naruto/DBZ/Dragon Ball/Attack on Titan/Bleach: anime.';
-  const CATEGORIES = 'funko, tcg, popmart, hottoys, neca, hwheels';
+  const CATEGORIES = 'funko, tcg, popmart, hottoys, neca, hwheels, autographed, thrilljoy';
 
   const prompt = `You are a collectibles trend analyst. Evaluate these eBay listings to find specific, trackable collectible SKUs worth price monitoring.
 
@@ -108,11 +116,15 @@ REJECT if: the title is too generic, it's a multi-item lot, it's a reprint/bootl
 - card_variant: "graded" if the listing is a professionally graded card (look for PSA, BGS, Beckett, CGC, SGC in the title)
 If graded, also extract: card_grader (e.g. "PSA", "BGS", "CGC") and card_grade (e.g. "10", "9.5", "9") when visible in the title. REJECT TCG items where the variant cannot be determined (too generic, no card name visible).
 
+⚠️ AUTOGRAPHED RULE: Use category_id "autographed" for any signed or autographed collectible — cards, figures, comics, Funko Pops, or any other format — where the listing shows authentication (COA, JSA, Beckett, PSA auth) or clearly states it is hand-signed. Name format: "Item Name Signed" (e.g. "Charizard Base Set Signed CGC Auth", "Spider-Man #1 Comic Signed JSA"). REJECT autographed items without any authentication indicator.
+
+⚠️ THRILLJOY RULE: Use category_id "thrilljoy" for any ThrillJoy brand collectible figure or blind box. Name the specific figure/series clearly.
+
 For each APPROVED item return:
-- name: clean canonical product name (Funko: must end with [#XXXX])
+- name: clean canonical product name (Funko: must end with [#XXXX]; Autographed: must end with "Signed")
 - short: nickname max 18 chars
 - series: product line / set (e.g. "Funko Pop · #1583" or "Pokémon TCG · Scarlet & Violet")
-- category_id: funko | tcg | popmart | hottoys | neca | hwheels
+- category_id: funko | tcg | popmart | hottoys | neca | hwheels | autographed | thrilljoy
 - fandom_id: one of the known fandoms or null
 - ebay_query: concise eBay search string (Funko: must include the pop number)
 - ebay_title: original listing title verbatim

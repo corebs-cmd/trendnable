@@ -110,7 +110,6 @@ CHASE & VARIANTS
 - Flocked (fuzzy texture)
 - Holographic
 - Chrome / diamond / translucent / pearlescent / jeweled
-- Signed or autographed (with or without COA)
 
 GRAILS & HARD TO FIND
 - Vaulted, retired, or discontinued — no longer produced, drives secondary market prices up
@@ -118,6 +117,10 @@ GRAILS & HARD TO FIND
 - Limited print run — listings mentioning "1000 pcs", "LE500", stickered quantity limits
 - Price signal: if the listing is $75 or more for a single figure it is almost certainly rare or a grail — approve it
 - Community-recognized grails: figures the Funko community widely considers rare trophies even if the listing doesn't use the word "grail"
+
+━━ SIGNED / AUTOGRAPHED — SEPARATE CATEGORY ━━
+
+⚠️ If the listing is a signed or autographed Funko Pop (keywords: "signed", "autograph", "auto ", "COA", "certificate of authenticity", "JSA", "Beckett auth"), set category_id to "autographed" instead of "funko". These flow into a dedicated Signed & Autographed category, not the standard Funko feed. Still extract the Pop number and include it in the name.
 
 ━━ MANDATORY RULES ━━
 
@@ -135,6 +138,7 @@ For each APPROVED item return:
 - name: "Character Name [#XXXX]" — canonical name ending with Pop number in [#XXXX] format
 - short: nickname max 18 chars
 - series: product line (e.g. "Funko Pop · Marvel #1234")
+- category_id: "funko" for standard Pops, "autographed" for signed/autographed Pops
 - fandom_id: best match from known fandoms or null
 - ebay_query: search string including bare Pop number + rarity keyword (e.g. "Funko Pop Luffy 1583 chase GITD")
 - ebay_title: original listing title verbatim
@@ -309,14 +313,18 @@ serve(async (req) => {
         continue;
       }
 
-      // Reject if this Pop number is already tracked (existing SKU or earlier in this batch)
-      const popNum = parseInt(popMatch[1]);
-      if (batchPopNumbers.has(popNum)) {
-        console.log(`Rejected — duplicate Pop number #${popNum}: ${c.name}`);
-        rejected++;
-        continue;
+      const popNum   = parseInt(popMatch[1]);
+      const catId    = c.category_id === 'autographed' ? 'autographed' : 'funko';
+
+      // For standard Funko Pops, reject if pop number already tracked
+      if (catId === 'funko') {
+        if (batchPopNumbers.has(popNum)) {
+          console.log(`Rejected — duplicate Pop number #${popNum}: ${c.name}`);
+          rejected++;
+          continue;
+        }
+        batchPopNumbers.add(popNum);
       }
-      batchPopNumbers.add(popNum);
 
       const meetsThreshold = Number(c.price_median ?? 0) >= 20 && !!c.fandom_id;
 
@@ -324,7 +332,7 @@ serve(async (req) => {
         .from('discovery_candidates')
         .insert({
           name:        c.name,
-          category_id: 'funko',
+          category_id: catId,
           fandom_id:   c.fandom_id ?? null,
           ebay_count:  0,
           reddit_mentions: 0,
@@ -354,7 +362,7 @@ serve(async (req) => {
 
       // Upsert to product_catalog — fire and forget, never block candidate flow
       const variantType = exclusiveTypeToVariantType(c.exclusive_type);
-      const fp          = catalogFingerprint('funko', c.name, {
+      const fp          = catalogFingerprint(catId, c.name, {
         popNumber:   isNaN(popNum) ? null : popNum,
         variantType,
       });
@@ -362,7 +370,7 @@ serve(async (req) => {
         fingerprint:      fp,
         name:             c.name,
         short:            c.short ?? c.name.slice(0, 18),
-        category_id:      'funko',
+        category_id:      catId,
         fandom_id:        c.fandom_id ?? null,
         series:           c.series    ?? null,
         pop_number:       isNaN(popNum) ? null : popNum,

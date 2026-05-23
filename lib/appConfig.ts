@@ -1,12 +1,14 @@
 import { Category, Fandom } from './types';
 
 export const CATEGORIES: Category[] = [
-  { id: 'funko',   label: 'Funko Pop',     short: 'Funko',   type: 'figure' },
-  { id: 'tcg',     label: 'Trading Cards', short: 'TCG',     type: 'card' },
-  { id: 'popmart', label: 'Pop Mart',      short: 'PopMart', type: 'box' },
-  { id: 'hottoys', label: 'Hot Toys',      short: 'HotToys', type: 'figure' },
-  { id: 'neca',    label: 'NECA',          short: 'NECA',    type: 'figure' },
-  { id: 'hwheels', label: 'Hot Wheels',    short: 'HWheels', type: 'car' },
+  { id: 'funko',        label: 'Funko Pop',            short: 'Funko',     type: 'figure' },
+  { id: 'tcg',          label: 'Trading Cards',         short: 'TCG',       type: 'card'   },
+  { id: 'popmart',      label: 'Pop Mart',              short: 'PopMart',   type: 'box'    },
+  { id: 'hottoys',      label: 'Hot Toys',              short: 'HotToys',   type: 'figure' },
+  { id: 'neca',         label: 'NECA',                  short: 'NECA',      type: 'figure' },
+  { id: 'hwheels',      label: 'Hot Wheels',            short: 'HWheels',   type: 'car'    },
+  { id: 'autographed',  label: 'Signed & Autographed',  short: 'Signed',    type: 'signed' },
+  { id: 'thrilljoy',    label: 'ThrillJoy',             short: 'ThrillJoy', type: 'box'    },
 ];
 
 export const FANDOMS: Fandom[] = [

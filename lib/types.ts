@@ -4,7 +4,7 @@ export interface Category {
   id: string;
   label: string;
   short: string;
-  type: 'figure' | 'card' | 'box' | 'car';
+  type: 'figure' | 'card' | 'box' | 'car' | 'signed';
 }
 
 export interface Fandom {

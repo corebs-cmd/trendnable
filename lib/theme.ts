@@ -3,12 +3,14 @@
 // per-category color identity, gold coral for hot/top-find moments.
 
 export const CATEGORY_COLORS = {
-  funko:   { tint: '#FFE9D6', tintDark: '#161C3E', tintDark2: '#0C1128', ink: '#C2410C', name: 'Pop' },
-  tcg:     { tint: '#E8E0FA', tintDark: '#131A40', tintDark2: '#0B1030', ink: '#6B46C1', name: 'TCG' },
-  popmart: { tint: '#FCDCE8', tintDark: '#17133C', tintDark2: '#0F0D28', ink: '#BE185D', name: 'Pop Mart' },
-  hottoys: { tint: '#D5E4FF', tintDark: '#0F1C3E', tintDark2: '#091430', ink: '#1D4ED8', name: 'Hot Toys' },
-  neca:    { tint: '#D5EFDC', tintDark: '#0E1D36', tintDark2: '#081524', ink: '#15803D', name: 'NECA' },
-  hwheels: { tint: '#FDDEDE', tintDark: '#131624', tintDark2: '#0C0F1A', ink: '#B91C1C', name: 'Hot Wheels' },
+  funko:       { tint: '#FFE9D6', tintDark: '#161C3E', tintDark2: '#0C1128', ink: '#C2410C', name: 'Pop' },
+  tcg:         { tint: '#E8E0FA', tintDark: '#131A40', tintDark2: '#0B1030', ink: '#6B46C1', name: 'TCG' },
+  popmart:     { tint: '#FCDCE8', tintDark: '#17133C', tintDark2: '#0F0D28', ink: '#BE185D', name: 'Pop Mart' },
+  hottoys:     { tint: '#D5E4FF', tintDark: '#0F1C3E', tintDark2: '#091430', ink: '#1D4ED8', name: 'Hot Toys' },
+  neca:        { tint: '#D5EFDC', tintDark: '#0E1D36', tintDark2: '#081524', ink: '#15803D', name: 'NECA' },
+  hwheels:     { tint: '#FDDEDE', tintDark: '#131624', tintDark2: '#0C0F1A', ink: '#B91C1C', name: 'Hot Wheels' },
+  autographed: { tint: '#FFF5D6', tintDark: '#1A1500', tintDark2: '#120E00', ink: '#B45309', name: 'Signed' },
+  thrilljoy:   { tint: '#D0F5F0', tintDark: '#0D2222', tintDark2: '#081818', ink: '#0D9488', name: 'ThrillJoy' },
 } as const;
 
 export function categoryColor(catId: string, dark: boolean) {

@@ -152,25 +152,30 @@ async function searchEbay(query: string, token: string): Promise<any[]> {
  */
 function inferCategoryFromName(name: string): string {
   const lower = name.toLowerCase();
-  if (/funko\s+pop/i.test(lower))                                       return 'funko';
+  // Signed/autographed detection takes priority — check before funko
+  if (/\b(signed|autograph|auto\b|hand.signed|coa|jsa|beckett\s+auth)\b/i.test(lower)) return 'autographed';
+  if (/thrilljoy/i.test(lower))                                          return 'thrilljoy';
+  if (/funko\s+pop/i.test(lower))                                        return 'funko';
   if (/\b(pokemon|magic.*(gathering|card)|yugioh|yu-gi-oh)\b/i.test(lower)) return 'tcg';
-  if (/\bpop\s*mart\b/i.test(lower))                                    return 'popmart';
-  if (/\bhot\s+toys\b/i.test(lower))                                    return 'hottoys';
-  if (/\bneca\b/i.test(lower))                                           return 'neca';
-  if (/\bhot\s+wheels\b/i.test(lower))                                  return 'hwheels';
+  if (/\bpop\s*mart\b/i.test(lower))                                     return 'popmart';
+  if (/\bhot\s+toys\b/i.test(lower))                                     return 'hottoys';
+  if (/\bneca\b/i.test(lower))                                            return 'neca';
+  if (/\bhot\s+wheels\b/i.test(lower))                                   return 'hwheels';
   return 'funko'; // safe default for collectibles; Claude will correct
 }
 
 function buildEbayQuery(name: string, category_id: string): string {
   const n = name.trim();
   switch (category_id) {
-    case 'funko':   return `Funko Pop ${n}`;
-    case 'tcg':     return `${n} card`;
-    case 'popmart': return `Pop Mart ${n}`;
-    case 'hottoys': return `Hot Toys ${n}`;
-    case 'neca':    return `NECA ${n}`;
-    case 'hwheels': return `Hot Wheels ${n}`;
-    default:        return n;
+    case 'funko':        return `Funko Pop ${n}`;
+    case 'tcg':          return `${n} card`;
+    case 'popmart':      return `Pop Mart ${n}`;
+    case 'hottoys':      return `Hot Toys ${n}`;
+    case 'neca':         return `NECA ${n}`;
+    case 'hwheels':      return `Hot Wheels ${n}`;
+    case 'autographed':  return `${n} signed autographed COA`;
+    case 'thrilljoy':    return `ThrillJoy ${n}`;
+    default:             return n;
   }
 }
 
@@ -212,6 +217,17 @@ async function classifyWithClaude(
     hwheels: `HOT WHEELS RULES:
 - Identify if it's a Super Treasure Hunt (STH), Treasure Hunt (TH), or premium series.
 - Note the year and casting name.`,
+
+    autographed: `SIGNED & AUTOGRAPHED RULES:
+- This category covers any signed or autographed collectible: cards, figures, Funko Pops, comics, prints, etc.
+- Name format: "Item Name Signed" or "Item Name Autographed" (e.g. "Charizard Holo Base Set Signed PSA Auth").
+- Authentication is required: COA, JSA, Beckett, PSA, SGC auth, or similar. REJECT if no authentication.
+- Note the authenticator (JSA, Beckett, PSA Auth, etc.) in the series field.`,
+
+    thrilljoy: `THRILLJOY RULES:
+- ThrillJoy is a designer toy brand similar to Pop Mart.
+- Identify the specific figure name and series/collection.
+- Note if it's a secret/hidden figure, limited edition, or chase variant.`,
   };
 
   const rules = categoryRules[categoryId] ?? '';
@@ -236,7 +252,7 @@ OUTPUT — return a single JSON object (not an array):
 {
   "approved": true | false,
   "rejection_reason": "why rejected (if not approved)",
-  "category_id": "funko" | "tcg" | "popmart" | "hottoys" | "neca" | "hwheels",
+  "category_id": "funko" | "tcg" | "popmart" | "hottoys" | "neca" | "hwheels" | "autographed" | "thrilljoy",
   "name": "canonical product name",
   "short": "nickname max 18 chars",
   "series": "product line / set",
