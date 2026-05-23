@@ -9,7 +9,7 @@
     "newArchEnabled": true,
     "scheme": "trendnable",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/trendnable_logo_b.png",
       "resizeMode": "contain",
       "backgroundColor": "#0A1426"
     },
