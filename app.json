@@ -4,7 +4,7 @@
     "slug": "trendnable",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/trendnable_logo_b.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "scheme": "trendnable",
@@ -24,7 +24,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/trendnable_logo_b.png",
         "backgroundColor": "#0A1426"
       },
       "package": "com.trendnable.app",
@@ -33,7 +33,7 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/trendnable_logo_b.png"
     },
     "plugins": [
       "expo-router",
