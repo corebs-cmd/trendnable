@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, Pressable, StyleSheet,
-  KeyboardAvoidingView, Platform, ScrollView,
+  KeyboardAvoidingView, Platform, ScrollView, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -111,9 +111,11 @@ export default function AuthScreen() {
       >
         {/* Logo */}
         <View style={styles.logoRow}>
-          <View style={[styles.logoBox, { backgroundColor: theme.accent }]}>
-            <Text style={[styles.logoGlyph, { color: theme.accentInk }]}>T</Text>
-          </View>
+          <Image
+            source={require('../../assets/trendnable_logo_b.png')}
+            style={{ width: 52, height: 52, borderRadius: 14 }}
+            resizeMode="contain"
+          />
         </View>
 
         <Text style={[styles.headline, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
@@ -219,11 +221,6 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { paddingHorizontal: 24 },
   logoRow: { alignItems: 'flex-start', marginBottom: 32 },
-  logoBox: {
-    width: 52, height: 52, borderRadius: 14,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  logoGlyph: { fontSize: 28, fontWeight: '700' },
   headline: { fontSize: 32, letterSpacing: -0.03, lineHeight: 36, marginBottom: 8 },
   sub: { fontSize: 15, lineHeight: 22, marginBottom: 32 },
   field: { marginBottom: 16 },

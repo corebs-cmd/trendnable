@@ -200,7 +200,7 @@ export default function SettingsScreen() {
           marginBottom: 16,
         }}>
           <Image
-            source={require('@/assets/trendnable-icon.png')}
+            source={require('@/assets/trendnable_logo_b.png')}
             style={{ width: 52, height: 52, borderRadius: 14, flexShrink: 0 }}
             accessibilityLabel="Profile icon"
           />
