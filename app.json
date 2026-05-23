@@ -39,14 +39,7 @@
       "expo-router",
       "expo-font",
       ["expo-camera", { "cameraPermission": "Allow Trendnable to use the camera to scan product barcodes." }],
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/icon.png",
-          "color": "#0A1426",
-          "sounds": []
-        }
-      ]
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true
