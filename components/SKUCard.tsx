@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, View, Text, StyleSheet } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { Theme } from '@/lib/theme';
+import { Theme, categoryColor } from '@/lib/theme';
 import { SKU, CardDensity } from '@/lib/types';
 import { catById, fandomById, fmtPrice } from '@/lib/appConfig';
 import ProductPlaceholder from '@/components/ProductPlaceholder';
@@ -24,6 +24,7 @@ interface SKUCardProps {
 function HeroCard({ sku, theme, onPress, onLongPress }: SKUCardProps) {
   const cat = catById(sku.category);
   const fandom = fandomById(sku.fandom);
+  const c = categoryColor(sku.category, theme.dark);
 
   return (
     <Pressable
@@ -82,7 +83,7 @@ function HeroCard({ sku, theme, onPress, onLongPress }: SKUCardProps) {
 
       {/* Narrative — italic Fraunces with gold left border */}
       {sku.narrative ? (
-        <View style={[styles.narrativeBlock, { borderLeftColor: '#0BC7FD' }]}>
+        <View style={[styles.narrativeBlock, { borderLeftColor: c.ink }]}>
           <Text numberOfLines={2} ellipsizeMode="tail" style={[styles.narrativeText, { color: theme.text, fontFamily: theme.fontDispItalic }]}>
             "{sku.narrative}"
           </Text>
