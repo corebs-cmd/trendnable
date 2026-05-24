@@ -31,12 +31,14 @@ function HeroCard({ sku, theme, onPress, onLongPress }: SKUCardProps) {
       onPress={onPress}
       onLongPress={onLongPress}
       style={({ pressed }) => ({
-        backgroundColor: c.tint,
+        backgroundColor: theme.surface,
         borderRadius: theme.radiusLg,
         overflow: 'hidden',
         opacity: pressed ? 0.85 : 1,
       })}
     >
+      {/* Category colour wash — ink at ~18% so text stays readable */}
+      <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: c.ink + '2E' }} pointerEvents="none" />
       {/* Eyebrow row */}
       <View style={styles.eyebrowRow}>
         <View style={[styles.topFindPill, { backgroundColor: '#FF0025' }]}>
