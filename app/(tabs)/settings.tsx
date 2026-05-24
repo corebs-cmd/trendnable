@@ -112,7 +112,18 @@ export default function SettingsScreen() {
     }
   }
 
+  const setIsPremium = useAppStore((s) => s.setIsPremium);
+
   const settingsGroups: SettingsGroup[] = [
+    ...(__DEV__ ? [{
+      label: 'Developer',
+      rows: [{
+        id: 'devPremium', type: 'toggle' as const,
+        title: '[DEV] Simulate Premium',
+        value: isPremium,
+        onToggle: () => setIsPremium(!isPremium),
+      }],
+    }] : []),
     {
       label: 'Personalization',
       rows: [

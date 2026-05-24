@@ -189,6 +189,7 @@ export interface ScanResult {
   price: { low: number; median: number; high: number };
   listings: number;
   soldCount: number;
+  sellabilityScore: number;
   scoreEstimate: number;
   scoreBreakdown: { velocity: number; volume: number; confirmation: number; freshness: number };
   isNewToCatalog: boolean;

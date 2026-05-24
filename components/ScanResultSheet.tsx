@@ -73,19 +73,29 @@ function CategoryBadge({ categoryId, theme }: { categoryId: string; theme: Theme
 
 // ── Hot score bar ─────────────────────────────────────────────────────────────
 
+function scoreColor(score: number): string {
+  if (score >= 80) return '#22C55E';
+  if (score >= 65) return '#84CC16';
+  if (score >= 45) return '#EAB308';
+  if (score >= 25) return '#F97316';
+  return '#EF4444';
+}
+
 function ScoreBar({ score, theme }: { score: number; theme: Theme }) {
-  const fillColor =
-    score >= 80 ? theme.gold :
-    score >= 65 ? theme.accent :
-    score >= 40 ? theme.text :
-    theme.faint;
+  const fillColor = scoreColor(score);
+  const pct = Math.min(100, Math.max(0, score));
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-      <View style={{ flex: 1, height: 10, borderRadius: 5, backgroundColor: theme.surface2, overflow: 'hidden' }}>
+      {/* Track */}
+      <View style={{ flex: 1, height: 10, borderRadius: 5, overflow: 'hidden', flexDirection: 'row' }}>
+        {SCALE_COLORS.map((c) => (
+          <View key={c} style={{ flex: 1, backgroundColor: c, opacity: 0.18 }} />
+        ))}
+        {/* Coloured fill overlay */}
         <View style={{
-          width: `${Math.min(100, Math.max(0, score))}%`,
-          height: '100%',
+          position: 'absolute', left: 0, top: 0, bottom: 0,
+          width: `${pct}%`,
           backgroundColor: fillColor,
           borderRadius: 5,
         }} />
@@ -117,31 +127,27 @@ function sellabilityTier(pct: number): { label: string; description: string } {
   return              { label: 'Oversaturated',      description: 'Difficult to sell quickly'   };
 }
 
-function calcQuickSalePct(soldCount: number, activeCount: number): number {
-  // Bayesian smoothing: prior of 40% with weight 10
-  return Math.round((4 + soldCount) / (10 + soldCount + activeCount) * 100);
-}
-
 // ── Sellability card ──────────────────────────────────────────────────────────
 
 interface SellabilityCardProps {
   soldCount: number;
   activeCount: number;
+  sellabilityScore: number;
   theme: Theme;
   isPremium: boolean;
   onUnlock: () => void;
 }
 
-function SellabilityCard({ soldCount, activeCount, theme, isPremium, onUnlock }: SellabilityCardProps) {
-  const hasData   = soldCount + activeCount > 0;
-  const quickPct  = hasData ? calcQuickSalePct(soldCount, activeCount) : 0;
+function SellabilityCard({ soldCount, activeCount, sellabilityScore, theme, isPremium, onUnlock }: SellabilityCardProps) {
+  const hasData  = sellabilityScore > 0;
+  const quickPct = sellabilityScore;
   const inkColor  = sellabilityColor(quickPct);
   const tier      = sellabilityTier(quickPct);
   // Keep indicator 2–98 so it never clips outside the bar ends
   const indicatorPct = Math.max(2, Math.min(98, quickPct));
 
   return (
-    <View style={[styles.card, { backgroundColor: theme.surface2 }]}>
+    <View style={[styles.card, { backgroundColor: theme.surface2, minHeight: isPremium ? undefined : 230 }]}>
 
       {/* ── Actual content (always rendered; opacity dimmed for free users) ── */}
       <View style={{ padding: 14, gap: 12, opacity: isPremium ? 1 : 0.07 }}
@@ -202,14 +208,14 @@ function SellabilityCard({ soldCount, activeCount, theme, isPremium, onUnlock }:
                 {quickPct}%
               </Text>
               <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.muted, paddingBottom: 5, lineHeight: 18 }}>
-                likely to{'\n'}sell quickly
+                likelihood of{'\n'}selling quickly
               </Text>
             </View>
 
             {/* Sold / active stats + tier */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
               <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: theme.muted }}>
-                {soldCount} sold  ·  {activeCount} active
+                {soldCount > 0 ? `${soldCount} sold` : '— sold'}  ·  {activeCount} active
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                 <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: inkColor }} />
@@ -221,7 +227,7 @@ function SellabilityCard({ soldCount, activeCount, theme, isPremium, onUnlock }:
 
             {/* Tier description */}
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted }}>
-              {tier.description}
+              <Text style={{ fontFamily: 'Inter_600SemiBold' }}>Forecast: </Text>{tier.description}
             </Text>
           </>
         ) : (
@@ -342,6 +348,7 @@ export default function ScanResultSheet({
         <SellabilityCard
           soldCount={result.soldCount}
           activeCount={result.listings}
+          sellabilityScore={result.sellabilityScore}
           theme={theme}
           isPremium={isPremium}
           onUnlock={onUnlockSellability}

@@ -39,6 +39,7 @@ interface ScanResult {
   price: { low: number; median: number; high: number };
   listings: number;
   sold_count: number;
+  sellability_score: number;
   score_estimate: number;
   score_breakdown: { velocity: number; volume: number; confirmation: number; freshness: number };
   is_new_to_catalog: boolean;
@@ -129,26 +130,35 @@ async function lookupBarcodeOnUpcItemDb(barcode: string): Promise<string | null>
  * Uses App ID auth (same as lookupBarcodeOnEbay), no OAuth token required.
  */
 async function searchEbaySold(query: string): Promise<number> {
-  const url = new URL('https://svcs.ebay.com/services/search/FindingService/v1');
-  url.searchParams.set('OPERATION-NAME',      'findCompletedItems');
-  url.searchParams.set('SERVICE-VERSION',     '1.0.0');
-  url.searchParams.set('SECURITY-APPNAME',    EBAY_CLIENT_ID);
-  url.searchParams.set('RESPONSE-DATA-FORMAT','JSON');
-  url.searchParams.set('keywords',            query);
-  url.searchParams.set('itemFilter(0).name',  'SoldItemsOnly');
-  url.searchParams.set('itemFilter(0).value', 'true');
-  url.searchParams.set('paginationInput.entriesPerPage', '5');
-  url.searchParams.set('paginationInput.pageNumber',     '1');
+  // Build URL manually — URLSearchParams encodes parentheses as %28%29 but
+  // eBay Finding API requires literal parentheses in itemFilter(n).name params.
+  const qs = [
+    `OPERATION-NAME=findCompletedItems`,
+    `SERVICE-VERSION=1.0.0`,
+    `SECURITY-APPNAME=${encodeURIComponent(EBAY_CLIENT_ID)}`,
+    `RESPONSE-DATA-FORMAT=JSON`,
+    `GLOBAL-ID=EBAY-US`,
+    `keywords=${encodeURIComponent(query)}`,
+    `itemFilter(0).name=SoldItemsOnly`,
+    `itemFilter(0).value=true`,
+    `paginationInput.entriesPerPage=5`,
+    `paginationInput.pageNumber=1`,
+  ].join('&');
 
   try {
-    const res = await fetch(url.toString());
+    const res = await fetch(`https://svcs.ebay.com/services/search/FindingService/v1?${qs}`);
     if (!res.ok) {
       console.warn('eBay findCompletedItems non-OK:', res.status);
       return 0;
     }
     const data = await res.json();
-    const totalStr = data?.findCompletedItemsResponse?.[0]
-      ?.paginationOutput?.[0]?.totalEntries?.[0];
+    const resp = data?.findCompletedItemsResponse?.[0];
+    const ack  = resp?.ack?.[0];
+    if (ack !== 'Success' && ack !== 'SuccessWithWarning') {
+      console.warn('eBay findCompletedItems ack:', ack, JSON.stringify(resp?.errorMessage?.[0]));
+      return 0;
+    }
+    const totalStr = resp?.paginationOutput?.[0]?.totalEntries?.[0];
     return parseInt(totalStr ?? '0', 10) || 0;
   } catch (err) {
     console.warn('eBay findCompletedItems error:', err);
@@ -158,23 +168,25 @@ async function searchEbaySold(query: string): Promise<number> {
 
 /**
  * Step 6: eBay Browse API search — same params as spotlight-pipeline.
+ * Returns the item summaries AND the total active listing count from eBay.
  */
-async function searchEbay(query: string, token: string): Promise<any[]> {
+async function searchEbay(query: string, token: string): Promise<{ items: any[]; total: number }> {
   const url = new URL('https://api.ebay.com/buy/browse/v1/item_summary/search');
   url.searchParams.set('q', query);
   url.searchParams.set('filter', 'categoryIds:{220,64482},buyingOptions:{FIXED_PRICE}');
   url.searchParams.set('sort', 'watchCountDesc');
   url.searchParams.set('limit', '20');
+  url.searchParams.set('fieldgroups', 'EXTENDED');  // includes watchCount per listing
 
   const res = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) {
     console.error('eBay Browse search failed:', res.status);
-    return [];
+    return { items: [], total: 0 };
   }
   const data = await res.json();
-  return data.itemSummaries ?? [];
+  return { items: data.itemSummaries ?? [], total: data.total ?? 0 };
 }
 
 // ── Category inference ────────────────────────────────────────────────────────
@@ -219,6 +231,8 @@ async function classifyWithClaude(
   categoryId: string,
   fandomId: string | null,
   listings: any[],
+  barcodeListings: any[] = [],
+  barcode: string = '',
 ): Promise<{ candidate: any | null; inputTokens: number; outputTokens: number }> {
 
   const FANDOMS = 'onepiece (One Piece only), demon (Demon Slayer only), starwars, pokemon, marvel, anime (My Hero Academia/MHA, Jujutsu Kaisen/JJK, Naruto, Dragon Ball/DBZ, Attack on Titan, Bleach, or any other anime not covered by onepiece/demon), labubu, disney, dc, gaming, tmnt (Teenage Mutant Ninja Turtles — use for any TMNT/Ninja Turtles collectible), popcult (Pop Culture: Stranger Things, Terminator, RoboCop, Ghostbusters, Back to the Future, Alien, Predator, Halloween, Friday 13th, Nightmare on Elm Street, IT, any horror franchise, cult classics, movies & shows)';
@@ -304,10 +318,17 @@ OUTPUT — return a single JSON object (not an array):
 
 Fill in the category-specific fields (exclusive_type for funko, card_variant for tcg, etc.). Leave others null.
 
-LISTINGS (top matches for "${targetName}"):
+LISTINGS — searched by product name ("${targetName}"):
 ${listings.map((item, i) =>
   `${i + 1}. "${item.title}" | $${item.price?.value ?? '?'} | ${item.condition ?? 'unknown'}`
 ).join('\n')}
+${barcodeListings.length > 0 ? `
+LISTINGS — searched by barcode (${barcode}) — these are the strongest signal for the exact scanned item:
+${barcodeListings.map((item, i) =>
+  `${i + 1}. "${item.title}" | $${item.price?.value ?? '?'} | ${item.condition ?? 'unknown'}`
+).join('\n')}
+
+If the barcode listings show a significantly different product or price point than the name-based listings, trust the barcode listings — they reflect the specific item that was physically scanned. Use them to determine the correct canonical name, price, and ebay_query.` : ''}
 
 Return ONLY valid JSON. No markdown, no explanation.`;
 
@@ -343,6 +364,41 @@ Return ONLY valid JSON. No markdown, no explanation.`;
     console.error('Failed to parse Claude response:', text.slice(0, 200));
     return { candidate: null, inputTokens, outputTokens };
   }
+}
+
+// ── Sellability score ─────────────────────────────────────────────────────────
+
+function calcSellabilityScore(
+  soldCount: number,
+  activeTotal: number,
+  priceMedian: number,
+  listings: any[],
+): number {
+  const hasSoldData = soldCount > 0;
+
+  // Sell-through — Bayesian smoothed ratio (only used when sold data is available)
+  const stPct = hasSoldData
+    ? (4 + soldCount) / (10 + soldCount + Math.max(activeTotal, 1)) * 100
+    : 0;
+
+  // Price signal — log10 scale anchored $10–$1000
+  // $10→0  $50→35  $100→50  $300→74  $500→85  $1000→100
+  const priceScore = priceMedian < 10 ? 0
+    : Math.min(100, Math.round((Math.log10(priceMedian) - 1) / (3 - 1) * 100));
+
+  // Watch-count demand — avg watches across returned listings (requires EXTENDED fieldgroups)
+  const watches = listings.map((l: any) => Number(l.watchCount ?? 0));
+  const avgWatches = watches.length > 0
+    ? watches.reduce((a: number, b: number) => a + b, 0) / watches.length
+    : 0;
+  const watchScore = Math.min(100, Math.round(avgWatches / 25 * 100));
+
+  // Dynamic weights: when sold data is unavailable redistribute its weight
+  const score = hasSoldData
+    ? stPct * 0.25 + priceScore * 0.45 + watchScore * 0.30
+    : priceScore * 0.60 + watchScore * 0.40;
+
+  return Math.max(1, Math.min(100, Math.round(score)));
 }
 
 // ── Hot score estimate ────────────────────────────────────────────────────────
@@ -425,95 +481,9 @@ serve(async (req) => {
   let outputTokens = 0;
 
   try {
-    // ── Step 3: Cache check ───────────────────────────────────────────────────
-    const { data: cachedRows, error: cacheErr } = await svc
-      .from('product_catalog')
-      .select('*')
-      .eq('barcode', barcode)
-      .limit(1);
-
-    if (cacheErr) {
-      console.warn('Cache check error:', cacheErr.message);
-    }
-
-    const cached = cachedRows?.[0] ?? null;
-
-    if (cached && cached.sku_id) {
-      // Full cache hit — also fetch the SKU for richer data
-      const { data: sku } = await svc
-        .from('skus')
-        .select('*')
-        .eq('id', cached.sku_id)
-        .single();
-
-      // Increment scan_count non-blocking
-      svc.from('product_catalog')
-        .update({ scan_count: (cached.scan_count ?? 0) + 1 })
-        .eq('id', cached.id)
-        .then(({ error: scErr }) => {
-          if (scErr) console.warn('scan_count increment failed:', scErr.message);
-        });
-
-      // Log to pipeline_runs
-      svc.from('pipeline_runs').insert({
-        pipeline: 'scan-pipeline',
-        input_tokens: 0,
-        output_tokens: 0,
-        cost_usd: 0,
-        meta: {
-          barcode,
-          catalog_id: cached.id,
-          sku_id: cached.sku_id,
-          is_new: false,
-          quality_gate_passed: false,
-          user_id: userId,
-          cache_hit: true,
-        },
-      }).then(({ error: logErr }) => {
-        if (logErr) console.warn('Failed to log pipeline run:', logErr.message);
-      });
-
-      const { score, breakdown } = estimateHotScore([]);
-      return json({
-        ok: true,
-        catalog_id: cached.id,
-        sku_id: cached.sku_id,
-        name: cached.name,
-        short: cached.short ?? cached.name.slice(0, 18),
-        series: cached.series ?? sku?.series ?? null,
-        category_id: cached.category_id,
-        fandom_id: cached.fandom_id ?? null,
-        variant_type: cached.variant_type ?? null,
-        pop_number: cached.pop_number ?? null,
-        price: {
-          low:    Number(cached.price_latest ?? 0),
-          median: Number(cached.price_latest ?? 0),
-          high:   Number(cached.price_latest ?? 0),
-        },
-        listings: 0,
-        sold_count: 0,
-        score_estimate: score,
-        score_breakdown: breakdown,
-        is_new_to_catalog: false,
-        quality_gate_passed: false,
-        barcode,
-        ebay_query: cached.ebay_query ?? cached.name,
-        image_url: cached.image_url ?? null,
-      });
-    }
-
-    // Partial cache hit (no sku_id) — still run fresh pricing
-    const isNewToCache = !cached;
-
-    // ── Step 4: eBay Finding API barcode lookup ───────────────────────────────
+    // ── Step 3: eBay Finding API barcode lookup ───────────────────────────────
     let productName: string | null = null;
-
-    if (cached && !cached.sku_id) {
-      // Use the cached name as the search term
-      productName = cached.name;
-    } else {
-      productName = await lookupBarcodeOnEbay(barcode);
-    }
+    productName = await lookupBarcodeOnEbay(barcode);
 
     // ── Step 5: UPCitemdb fallback ────────────────────────────────────────────
     if (!productName) {
@@ -533,11 +503,13 @@ serve(async (req) => {
     const ebayQueryInitial = buildEbayQuery(productName, inferredCategory);
 
     const ebayToken = await getEbayToken();
-    const [listings, soldCount] = await Promise.all([
+    const [nameResult, barcodeResult] = await Promise.all([
       searchEbay(ebayQueryInitial, ebayToken),
-      searchEbaySold(ebayQueryInitial),
+      searchEbay(barcode, ebayToken),
     ]);
-    const imageUrl   = listings.find((l: any) => l?.image?.imageUrl)?.image?.imageUrl ?? null;
+    const listings        = nameResult.items;
+    const barcodeListings = barcodeResult.items;
+    const imageUrl = (listings.find((l: any) => l?.image?.imageUrl) ?? barcodeListings.find((l: any) => l?.image?.imageUrl))?.image?.imageUrl ?? null;
 
     // ── Step 7: Claude classification ─────────────────────────────────────────
     const { candidate, inputTokens: iT, outputTokens: oT } = await classifyWithClaude(
@@ -545,6 +517,8 @@ serve(async (req) => {
       inferredCategory,
       null,
       listings,
+      barcodeListings.slice(0, 5),
+      barcode,
     );
     inputTokens  += iT;
     outputTokens += oT;
@@ -573,6 +547,22 @@ serve(async (req) => {
     const finalCategoryId = candidate.category_id ?? inferredCategory;
     const ebayQuery = candidate.ebay_query ?? buildEbayQuery(candidate.name ?? productName, finalCategoryId);
 
+    // ── Step 7.5: Precision sellability search with Claude's refined query ────
+    // Claude's ebayQuery targets the exact variant (GITD, Chase, Exclusive etc.)
+    // so these counts are far more accurate than the broad initial query.
+    const [preciseResult, soldCount] = await Promise.all([
+      searchEbay(ebayQuery, ebayToken),
+      searchEbaySold(ebayQuery),
+    ]);
+
+    // Cascade: refined query > barcode search > initial broad search
+    const activeTotal = preciseResult.total > 0  ? preciseResult.total
+      : barcodeResult.total > 0                  ? barcodeResult.total
+      : nameResult.total;
+
+    // Use precise listings for watch-count signal; fall back to initial listings
+    const sellabilityListings = preciseResult.items.length > 0 ? preciseResult.items : listings;
+
     // ── Step 8: Hot score estimate ────────────────────────────────────────────
     const { score: scoreEstimate, breakdown: scoreBreakdown } = estimateHotScore(listings);
 
@@ -581,10 +571,13 @@ serve(async (req) => {
     const priceLow    = Number(candidate.price_low    ?? priceMedian);
     const priceHigh   = Number(candidate.price_high   ?? priceMedian);
 
+    // Sellability uses precise counts + price + watch signals
+    const sellabilityScore = calcSellabilityScore(soldCount, activeTotal, priceMedian, sellabilityListings);
+
     const qualityGatePassed =
       candidate.approved === true &&
       priceMedian >= 15 &&
-      listings.length >= 5;
+      activeTotal >= 5;
 
     if (qualityGatePassed) {
       // Check if a candidate with this name already exists
@@ -648,9 +641,6 @@ serve(async (req) => {
       cardGrade:   candidate.card_grade   ?? null,
     });
 
-    // Determine source: only 'scan' if this is a brand-new entry
-    const catalogSource = isNewToCache ? 'scan' : (cached?.source ?? 'scan');
-
     const { data: upsertedRows, error: upsertErr } = await svc
       .from('product_catalog')
       .upsert(
@@ -668,19 +658,16 @@ serve(async (req) => {
           card_grader:      candidate.card_grader    ?? null,
           card_grade:       candidate.card_grade     ?? null,
           ebay_query:       ebayQuery,
-          price_first_seen: isNewToCache ? priceMedian : undefined,
           price_latest:     priceMedian,
           price_updated_at: new Date().toISOString(),
           barcode:          barcode,
-          image_url:        isNewToCache ? imageUrl : (cached?.image_url ?? imageUrl),
-          scan_count:       isNewToCache ? 1 : (cached?.scan_count ?? 0) + 1,
-          source:           catalogSource,
+          image_url:        imageUrl,
+          source:           'scan',
           last_seen_at:     new Date().toISOString(),
-          first_seen_at:    isNewToCache ? new Date().toISOString() : undefined,
         },
         { onConflict: 'fingerprint' },
       )
-      .select('id, sku_id, scan_count')
+      .select('id, sku_id')
       .single();
 
     if (upsertErr || !upsertedRows) {
@@ -688,7 +675,7 @@ serve(async (req) => {
       return json({ ok: false, error: 'catalog_upsert_failed' }, 500);
     }
 
-    const catalogId = upsertedRows.id as string;
+    const catalogId = upsertedRows.id   as string;
     const skuId     = upsertedRows.sku_id as string | null;
 
     // ── Step 11: Log to pipeline_runs ─────────────────────────────────────────
@@ -703,7 +690,7 @@ serve(async (req) => {
         barcode,
         catalog_id:          catalogId,
         sku_id:              skuId,
-        is_new:              isNewToCache,
+        is_new:              true,
         quality_gate_passed: qualityGatePassed,
         user_id:             userId,
         ebay_listings:       listings.length,
@@ -726,11 +713,12 @@ serve(async (req) => {
       variant_type: variantType,
       pop_number: popNumber,
       price: { low: priceLow, median: priceMedian, high: priceHigh },
-      listings: listings.length,
+      listings: activeTotal,
       sold_count: soldCount,
+      sellability_score: sellabilityScore,
       score_estimate: scoreEstimate,
       score_breakdown: scoreBreakdown,
-      is_new_to_catalog: isNewToCache,
+      is_new_to_catalog: true,
       quality_gate_passed: qualityGatePassed,
       barcode,
       ebay_query: ebayQuery,
