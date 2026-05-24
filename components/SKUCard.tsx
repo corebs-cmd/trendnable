@@ -31,7 +31,7 @@ function HeroCard({ sku, theme, onPress, onLongPress }: SKUCardProps) {
       onPress={onPress}
       onLongPress={onLongPress}
       style={({ pressed }) => ({
-        backgroundColor: theme.surface,
+        backgroundColor: c.tint,
         borderRadius: theme.radiusLg,
         overflow: 'hidden',
         opacity: pressed ? 0.85 : 1,
