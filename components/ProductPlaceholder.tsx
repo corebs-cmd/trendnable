@@ -194,12 +194,21 @@ export default function ProductPlaceholder({
       )}
 
       {showRealImage ? (
-        <Image
-          source={{ uri: sku.imageUrl }}
-          style={{ width: '100%', height: '100%' }}
-          resizeMode="contain"
-          onError={() => setImageError(true)}
-        />
+        <>
+          {/* Blurred backdrop fills letterbox gaps with the image's own colours */}
+          <Image
+            source={{ uri: sku.imageUrl! }}
+            style={{ ...StyleSheet.absoluteFillObject }}
+            resizeMode="cover"
+            blurRadius={18}
+          />
+          <Image
+            source={{ uri: sku.imageUrl! }}
+            style={{ width: '100%', height: '100%' }}
+            resizeMode="contain"
+            onError={() => setImageError(true)}
+          />
+        </>
       ) : (
         <>
           {/* Category tag */}
