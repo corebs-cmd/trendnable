@@ -38,7 +38,7 @@ function HeroCard({ sku, theme, onPress, onLongPress }: SKUCardProps) {
     >
       {/* Eyebrow row */}
       <View style={styles.eyebrowRow}>
-        <View style={[styles.topFindPill, { backgroundColor: '#FC4A64' }]}>
+        <View style={[styles.topFindPill, { backgroundColor: '#FF0025' }]}>
           <Svg width={9} height={9} viewBox="0 0 16 16">
             <Defs>
               <LinearGradient id="topFindFlameGrad" x1="0" y1="1" x2="0" y2="0">
