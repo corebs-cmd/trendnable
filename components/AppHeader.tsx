@@ -43,7 +43,7 @@ export default function AppHeader({
         {brandLogo && (
           <Image
             source={require('@/assets/trendnable_logo_b.png')}
-            style={{ width: 31, height: 31, borderRadius: 9 }}
+            style={{ width: 37, height: 37, borderRadius: 11, marginTop: -4 }}
           />
         )}
         <Text

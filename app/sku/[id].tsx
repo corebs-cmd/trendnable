@@ -459,12 +459,20 @@ export default function SKUDetailScreen() {
           const salesLabel = totalSoldCount > 0 ? 'Recent Sales' : 'Listings';
           const salesValue = totalSoldCount > 0 ? totalSoldCount : sku.listings;
           return (
-            <View style={{ paddingHorizontal: 20, paddingTop: 12, flexDirection: 'row', gap: 8 }}>
-              <StatBox label="Median"    value={fmtPrice(sku.price.median)} theme={theme} valueColor={theme.premium} />
-              <StatBox label={salesLabel} value={String(salesValue)}         theme={theme} />
-              {sku.age >= 1 && (
-                <StatBox label="Days tracked" value={`${sku.age}d`} theme={theme} />
-              )}
+            <View style={{ paddingHorizontal: 20, paddingTop: 12, gap: 8 }}>
+              {/* Row 1: Listings + Days Tracked */}
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <StatBox label={salesLabel}    value={String(salesValue)} theme={theme} />
+                {sku.age >= 1 && (
+                  <StatBox label="Days Tracked" value={`${sku.age}d`}    theme={theme} />
+                )}
+              </View>
+              {/* Row 2: Median + Lowest Recorded + Highest Recorded */}
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <StatBox label="Median"           value={fmtPrice(sku.price.median)} theme={theme} valueColor={theme.premium} />
+                <StatBox label="Lowest Recorded"  value={fmtPrice(sku.price.low)}    theme={theme} />
+                <StatBox label="Highest Recorded" value={fmtPrice(sku.price.high)}   theme={theme} />
+              </View>
             </View>
           );
         })()}
