@@ -92,7 +92,7 @@ function HeroCard({ sku, theme, onPress, onLongPress }: SKUCardProps) {
       {/* Footer: price + listings | score badge + delta */}
       <View style={[styles.heroFooter, { borderTopColor: theme.hairline }]}>
         <View>
-          <Text style={[styles.heroPrice, { color: theme.premium, fontFamily: theme.fontMonoBold }]}>
+          <Text style={[styles.heroPrice, { color: '#FC792E', fontFamily: theme.fontMonoBold }]}>
             {fmtPrice(sku.price.median)}
           </Text>
           <Text style={[styles.heroListings, { color: theme.muted, fontFamily: 'Inter_400Regular' }]}>
@@ -177,7 +177,7 @@ function StandardCard({ sku, theme, rank, onPress, onLongPress }: SKUCardProps) 
 
         {/* Footer: price + delta */}
         <View style={[styles.standardFooter, { borderTopColor: theme.hairline }]}>
-          <Text style={[styles.standardPrice, { color: theme.premium, fontFamily: theme.fontMonoBold }]}>
+          <Text style={[styles.standardPrice, { color: '#FC792E', fontFamily: theme.fontMonoBold }]}>
             {fmtPrice(sku.price.median)}
           </Text>
           <View style={styles.footerRight}>

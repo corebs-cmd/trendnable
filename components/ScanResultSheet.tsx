@@ -383,7 +383,7 @@ export default function ScanResultSheet({
               { label: 'High',   value: result.price.high   },
             ] as { label: string; value: number }[]).map((p) => (
               <View key={p.label} style={{ flex: 1, alignItems: 'center', gap: 2 }}>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: theme.text }}>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: '#FC792E' }}>
                   {fmtPrice(p.value)}
                 </Text>
                 <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.muted }}>

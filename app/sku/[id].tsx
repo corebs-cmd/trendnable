@@ -469,7 +469,7 @@ export default function SKUDetailScreen() {
               </View>
               {/* Row 2: Median + Lowest Recorded + Highest Recorded */}
               <View style={{ flexDirection: 'row', gap: 8 }}>
-                <StatBox label="Median"           value={fmtPrice(sku.price.median)} theme={theme} valueColor={theme.premium} />
+                <StatBox label="Median"           value={fmtPrice(sku.price.median)} theme={theme} valueColor='#FC792E' />
                 <StatBox label="Lowest Recorded"  value={fmtPrice(sku.price.low)}    theme={theme} />
                 <StatBox label="Highest Recorded" value={fmtPrice(sku.price.high)}   theme={theme} />
               </View>
