@@ -74,6 +74,7 @@ export default function HotScreen() {
   }, [activeCats]);
 
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [newTodayOpen, setNewTodayOpen]       = useState(false);
   const [notifOpen, setNotifOpen]     = useState(false);
   const [scrolled, setScrolled]       = useState(false);
   const [refreshing, setRefreshing]   = useState(false);
@@ -89,7 +90,8 @@ export default function HotScreen() {
     return list;
   }, [hotSkus, activeCats, sortBy]);
 
-  const newCount = useMemo(() => hotSkus.filter((s) => s.age <= 7).length, [hotSkus]);
+  const newToday = useMemo(() => hotSkus.filter((s) => s.age <= 1), [hotSkus]);
+  const newCount = newToday.length;
 
   const handleScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
     setScrolled(e.nativeEvent.contentOffset.y > 4);
@@ -170,60 +172,61 @@ export default function HotScreen() {
           </Text>
         </View>
 
-        {/* ── Discovery card ────────────────────────────────────────────── */}
-        <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
-          <Pressable
-            onPress={() => setFilterSheetOpen(true)}
-            style={({ pressed }) => ({
-              borderRadius: theme.radius,
-              padding: 14,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 12,
-              opacity: pressed ? 0.88 : 1,
-              backgroundColor: isDark ? '#162640' : '#2563EB',
-              // dark uses a subtle navy gradient feel; light uses brand blue
-            })}
-          >
-            <View style={{
-              width: 44, height: 44, borderRadius: 12,
-              backgroundColor: 'rgba(255,255,255,0.18)',
-              alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Text style={{
-                color: '#FFFFFF',
-                fontFamily: theme.fontMonoBold,
-                fontSize: 17,
-                letterSpacing: -0.5,
+        {/* ── New Today card — hidden when nothing is new ───────────────── */}
+        {newCount > 0 && (
+          <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
+            <Pressable
+              onPress={() => setNewTodayOpen(true)}
+              style={({ pressed }) => ({
+                borderRadius: theme.radius,
+                padding: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                opacity: pressed ? 0.88 : 1,
+                backgroundColor: isDark ? '#162640' : '#2563EB',
+              })}
+            >
+              <View style={{
+                width: 44, height: 44, borderRadius: 12,
+                backgroundColor: 'rgba(255,255,255,0.18)',
+                alignItems: 'center', justifyContent: 'center',
               }}>
-                +{newCount}
-              </Text>
-            </View>
+                <Text style={{
+                  color: '#FFFFFF',
+                  fontFamily: theme.fontMonoBold,
+                  fontSize: 17,
+                  letterSpacing: -0.5,
+                }}>
+                  +{newCount}
+                </Text>
+              </View>
 
-            <View style={{ flex: 1 }}>
-              <Text style={{
-                color: '#FFFFFF',
-                fontSize: 15,
-                fontFamily: theme.fontDispBold,
-                letterSpacing: -0.3,
-              }}>
-                New this week
-              </Text>
-              <Text style={{
-                color: 'rgba(255,255,255,0.85)',
-                fontSize: 12.5,
-                fontFamily: 'Inter_400Regular',
-                marginTop: 2,
-              }} numberOfLines={1}>
-                SKUs trending upward we haven't tracked
-              </Text>
-            </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{
+                  color: '#FFFFFF',
+                  fontSize: 15,
+                  fontFamily: theme.fontDispBold,
+                  letterSpacing: -0.3,
+                }}>
+                  New Today
+                </Text>
+                <Text style={{
+                  color: 'rgba(255,255,255,0.85)',
+                  fontSize: 12.5,
+                  fontFamily: 'Inter_400Regular',
+                  marginTop: 2,
+                }} numberOfLines={1}>
+                  {newCount} SKU{newCount !== 1 ? 's' : ''} added in the last 24 hours
+                </Text>
+              </View>
 
-            <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
-              <Path d="M9 6l6 6-6 6" />
-            </Svg>
-          </Pressable>
-        </View>
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+                <Path d="M9 6l6 6-6 6" />
+              </Svg>
+            </Pressable>
+          </View>
+        )}
 
         {/* ── Category chips — single row ───────────────────────────────── */}
         <ScrollView
@@ -361,6 +364,48 @@ export default function HotScreen() {
         onClose={() => setNotifOpen(false)}
         onNavigate={(skuId) => router.push(`/sku/${skuId}`)}
       />
+
+      {/* ── New Today Sheet ──────────────────────────────────────────────── */}
+      <Sheet open={newTodayOpen} onClose={() => setNewTodayOpen(false)} theme={theme} title="New Today">
+        <View style={{ paddingBottom: 32 }}>
+          {newToday.map((sku) => (
+            <Pressable
+              key={sku.id}
+              onPress={() => { setNewTodayOpen(false); router.push(`/sku/${sku.id}`); }}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 14,
+                paddingHorizontal: 20,
+                paddingVertical: 14,
+                opacity: pressed ? 0.7 : 1,
+                borderBottomWidth: 0.5,
+                borderBottomColor: theme.hairline,
+              })}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: theme.fontDispBold, fontSize: 15, color: theme.text, letterSpacing: -0.2 }} numberOfLines={1}>
+                  {sku.name}
+                </Text>
+                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginTop: 2 }}>
+                  {sku.series ?? sku.category}
+                </Text>
+              </View>
+              <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                <Text style={{ fontFamily: theme.fontMonoBold, fontSize: 14, color: '#FC792E' }}>
+                  ${sku.price.median.toFixed(0)}
+                </Text>
+                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.muted }}>
+                  {sku.listings} listed
+                </Text>
+              </View>
+              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={theme.faint} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+                <Path d="M9 6l6 6-6 6" />
+              </Svg>
+            </Pressable>
+          ))}
+        </View>
+      </Sheet>
 
       {/* ── Filter Sheet ─────────────────────────────────────────────────── */}
       <Sheet open={filterSheetOpen} onClose={() => setFilterSheetOpen(false)} theme={theme} title="Filters">
