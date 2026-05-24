@@ -3,14 +3,14 @@
 // per-category color identity, gold coral for hot/top-find moments.
 
 export const CATEGORY_COLORS = {
-  funko:       { tint: '#FFE9D6', tintDark: '#161C3E', tintDark2: '#0C1128', ink: '#C2410C', name: 'Pop' },
+  funko:       { tint: '#FFE9D6', tintDark: '#161C3E', tintDark2: '#0C1128', ink: '#0869BF', name: 'Pop' },
   tcg:         { tint: '#E8E0FA', tintDark: '#131A40', tintDark2: '#0B1030', ink: '#6B46C1', name: 'TCG' },
   popmart:     { tint: '#FCDCE8', tintDark: '#17133C', tintDark2: '#0F0D28', ink: '#BE185D', name: 'Pop Mart' },
   hottoys:     { tint: '#D5E4FF', tintDark: '#0F1C3E', tintDark2: '#091430', ink: '#1D4ED8', name: 'Hot Toys' },
-  neca:        { tint: '#D5EFDC', tintDark: '#0E1D36', tintDark2: '#081524', ink: '#15803D', name: 'NECA' },
+  neca:        { tint: '#D5EFDC', tintDark: '#0E1D36', tintDark2: '#081524', ink: '#CA0000', name: 'NECA' },
   hwheels:     { tint: '#FDDEDE', tintDark: '#131624', tintDark2: '#0C0F1A', ink: '#B91C1C', name: 'Hot Wheels' },
   autographed: { tint: '#FDE8FB', tintDark: '#260020', tintDark2: '#180014', ink: '#B5059C', name: 'Signed' },
-  thrilljoy:   { tint: '#DCFAD4', tintDark: '#0C2010', tintDark2: '#071509', ink: '#2E9E1A', name: 'ThrillJoy' },
+  thrilljoy:   { tint: '#DCFAD4', tintDark: '#0C2010', tintDark2: '#071509', ink: '#5FD551', name: 'ThrillJoy' },
 } as const;
 
 export function categoryColor(catId: string, dark: boolean) {
