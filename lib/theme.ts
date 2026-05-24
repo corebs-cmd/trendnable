@@ -8,7 +8,7 @@ export const CATEGORY_COLORS = {
   popmart:     { tint: '#FCDCE8', tintDark: '#17133C', tintDark2: '#0F0D28', ink: '#BE185D', name: 'Pop Mart' },
   hottoys:     { tint: '#D5E4FF', tintDark: '#0F1C3E', tintDark2: '#091430', ink: '#1D4ED8', name: 'Hot Toys' },
   neca:        { tint: '#D5EFDC', tintDark: '#0E1D36', tintDark2: '#081524', ink: '#CA0000', name: 'NECA' },
-  hwheels:     { tint: '#FDDEDE', tintDark: '#131624', tintDark2: '#0C0F1A', ink: '#B91C1C', name: 'Hot Wheels' },
+  hwheels:     { tint: '#FDDEDE', tintDark: '#131624', tintDark2: '#0C0F1A', ink: '#FDEE38', name: 'Hot Wheels' },
   autographed: { tint: '#FDE8FB', tintDark: '#260020', tintDark2: '#180014', ink: '#B5059C', name: 'Signed' },
   thrilljoy:   { tint: '#DCFAD4', tintDark: '#0C2010', tintDark2: '#071509', ink: '#5FD551', name: 'ThrillJoy' },
 } as const;
