@@ -38,7 +38,7 @@ function HeroCard({ sku, theme, onPress, onLongPress }: SKUCardProps) {
       })}
     >
       {/* Category colour wash — ink at ~18% so text stays readable */}
-      <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: c.ink + '2E' }} pointerEvents="none" />
+      <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: c.ink + '40' }} pointerEvents="none" />
       {/* Eyebrow row */}
       <View style={styles.eyebrowRow}>
         <View style={[styles.topFindPill, { backgroundColor: '#FF0025' }]}>
