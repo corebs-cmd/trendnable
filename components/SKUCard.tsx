@@ -82,7 +82,7 @@ function HeroCard({ sku, theme, onPress, onLongPress }: SKUCardProps) {
 
       {/* Narrative — italic Fraunces with gold left border */}
       {sku.narrative ? (
-        <View style={[styles.narrativeBlock, { borderLeftColor: theme.gold }]}>
+        <View style={[styles.narrativeBlock, { borderLeftColor: '#DB30EE' }]}>
           <Text numberOfLines={2} ellipsizeMode="tail" style={[styles.narrativeText, { color: theme.text, fontFamily: theme.fontDispItalic }]}>
             "{sku.narrative}"
           </Text>
