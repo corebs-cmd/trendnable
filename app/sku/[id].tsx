@@ -649,7 +649,7 @@ export default function SKUDetailScreen() {
         <SectionHeader title="Why it's hot" theme={theme} />
         <View style={{ marginHorizontal: 20, backgroundColor: theme.surface, borderRadius: theme.radius, padding: 18 }}>
           {sku.narrative ? (
-            <View style={{ paddingLeft: 14, borderLeftWidth: 2, borderLeftColor: theme.gold, marginBottom: 18 }}>
+            <View style={{ paddingLeft: 14, borderLeftWidth: 2, borderLeftColor: c?.ink ?? theme.gold, marginBottom: 18 }}>
               <Text style={{
                 fontFamily: 'Fraunces_400Regular_Italic', fontSize: 15,
                 color: theme.text, lineHeight: 23,
