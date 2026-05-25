@@ -36,7 +36,6 @@ function toggleChipSelection(current: string[], id: string): string[] {
   return next.length === 0 ? ['all'] : next;
 }
 
-// Format current date like "Thursday · 15 May"
 function formatTodayLabel(): string {
   const now = new Date();
   const day = now.toLocaleDateString('en-US', { weekday: 'long' });
@@ -57,12 +56,11 @@ export default function HotScreen() {
   const user = useAppStore((s) => s.user);
   const theme = buildTheme(isDark);
 
-  const [sortBy, setSortBy]           = useState<SortBy>('hot');
-  const [activeCats, setActiveCats]   = useState<string[]>(
+  const [sortBy, setSortBy]         = useState<SortBy>('hot');
+  const [activeCats, setActiveCats] = useState<string[]>(
     () => followedCategories.length > 0 ? followedCategories : ['all']
   );
 
-  // Persist chip selection to store + DB whenever user changes it
   const isMounted = useRef(false);
   useEffect(() => {
     if (!isMounted.current) { isMounted.current = true; return; }
@@ -75,20 +73,41 @@ export default function HotScreen() {
 
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [newTodayOpen, setNewTodayOpen]       = useState(false);
-  const [notifOpen, setNotifOpen]     = useState(false);
-  const [scrolled, setScrolled]       = useState(false);
-  const [refreshing, setRefreshing]   = useState(false);
+  const [notifOpen, setNotifOpen]   = useState(false);
+  const [scrolled, setScrolled]     = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const filtered = useMemo(() => {
-    let list = [...hotSkus];
-    if (!activeCats.includes('all')) list = list.filter((s) => activeCats.includes(s.category));
-    list.sort((a, b) => {
-      if (sortBy === 'hot') return b.hot - a.hot;
-      if (sortBy === 'velocity') return b.delta - a.delta;
-      return b.price.median - a.price.median;
-    });
-    return list;
+  // Hero: single hottest SKU across ALL categories (always featured)
+  const hero = useMemo(() => getFeaturedSku(
+    [...hotSkus].sort((a, b) => b.hot - a.hot)
+  ), [hotSkus]);
+
+  // Per-category sections: top 5 by selected sort, skip hero's category section's top spot
+  const sections = useMemo(() => {
+    const catIds = activeCats.includes('all')
+      ? CATEGORIES.map((c) => c.id)
+      : activeCats;
+
+    return catIds
+      .map((catId) => {
+        const cat = CATEGORIES.find((c) => c.id === catId);
+        const skus = hotSkus
+          .filter((s) => s.category === catId)
+          .sort((a, b) => {
+            if (sortBy === 'velocity') return b.delta - a.delta;
+            if (sortBy === 'price') return b.price.median - a.price.median;
+            return b.hot - a.hot;
+          })
+          .slice(0, 5);
+        return { catId, cat, skus };
+      })
+      .filter((s) => s.skus.length > 0 && s.cat);
   }, [hotSkus, activeCats, sortBy]);
+
+  const totalCount = useMemo(
+    () => sections.reduce((sum, s) => sum + s.skus.length, 0),
+    [sections]
+  );
 
   const newToday = useMemo(() => hotSkus.filter((s) => s.age <= 1), [hotSkus]);
   const newCount = newToday.length;
@@ -105,9 +124,6 @@ export default function HotScreen() {
       setRefreshing(false);
     }
   }, []);
-
-  const hero = getFeaturedSku(filtered);
-  const rest = filtered.filter((s) => s.id !== hero?.id);
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
@@ -139,50 +155,35 @@ export default function HotScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={theme.accent}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.accent} />
         }
       >
-        {/* ── Price alert banner ───────────────────────────────────────── */}
         <NotificationBanner theme={theme} onPress={() => setNotifOpen(true)} />
 
-        {/* ── Date / context subheader ──────────────────────────────────── */}
+        {/* ── Date / context subheader ── */}
         <View style={{ paddingHorizontal: 20, paddingBottom: 14 }}>
           <Text style={{
-            fontFamily: 'Inter_700Bold',
-            fontSize: 11,
-            color: theme.gold,
-            letterSpacing: 0.14 * 11,
-            textTransform: 'uppercase',
-            marginBottom: 4,
+            fontFamily: 'Inter_700Bold', fontSize: 11, color: theme.gold,
+            letterSpacing: 0.14 * 11, textTransform: 'uppercase', marginBottom: 4,
           }}>
             {formatTodayLabel()}
           </Text>
           <Text style={{
-            fontFamily: theme.fontDispBold,
-            fontSize: 26,
-            color: theme.text,
-            letterSpacing: -0.52,
-            lineHeight: 30,
+            fontFamily: theme.fontDispBold, fontSize: 26, color: theme.text,
+            letterSpacing: -0.52, lineHeight: 30,
           }}>
             What's moving today
           </Text>
         </View>
 
-        {/* ── New Today card — hidden when nothing is new ───────────────── */}
+        {/* ── New Today card ── */}
         {newCount > 0 && (
           <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
             <Pressable
               onPress={() => setNewTodayOpen(true)}
               style={({ pressed }) => ({
-                borderRadius: theme.radius,
-                padding: 14,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 12,
+                borderRadius: theme.radius, padding: 14,
+                flexDirection: 'row', alignItems: 'center', gap: 12,
                 opacity: pressed ? 0.88 : 1,
                 backgroundColor: isDark ? '#162640' : '#2563EB',
               })}
@@ -192,35 +193,18 @@ export default function HotScreen() {
                 backgroundColor: 'rgba(255,255,255,0.18)',
                 alignItems: 'center', justifyContent: 'center',
               }}>
-                <Text style={{
-                  color: '#FFFFFF',
-                  fontFamily: theme.fontMonoBold,
-                  fontSize: 17,
-                  letterSpacing: -0.5,
-                }}>
+                <Text style={{ color: '#FFFFFF', fontFamily: theme.fontMonoBold, fontSize: 17, letterSpacing: -0.5 }}>
                   +{newCount}
                 </Text>
               </View>
-
               <View style={{ flex: 1 }}>
-                <Text style={{
-                  color: '#FFFFFF',
-                  fontSize: 15,
-                  fontFamily: theme.fontDispBold,
-                  letterSpacing: -0.3,
-                }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontFamily: theme.fontDispBold, letterSpacing: -0.3 }}>
                   New Today
                 </Text>
-                <Text style={{
-                  color: 'rgba(255,255,255,0.85)',
-                  fontSize: 12.5,
-                  fontFamily: 'Inter_400Regular',
-                  marginTop: 2,
-                }} numberOfLines={1}>
+                <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12.5, fontFamily: 'Inter_400Regular', marginTop: 2 }} numberOfLines={1}>
                   {newCount} SKU{newCount !== 1 ? 's' : ''} added in the last 24 hours
                 </Text>
               </View>
-
               <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
                 <Path d="M9 6l6 6-6 6" />
               </Svg>
@@ -228,15 +212,13 @@ export default function HotScreen() {
           </View>
         )}
 
-        {/* ── Category chips — single row ───────────────────────────────── */}
+        {/* ── Category chips ── */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 4, gap: 8, flexDirection: 'row' }}
         >
-          <Chip theme={theme} active={activeCats.includes('all')} onClick={() => setActiveCats(['all'])} size="sm">
-            All
-          </Chip>
+          <Chip theme={theme} active={activeCats.includes('all')} onClick={() => setActiveCats(['all'])} size="sm">All</Chip>
           {CATEGORIES.map((cat) => (
             <Chip
               key={cat.id}
@@ -250,78 +232,29 @@ export default function HotScreen() {
           ))}
         </ScrollView>
 
-        {/* ── Sort row ──────────────────────────────────────────────────── */}
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: 20,
-          paddingTop: 14,
-          paddingBottom: 12,
-          justifyContent: 'space-between',
-        }}>
-          <Text style={{
-            fontFamily: 'Inter_400Regular',
-            fontSize: 12.5,
-            color: theme.muted,
-          }}>
-            {filtered.length} items
-          </Text>
-
-          <View style={{ flexDirection: 'row', gap: 2 }}>
-            {([['hot', 'Hot'], ['velocity', 'Δ'], ['price', '$']] as [SortBy, string][]).map(([id, label]) => (
-              <Pressable
-                key={id}
-                onPress={() => setSortBy(id)}
-                style={({ pressed }) => ({
-                  paddingHorizontal: 12,
-                  paddingVertical: 6,
-                  borderRadius: 999,
-                  backgroundColor: sortBy === id ? theme.surface2 : 'transparent',
-                  opacity: pressed ? 0.7 : 1,
-                })}
-              >
-                <Text style={{
-                  fontFamily: sortBy === id ? 'Inter_700Bold' : 'Inter_400Regular',
-                  fontSize: 12,
-                  color: sortBy === id ? theme.text : theme.muted,
-                }}>
-                  {label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-
-        {/* ── SKU list ──────────────────────────────────────────────────── */}
-        <View style={{ paddingHorizontal: 20, gap: 10 }}>
+        {/* ── Content ── */}
+        <View style={{ paddingTop: 16 }}>
           {skusLoading ? (
             <View style={{ alignItems: 'center', paddingVertical: 60 }}>
               <ActivityIndicator color={theme.accent} />
-              <Text style={{ color: theme.faint, fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 12 }}>
-                Loading…
-              </Text>
+              <Text style={{ color: theme.faint, fontSize: 13, fontFamily: 'Inter_400Regular', marginTop: 12 }}>Loading…</Text>
             </View>
           ) : skusError ? (
             <View style={{ alignItems: 'center', paddingVertical: 60, gap: 12 }}>
-              <Text style={{ color: theme.neg, fontSize: 13, fontFamily: 'Inter_400Regular', textAlign: 'center' }}>
-                {skusError}
-              </Text>
+              <Text style={{ color: theme.neg, fontSize: 13, fontFamily: 'Inter_400Regular', textAlign: 'center' }}>{skusError}</Text>
               <Pressable
                 onPress={retryLoadHotSkus}
                 style={({ pressed }) => ({
-                  backgroundColor: theme.surface2,
-                  borderRadius: theme.radius,
-                  paddingHorizontal: 20,
-                  paddingVertical: 10,
-                  opacity: pressed ? 0.7 : 1,
+                  backgroundColor: theme.surface2, borderRadius: theme.radius,
+                  paddingHorizontal: 20, paddingVertical: 10, opacity: pressed ? 0.7 : 1,
                 })}
               >
                 <Text style={{ color: theme.text, fontSize: 13, fontFamily: 'Inter_600SemiBold' }}>Retry</Text>
               </Pressable>
             </View>
-          ) : filtered.length === 0 ? (
+          ) : sections.length === 0 ? (
             <View style={{
-              padding: 36, alignItems: 'center',
+              margin: 20, padding: 36, alignItems: 'center',
               backgroundColor: theme.surface, borderRadius: theme.radius,
               borderWidth: 0.5, borderStyle: 'dashed', borderColor: theme.hairline,
             }}>
@@ -334,24 +267,57 @@ export default function HotScreen() {
             </View>
           ) : (
             <>
+              {/* TOP FIND hero — hottest SKU across all categories */}
               {hero && (
-                <SKUCard
-                  key={hero.id}
-                  sku={hero}
-                  theme={theme}
-                  density="hero"
-                  onPress={() => router.push(`/sku/${hero.id}`)}
-                />
+                <View style={{ paddingHorizontal: 20, marginBottom: 32 }}>
+                  <SKUCard
+                    sku={hero}
+                    theme={theme}
+                    density="hero"
+                    onPress={() => router.push(`/sku/${hero.id}`)}
+                  />
+                </View>
               )}
-              {rest.map((sku, index) => (
-                <SKUCard
-                  key={sku.id}
-                  sku={sku}
-                  theme={theme}
-                  density="medium"
-                  rank={index + 2}
-                  onPress={() => router.push(`/sku/${sku.id}`)}
-                />
+
+              {/* Per-category sections */}
+              {sections.map(({ catId, cat, skus }) => (
+                <View key={catId} style={{ marginBottom: 32 }}>
+                  {/* Section header */}
+                  <View style={{
+                    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                    paddingHorizontal: 20, marginBottom: 12,
+                  }}>
+                    <Text style={{
+                      fontFamily: theme.fontDispBold, fontSize: 18,
+                      color: theme.text, letterSpacing: -0.3,
+                    }}>
+                      {cat!.label}
+                    </Text>
+                    <Pressable
+                      onPress={() => router.push('/(tabs)/browse')}
+                      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, flexDirection: 'row', alignItems: 'center', gap: 4 })}
+                    >
+                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: theme.accent }}>See all</Text>
+                      <Svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke={theme.accent} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                        <Path d="M9 6l6 6-6 6" />
+                      </Svg>
+                    </Pressable>
+                  </View>
+
+                  {/* Top 5 SKU cards */}
+                  <View style={{ paddingHorizontal: 20, gap: 10 }}>
+                    {skus.map((sku, index) => (
+                      <SKUCard
+                        key={sku.id}
+                        sku={sku}
+                        theme={theme}
+                        density="medium"
+                        rank={index + 1}
+                        onPress={() => router.push(`/sku/${sku.id}`)}
+                      />
+                    ))}
+                  </View>
+                </View>
               ))}
             </>
           )}
@@ -365,7 +331,7 @@ export default function HotScreen() {
         onNavigate={(skuId) => router.push(`/sku/${skuId}`)}
       />
 
-      {/* ── New Today Sheet ──────────────────────────────────────────────── */}
+      {/* ── New Today Sheet ── */}
       <Sheet open={newTodayOpen} onClose={() => setNewTodayOpen(false)} theme={theme} title="New Today">
         <View style={{ paddingBottom: 32 }}>
           {newToday.map((sku) => (
@@ -373,31 +339,19 @@ export default function HotScreen() {
               key={sku.id}
               onPress={() => { setNewTodayOpen(false); router.push(`/sku/${sku.id}`); }}
               style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 14,
-                paddingHorizontal: 20,
-                paddingVertical: 14,
+                flexDirection: 'row', alignItems: 'center', gap: 14,
+                paddingHorizontal: 20, paddingVertical: 14,
                 opacity: pressed ? 0.7 : 1,
-                borderBottomWidth: 0.5,
-                borderBottomColor: theme.hairline,
+                borderBottomWidth: 0.5, borderBottomColor: theme.hairline,
               })}
             >
               <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: theme.fontDispBold, fontSize: 15, color: theme.text, letterSpacing: -0.2 }} numberOfLines={1}>
-                  {sku.name}
-                </Text>
-                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginTop: 2 }}>
-                  {sku.series ?? sku.category}
-                </Text>
+                <Text style={{ fontFamily: theme.fontDispBold, fontSize: 15, color: theme.text, letterSpacing: -0.2 }} numberOfLines={1}>{sku.name}</Text>
+                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginTop: 2 }}>{sku.series ?? sku.category}</Text>
               </View>
               <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                <Text style={{ fontFamily: theme.fontMonoBold, fontSize: 14, color: '#FC792E' }}>
-                  ${sku.price.median.toFixed(0)}
-                </Text>
-                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.muted }}>
-                  {sku.listings} listed
-                </Text>
+                <Text style={{ fontFamily: theme.fontMonoBold, fontSize: 14, color: '#FC792E' }}>${sku.price.median.toFixed(0)}</Text>
+                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.muted }}>{sku.listings} listed</Text>
               </View>
               <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={theme.faint} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
                 <Path d="M9 6l6 6-6 6" />
@@ -407,16 +361,16 @@ export default function HotScreen() {
         </View>
       </Sheet>
 
-      {/* ── Filter Sheet ─────────────────────────────────────────────────── */}
+      {/* ── Filter Sheet ── */}
       <Sheet open={filterSheetOpen} onClose={() => setFilterSheetOpen(false)} theme={theme} title="Filters">
         <View style={{ padding: 20, gap: 4 }}>
           <FilterGroup
-            title="Sort"
+            title="Sort within sections"
             theme={theme}
             options={[
-              { id: 'hot', label: 'Hot Score' },
+              { id: 'hot',      label: 'Hot Score' },
               { id: 'velocity', label: 'Velocity (Δ)' },
-              { id: 'price', label: 'Price' },
+              { id: 'price',    label: 'Price' },
             ]}
             selected={[sortBy]}
             multi={false}
@@ -432,7 +386,7 @@ export default function HotScreen() {
           />
           <View style={{ marginTop: 18 }}>
             <PrimaryButton theme={theme} tone="accent" size="md" full onPress={() => setFilterSheetOpen(false)}>
-              Show {filtered.length} items
+              Show {totalCount} items
             </PrimaryButton>
           </View>
         </View>
