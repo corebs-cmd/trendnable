@@ -28,14 +28,6 @@ import NotificationsSheet from '@/components/NotificationsSheet';
 
 type SortBy = 'hot' | 'velocity' | 'price';
 
-function toggleChipSelection(current: string[], id: string): string[] {
-  if (id === 'all') return ['all'];
-  const without = current.filter((x) => x !== 'all' && x !== id);
-  const hasId = current.includes(id);
-  const next = hasId ? without : [...without, id];
-  return next.length === 0 ? ['all'] : next;
-}
-
 function formatTodayLabel(): string {
   const now = new Date();
   const day = now.toLocaleDateString('en-US', { weekday: 'long' });
@@ -56,20 +48,20 @@ export default function HotScreen() {
   const user = useAppStore((s) => s.user);
   const theme = buildTheme(isDark);
 
-  const [sortBy, setSortBy]         = useState<SortBy>('hot');
-  const [activeCats, setActiveCats] = useState<string[]>(
-    () => followedCategories.length > 0 ? followedCategories : ['all']
+  const [sortBy, setSortBy]       = useState<SortBy>('hot');
+  const [activeCat, setActiveCat] = useState<string>(
+    () => followedCategories.length === 1 ? followedCategories[0] : 'all'
   );
 
   const isMounted = useRef(false);
   useEffect(() => {
     if (!isMounted.current) { isMounted.current = true; return; }
-    const cats = activeCats.includes('all') ? [] : activeCats;
-    setFollowedCategories(cats.length > 0 ? cats : []);
+    const cats = activeCat === 'all' ? [] : [activeCat];
+    setFollowedCategories(cats);
     if (user) {
       api.updateUserPreferences(user.id, { followedCategories: cats.length > 0 ? cats : undefined });
     }
-  }, [activeCats]);
+  }, [activeCat]);
 
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [newTodayOpen, setNewTodayOpen]       = useState(false);
@@ -77,16 +69,19 @@ export default function HotScreen() {
   const [scrolled, setScrolled]     = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Hero: single hottest SKU across ALL categories (always featured)
-  const hero = useMemo(() => getFeaturedSku(
-    [...hotSkus].sort((a, b) => b.hot - a.hot)
-  ), [hotSkus]);
+  // Hero: hottest SKU within the selected category (or overall when All)
+  const hero = useMemo(() => {
+    const pool = activeCat === 'all'
+      ? [...hotSkus]
+      : hotSkus.filter((s) => s.category === activeCat);
+    return getFeaturedSku(pool.sort((a, b) => b.hot - a.hot));
+  }, [hotSkus, activeCat]);
 
-  // Per-category sections: top 5 by selected sort, skip hero's category section's top spot
+  // Per-category sections: top 5 by selected sort
   const sections = useMemo(() => {
-    const catIds = activeCats.includes('all')
+    const catIds = activeCat === 'all'
       ? CATEGORIES.map((c) => c.id)
-      : activeCats;
+      : [activeCat];
 
     return catIds
       .map((catId) => {
@@ -102,7 +97,7 @@ export default function HotScreen() {
         return { catId, cat, skus };
       })
       .filter((s) => s.skus.length > 0 && s.cat);
-  }, [hotSkus, activeCats, sortBy]);
+  }, [hotSkus, activeCat, sortBy]);
 
   const totalCount = useMemo(
     () => sections.reduce((sum, s) => sum + s.skus.length, 0),
@@ -212,19 +207,19 @@ export default function HotScreen() {
           </View>
         )}
 
-        {/* ── Category chips ── */}
+        {/* ── Category chips — single select ── */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 4, gap: 8, flexDirection: 'row' }}
         >
-          <Chip theme={theme} active={activeCats.includes('all')} onClick={() => setActiveCats(['all'])} size="sm">All</Chip>
+          <Chip theme={theme} active={activeCat === 'all'} onClick={() => setActiveCat('all')} size="sm">All</Chip>
           {CATEGORIES.map((cat) => (
             <Chip
               key={cat.id}
               theme={theme}
-              active={activeCats.includes(cat.id)}
-              onClick={() => setActiveCats((prev) => toggleChipSelection(prev, cat.id))}
+              active={activeCat === cat.id}
+              onClick={() => setActiveCat(activeCat === cat.id ? 'all' : cat.id)}
               size="sm"
             >
               {cat.short}
@@ -380,9 +375,9 @@ export default function HotScreen() {
             title="Categories"
             theme={theme}
             options={[{ id: 'all', label: 'All' }, ...CATEGORIES.map((c) => ({ id: c.id, label: c.label }))]}
-            selected={activeCats}
-            multi
-            onToggle={(id) => setActiveCats((prev) => toggleChipSelection(prev, id))}
+            selected={[activeCat]}
+            multi={false}
+            onToggle={(id) => setActiveCat(id)}
           />
           <View style={{ marginTop: 18 }}>
             <PrimaryButton theme={theme} tone="accent" size="md" full onPress={() => setFilterSheetOpen(false)}>
