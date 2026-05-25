@@ -294,7 +294,7 @@ export default function HotScreen() {
                       {cat!.label}
                     </Text>
                     <Pressable
-                      onPress={() => router.push('/(tabs)/browse')}
+                      onPress={() => router.push(`/catalog/category/${catId}`)}
                       style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, flexDirection: 'row', alignItems: 'center', gap: 4 })}
                     >
                       <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: theme.accent }}>See all</Text>
