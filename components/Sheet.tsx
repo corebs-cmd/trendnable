@@ -21,6 +21,7 @@ interface SheetProps {
   theme: Theme;
   children: React.ReactNode;
   title?: string;
+  onDismiss?: () => void;
 }
 
 export default function Sheet({
@@ -29,6 +30,7 @@ export default function Sheet({
   theme,
   children,
   title,
+  onDismiss,
 }: SheetProps) {
   const insets = useSafeAreaInsets();
   const translateY = useRef(new Animated.Value(SCREEN_H)).current;
@@ -62,7 +64,9 @@ export default function Sheet({
           duration: 180,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]).start(() => {
+        onDismiss?.();
+      });
     }
   }, [open]);
 

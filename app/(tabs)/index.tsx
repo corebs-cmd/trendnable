@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -14,10 +14,11 @@ import { useAppStore } from '@/stores/appStore';
 import { buildTheme } from '@/lib/theme';
 import * as api from '@/lib/api';
 import { getFeaturedSku } from '@/lib/featured';
-import { CATEGORIES } from '@/lib/appConfig';
+import { CATEGORIES, catById } from '@/lib/appConfig';
 
 import AppHeader from '@/components/AppHeader';
 import IconButton from '@/components/IconButton';
+import { ProductThumb } from '@/components/ProductPlaceholder';
 import Chip from '@/components/Chip';
 import SKUCard from '@/components/SKUCard';
 import Sheet from '@/components/Sheet';
@@ -46,6 +47,8 @@ export default function HotScreen() {
   const followedCategories = useAppStore((s) => s.followedCategories);
   const setFollowedCategories = useAppStore((s) => s.setFollowedCategories);
   const user = useAppStore((s) => s.user);
+  const unreadCount = useAppStore((s) => s.unreadCount);
+  const isPremium = useAppStore((s) => s.isPremium);
   const theme = buildTheme(isDark);
 
   const [sortBy, setSortBy]       = useState<SortBy>('hot');
@@ -53,35 +56,51 @@ export default function HotScreen() {
     () => followedCategories.length === 1 ? followedCategories[0] : 'all'
   );
 
-  const isMounted = useRef(false);
+  // Reset activeCat if it's no longer in the followed set
   useEffect(() => {
-    if (!isMounted.current) { isMounted.current = true; return; }
-    const cats = activeCat === 'all' ? [] : [activeCat];
-    setFollowedCategories(cats);
-    if (user) {
-      api.updateUserPreferences(user.id, { followedCategories: cats.length > 0 ? cats : undefined });
+    const visible = followedCategories.length > 0 ? followedCategories : null;
+    if (visible && activeCat !== 'all' && !visible.includes(activeCat)) {
+      setActiveCat('all');
     }
-  }, [activeCat]);
+  }, [followedCategories]);
 
-  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
-  const [newTodayOpen, setNewTodayOpen]       = useState(false);
+  const toggleFollowedCat = (catId: string) => {
+    let next: string[];
+    if (catId === 'all') {
+      next = [];
+    } else {
+      next = followedCategories.includes(catId)
+        ? followedCategories.filter((id) => id !== catId)
+        : [...followedCategories, catId];
+      if (next.length === CATEGORIES.length) next = []; // all selected = same as "All"
+    }
+    setFollowedCategories(next);
+    if (user) {
+      api.updateUserPreferences(user.id, { followedCategories: next.length > 0 ? next : undefined });
+    }
+  };
+
+  const [filterSheetOpen, setFilterSheetOpen]       = useState(false);
+  const [newTodayOpen, setNewTodayOpen]             = useState(false);
+  const [newTodayPendingNav, setNewTodayPendingNav] = useState<string | null>(null);
   const [notifOpen, setNotifOpen]   = useState(false);
   const [scrolled, setScrolled]     = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  const visibleCatIds = followedCategories.length > 0
+    ? followedCategories
+    : CATEGORIES.map((c) => c.id);
+
   // Hero: hottest SKU within the selected category (or overall when All)
   const hero = useMemo(() => {
-    const pool = activeCat === 'all'
-      ? [...hotSkus]
-      : hotSkus.filter((s) => s.category === activeCat);
+    const catScope = activeCat === 'all' ? visibleCatIds : [activeCat];
+    const pool = hotSkus.filter((s) => catScope.includes(s.category));
     return getFeaturedSku(pool.sort((a, b) => b.hot - a.hot));
-  }, [hotSkus, activeCat]);
+  }, [hotSkus, activeCat, visibleCatIds]);
 
   // Per-category sections: top 5 by selected sort
   const sections = useMemo(() => {
-    const catIds = activeCat === 'all'
-      ? CATEGORIES.map((c) => c.id)
-      : [activeCat];
+    const catIds = activeCat === 'all' ? visibleCatIds : [activeCat];
 
     return catIds
       .map((catId) => {
@@ -97,7 +116,7 @@ export default function HotScreen() {
         return { catId, cat, skus };
       })
       .filter((s) => s.skus.length > 0 && s.cat);
-  }, [hotSkus, activeCat, sortBy]);
+  }, [hotSkus, activeCat, sortBy, visibleCatIds]);
 
   const totalCount = useMemo(
     () => sections.reduce((sum, s) => sum + s.skus.length, 0),
@@ -140,6 +159,33 @@ export default function HotScreen() {
                 <Path d="M3 6h18M6 12h12M10 18h4" />
               </Svg>
             </IconButton>
+            <View style={{ position: 'relative' }}>
+              <IconButton
+                theme={theme}
+                onPress={() => setNotifOpen(true)}
+                accessibilityLabel={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
+              >
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none"
+                  stroke={theme.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <Path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                  <Path d="M13.73 21a2 2 0 01-3.46 0" />
+                </Svg>
+              </IconButton>
+              {unreadCount > 0 && (
+                <View style={{
+                  position: 'absolute', top: 0, right: 0,
+                  minWidth: 16, height: 16, borderRadius: 999,
+                  backgroundColor: theme.premium,
+                  alignItems: 'center', justifyContent: 'center',
+                  paddingHorizontal: 3,
+                  pointerEvents: 'none',
+                }}>
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, color: theme.premiumInk }}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
         }
       />
@@ -214,17 +260,21 @@ export default function HotScreen() {
           contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 4, gap: 8, flexDirection: 'row' }}
         >
           <Chip theme={theme} active={activeCat === 'all'} onClick={() => setActiveCat('all')} size="sm">All</Chip>
-          {CATEGORIES.map((cat) => (
-            <Chip
-              key={cat.id}
-              theme={theme}
-              active={activeCat === cat.id}
-              onClick={() => setActiveCat(activeCat === cat.id ? 'all' : cat.id)}
-              size="sm"
-            >
-              {cat.short}
-            </Chip>
-          ))}
+          {visibleCatIds.map((catId) => {
+            const cat = catById(catId);
+            if (!cat) return null;
+            return (
+              <Chip
+                key={catId}
+                theme={theme}
+                active={activeCat === catId}
+                onClick={() => setActiveCat(activeCat === catId ? 'all' : catId)}
+                size="sm"
+              >
+                {cat.short}
+              </Chip>
+            );
+          })}
         </ScrollView>
 
         {/* ── Content ── */}
@@ -270,6 +320,11 @@ export default function HotScreen() {
                     theme={theme}
                     density="hero"
                     onPress={() => router.push(`/sku/${hero.id}`)}
+                    narrativeOverride={
+                      isPremium && hero.insight?.narrationShort
+                        ? hero.insight.narrationShort
+                        : undefined
+                    }
                   />
                 </View>
               )}
@@ -327,24 +382,36 @@ export default function HotScreen() {
       />
 
       {/* ── New Today Sheet ── */}
-      <Sheet open={newTodayOpen} onClose={() => setNewTodayOpen(false)} theme={theme} title="New Today">
+      <Sheet
+        open={newTodayOpen}
+        onClose={() => setNewTodayOpen(false)}
+        onDismiss={() => {
+          if (newTodayPendingNav) {
+            router.push(`/sku/${newTodayPendingNav}`);
+            setNewTodayPendingNav(null);
+          }
+        }}
+        theme={theme}
+        title="New Today"
+      >
         <View style={{ paddingBottom: 32 }}>
           {newToday.map((sku) => (
             <Pressable
               key={sku.id}
-              onPress={() => { setNewTodayOpen(false); router.push(`/sku/${sku.id}`); }}
+              onPress={() => { setNewTodayPendingNav(sku.id); setNewTodayOpen(false); }}
               style={({ pressed }) => ({
-                flexDirection: 'row', alignItems: 'center', gap: 14,
-                paddingHorizontal: 20, paddingVertical: 14,
+                flexDirection: 'row', alignItems: 'center', gap: 12,
+                paddingHorizontal: 16, paddingVertical: 10,
                 opacity: pressed ? 0.7 : 1,
                 borderBottomWidth: 0.5, borderBottomColor: theme.hairline,
               })}
             >
-              <View style={{ flex: 1 }}>
+              <ProductThumb sku={sku} theme={theme} size={52} radius={10} />
+              <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={{ fontFamily: theme.fontDispBold, fontSize: 15, color: theme.text, letterSpacing: -0.2 }} numberOfLines={1}>{sku.name}</Text>
-                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginTop: 2 }}>{sku.series ?? sku.category}</Text>
+                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginTop: 2 }} numberOfLines={1}>{sku.series ?? sku.category}</Text>
               </View>
-              <View style={{ alignItems: 'flex-end', gap: 2 }}>
+              <View style={{ alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
                 <Text style={{ fontFamily: theme.fontMonoBold, fontSize: 14, color: '#FC792E' }}>${sku.price.median.toFixed(0)}</Text>
                 <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.muted }}>{sku.listings} listed</Text>
               </View>
@@ -371,14 +438,49 @@ export default function HotScreen() {
             multi={false}
             onToggle={(id) => setSortBy(id as SortBy)}
           />
-          <FilterGroup
-            title="Categories"
-            theme={theme}
-            options={[{ id: 'all', label: 'All' }, ...CATEGORIES.map((c) => ({ id: c.id, label: c.label }))]}
-            selected={[activeCat]}
-            multi={false}
-            onToggle={(id) => setActiveCat(id)}
-          />
+          <View style={{ marginBottom: 24 }}>
+            <Text style={{ color: theme.muted, fontSize: 11, fontFamily: 'Inter_700Bold', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 10 }}>
+              My Categories
+            </Text>
+            <View style={{ backgroundColor: theme.surface2, borderRadius: theme.radius, overflow: 'hidden' }}>
+              {[{ id: 'all', label: 'All Categories' }, ...CATEGORIES.map((c) => ({ id: c.id, label: c.label }))].map((opt, idx, arr) => {
+                const isAll = opt.id === 'all';
+                const isSelected = isAll ? followedCategories.length === 0 : followedCategories.includes(opt.id);
+                return (
+                  <React.Fragment key={opt.id}>
+                    <Pressable
+                      onPress={() => toggleFollowedCat(opt.id)}
+                      style={({ pressed }) => ({
+                        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                        paddingHorizontal: 16, paddingVertical: 13,
+                        backgroundColor: pressed ? theme.surface : 'transparent',
+                      })}
+                    >
+                      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: isSelected ? theme.text : theme.muted }}>
+                        {opt.label}
+                      </Text>
+                      <View style={{
+                        width: 22, height: 22, borderRadius: 999,
+                        backgroundColor: isSelected ? theme.accent : 'transparent',
+                        borderWidth: isSelected ? 0 : 1.5,
+                        borderColor: theme.faint,
+                        alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        {isSelected && (
+                          <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+                            <Path d="M20 6L9 17l-5-5" />
+                          </Svg>
+                        )}
+                      </View>
+                    </Pressable>
+                    {idx < arr.length - 1 && (
+                      <View style={{ height: 0.5, backgroundColor: theme.hairline, marginLeft: 16 }} />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </View>
+          </View>
           <View style={{ marginTop: 18 }}>
             <PrimaryButton theme={theme} tone="accent" size="md" full onPress={() => setFilterSheetOpen(false)}>
               Show {totalCount} items

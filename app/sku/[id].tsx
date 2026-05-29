@@ -19,10 +19,11 @@ import Svg, { Path, Circle, Defs, Pattern, Rect } from 'react-native-svg';
 import { buildTheme, categoryColor, RADIUS } from '@/lib/theme';
 import { catById, fandomById, fmtPrice } from '@/lib/appConfig';
 import { useAppStore } from '@/stores/appStore';
-import { fetchSkuHistory, fetchSkuById } from '@/lib/api';
-import { SKU } from '@/lib/types';
+import { fetchSkuHistory, fetchSkuById, fetchSkuInsight } from '@/lib/api';
+import { SKU, InsightResponse } from '@/lib/types';
 
 import { HotScoreBadge } from '@/components/HotScore';
+import { InsightTypePill } from '@/components/signals/DirectionBadge';
 import Chip from '@/components/Chip';
 import LineChart from '@/components/LineChart';
 import IconButton from '@/components/IconButton';
@@ -35,6 +36,13 @@ import PriceAlertSheet from '@/components/PriceAlertSheet';
 import { UpgradeContext } from '@/lib/types';
 
 const { width: SCREEN_W } = Dimensions.get('window');
+
+function formatFiredAt(firedAt: string): string {
+  const days = Math.floor((Date.now() - new Date(firedAt).getTime()) / 86400000);
+  if (days === 0) return 'UPDATED TODAY';
+  if (days === 1) return 'UPDATED 1 DAY AGO';
+  return `UPDATED ${days} DAYS AGO`;
+}
 
 function DotPattern({ height }: { height: number }) {
   return (
@@ -236,6 +244,16 @@ export default function SKUDetailScreen() {
   const [alertOpen, setAlertOpen]           = useState(false);
   const [historyWindow, setHistoryWindow]   = useState<HistoryWindow>('30D');
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
+  const [insightData, setInsightData] = useState<InsightResponse | null>(null);
+
+  const userId = useAppStore((s) => s.user?.id ?? null);
+
+  useEffect(() => {
+    if (!id) return;
+    fetchSkuInsight(id, userId, isPremium)
+      .then(setInsightData)
+      .catch(() => {});
+  }, [id, userId, isPremium]);
 
   const activeAlertCount = useAppStore((s) =>
     s.priceAlerts.filter((a) => a.skuId === (id ?? '') && a.isActive).length
@@ -648,16 +666,56 @@ export default function SKUDetailScreen() {
         {/* ── Why it's hot ── */}
         <SectionHeader title="Why it's hot" theme={theme} />
         <View style={{ marginHorizontal: 20, backgroundColor: theme.surface, borderRadius: theme.radius, padding: 18 }}>
-          {sku.narrative ? (
-            <View style={{ paddingLeft: 14, borderLeftWidth: 2, borderLeftColor: c?.ink ?? theme.gold, marginBottom: 18 }}>
-              <Text style={{
-                fontFamily: 'Fraunces_400Regular_Italic', fontSize: 15,
-                color: theme.text, lineHeight: 23,
+          {(() => {
+            const insight = insightData?.insight;
+            const showInsight = isPremium && insight && insight.narrationLong;
+            const prose = showInsight ? insight.narrationLong! : (sku.narrative ?? insightData?.fallbackDescription ?? '');
+
+            return prose ? (
+              <View style={{ marginBottom: 18 }}>
+                {showInsight && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <InsightTypePill insightType={insight.insightType} theme={theme} />
+                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.faint }}>
+                      {formatFiredAt(insight.firedAt)}
+                    </Text>
+                  </View>
+                )}
+                <View style={{ paddingLeft: 14, borderLeftWidth: 2, borderLeftColor: c?.ink ?? theme.gold }}>
+                  <Text style={{
+                    fontFamily: 'Fraunces_400Regular_Italic', fontSize: 15,
+                    color: theme.text, lineHeight: 23,
+                  }}>
+                    {showInsight ? prose : `"${prose}"`}
+                  </Text>
+                </View>
+              </View>
+            ) : null;
+          })()}
+
+          {/* Personalized action line — premium only, when owned or watched */}
+          {(() => {
+            const action = insightData?.personalizedAction;
+            if (!isPremium || !action) return null;
+            return (
+              <View style={{
+                backgroundColor: 'rgba(249,115,22,0.08)',
+                borderLeftWidth: 3, borderLeftColor: '#f97316',
+                borderRadius: 6, padding: 14, marginBottom: 18,
               }}>
-                "{sku.narrative}"
-              </Text>
-            </View>
-          ) : null}
+                <Text style={{
+                  fontFamily: 'Inter_600SemiBold', fontSize: 10, color: theme.faint,
+                  letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6,
+                }}>
+                  FOR YOUR POSITION
+                </Text>
+                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: theme.text, lineHeight: 20 }}>
+                  {action}
+                </Text>
+              </View>
+            );
+          })()}
+
           <View style={{ borderTopWidth: 0.5, borderTopColor: theme.hairline, paddingTop: 18 }}>
             <Text style={{
               fontFamily: 'Inter_700Bold', fontSize: 11, color: theme.faint,
@@ -665,9 +723,9 @@ export default function SKUDetailScreen() {
             }}>
               Score breakdown
             </Text>
-            <ScoreBar label="Velocity"     value={sku.score.velocity}     hint="New listings per day"   theme={theme} />
+            <ScoreBar label="Velocity"     value={sku.score.velocity}     hint={sku.score.velocity === 0 ? "Listings stable — no new supply detected" : "Listing count is growing"}   theme={theme} />
             <ScoreBar label="Volume"       value={sku.score.volume}       hint="Active listing count"   theme={theme} />
-            <ScoreBar label="Confirmation" value={sku.score.confirmation} hint="Reddit + watch signals" theme={theme} />
+            <ScoreBar label="Confirmation" value={sku.score.confirmation} hint="Price momentum vs 7-day avg" theme={theme} />
             <ScoreBar label="Freshness"    value={sku.score.freshness}    hint="Recent appearance"      theme={theme} />
           </View>
         </View>

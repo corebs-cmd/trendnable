@@ -17,6 +17,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.trendnable.app",
       "buildNumber": "9",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Allow Trendnable to use the camera to scan product barcodes."
@@ -39,7 +40,8 @@
       "expo-router",
       "expo-font",
       ["expo-camera", { "cameraPermission": "Allow Trendnable to use the camera to scan product barcodes." }],
-      "expo-notifications"
+      "expo-notifications",
+      "expo-apple-authentication"
     ],
     "experiments": {
       "typedRoutes": true

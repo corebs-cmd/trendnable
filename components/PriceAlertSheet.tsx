@@ -5,6 +5,9 @@ import {
   Pressable,
   TextInput,
   Alert,
+  Keyboard,
+  InputAccessoryView,
+  Platform,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Theme } from '@/lib/theme';
@@ -200,6 +203,7 @@ export default function PriceAlertSheet({ open, sku, theme, onClose, onUpgrade }
               keyboardType="decimal-pad"
               placeholder="0"
               placeholderTextColor={theme.faint}
+              inputAccessoryViewID="price-alert-input"
               style={{
                 flex: 1,
                 fontFamily: 'JetBrainsMono_700Bold',
@@ -210,6 +214,29 @@ export default function PriceAlertSheet({ open, sku, theme, onClose, onUpgrade }
             />
           </View>
         </View>
+
+        {Platform.OS === 'ios' && (
+          <InputAccessoryView nativeID="price-alert-input">
+            <View style={{
+              backgroundColor: theme.surface2,
+              flexDirection: 'row',
+              justifyContent: 'flex-end',
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderTopWidth: 1,
+              borderTopColor: theme.hairline,
+            }}>
+              <Pressable
+                onPress={() => Keyboard.dismiss()}
+                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, paddingHorizontal: 12, paddingVertical: 6 })}
+              >
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: theme.accent }}>
+                  Done
+                </Text>
+              </Pressable>
+            </View>
+          </InputAccessoryView>
+        )}
 
         {/* Set Alert CTA */}
         <Pressable

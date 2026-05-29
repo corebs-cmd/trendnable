@@ -200,9 +200,11 @@ serve(async (req) => {
       ...(existingSkus ?? []).map((s: any) => s.name as string),
       ...(existingCandidates ?? []).map((c: any) => c.name as string),
     ];
-    // Blocklist for post-Claude name filter (exact, case-insensitive)
+    // Blocklist for post-Claude name filter (normalized: lowercase, punctuation stripped)
+    const normalizeName = (s: string) =>
+      s.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
     const deletedNameSet = new Set<string>(
-      (deletedSkus ?? []).map((d: any) => (d.name as string).toLowerCase())
+      (deletedSkus ?? []).map((d: any) => normalizeName(d.name as string))
     );
     // Pass deleted names to Claude so it can skip them during classification
     const allKnownNames = [
@@ -295,7 +297,7 @@ serve(async (req) => {
       if (!c.name) continue;
 
       // Skip names on the deleted-SKU blocklist (trigger also blocks the insert, but check here first)
-      if (deletedNameSet.has(c.name.toLowerCase())) {
+      if (deletedNameSet.has(normalizeName(c.name))) {
         console.log(`Blocked — deleted-SKU blocklist: ${c.name}`);
         skipped++;
         continue;

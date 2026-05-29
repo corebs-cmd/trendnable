@@ -20,6 +20,8 @@ import { UpgradeContext } from '@/lib/types';
 import AppHeader from '@/components/AppHeader';
 import UpgradeSheet from '@/components/UpgradeSheet';
 import { supabase } from '@/lib/supabase';
+import { CATEGORIES } from '@/lib/appConfig';
+import * as api from '@/lib/api';
 
 interface BaseRow { id: string; title: string; premium?: boolean; }
 interface NavRow extends BaseRow { type: 'nav'; detail?: string; onPress: () => void; }
@@ -35,16 +37,33 @@ export default function SettingsScreen() {
   const isDark = useAppStore((s) => s.isDark);
   const setIsDark = useAppStore((s) => s.setIsDark);
   const isPremium = useAppStore((s) => s.isPremium);
-  const followedFandoms = useAppStore((s) => s.followedFandoms);
   const followedCategories = useAppStore((s) => s.followedCategories);
+  const setFollowedCategories = useAppStore((s) => s.setFollowedCategories);
   const user = useAppStore((s) => s.user);
   const theme = buildTheme(isDark);
 
   const [scrolled, setScrolled] = useState(false);
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [catsExpanded, setCatsExpanded] = useState(false);
 
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
+
+  const toggleFollowedCat = (catId: string) => {
+    let next: string[];
+    if (catId === 'all') {
+      next = [];
+    } else {
+      next = followedCategories.includes(catId)
+        ? followedCategories.filter((id) => id !== catId)
+        : [...followedCategories, catId];
+      if (next.length === CATEGORIES.length) next = [];
+    }
+    setFollowedCategories(next);
+    if (user) {
+      api.updateUserPreferences(user.id, { followedCategories: next.length > 0 ? next : undefined });
+    }
+  };
 
   function handleRestorePurchases() {
     const rcKey = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY;
@@ -127,16 +146,6 @@ export default function SettingsScreen() {
     {
       label: 'Personalization',
       rows: [
-        {
-          id: 'fandoms', type: 'nav', title: 'Followed fandoms',
-          detail: `${followedFandoms.length} selected`,
-          onPress: () => Alert.alert('Coming soon', 'Edit your followed fandoms from the onboarding screen in the next update.'),
-        },
-        {
-          id: 'categories', type: 'nav', title: 'Followed categories',
-          detail: `${followedCategories.length} selected`,
-          onPress: () => Alert.alert('Coming soon', 'Edit your followed categories from the onboarding screen in the next update.'),
-        },
         {
           id: 'darkMode', type: 'toggle', title: 'Dark mode',
           value: isDark, onToggle: () => setIsDark(!isDark),
@@ -286,6 +295,83 @@ export default function SettingsScreen() {
             <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: isDark ? theme.premium : theme.premiumInk }}>→</Text>
           </Pressable>
         )}
+
+        {/* My Categories */}
+        <View style={{ marginBottom: 20 }}>
+          <Text style={{
+            fontFamily: 'Inter_700Bold', fontSize: 11, color: theme.faint,
+            letterSpacing: 0.14 * 11, textTransform: 'uppercase',
+            paddingLeft: 10, paddingBottom: 8,
+          }}>
+            My Categories
+          </Text>
+          <View style={{ backgroundColor: theme.surface, borderRadius: theme.radius, overflow: 'hidden' }}>
+            {/* Header row — always visible, tapping toggles expand */}
+            <Pressable
+              onPress={() => setCatsExpanded((v) => !v)}
+              style={({ pressed }) => ({
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                paddingHorizontal: 16, paddingVertical: 14,
+                backgroundColor: pressed ? theme.surface2 : 'transparent',
+              })}
+            >
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: theme.text }}>
+                {followedCategories.length === 0
+                  ? 'All Categories'
+                  : `${followedCategories.length} selected`}
+              </Text>
+              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none"
+                stroke={theme.faint} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+                style={{ transform: [{ rotate: catsExpanded ? '180deg' : '0deg' }] }}
+              >
+                <Path d="M6 9l6 6 6-6" />
+              </Svg>
+            </Pressable>
+
+            {/* Expandable list */}
+            {catsExpanded && (
+              <>
+                <View style={{ height: 0.5, backgroundColor: theme.hairline }} />
+                {[{ id: 'all', label: 'All Categories' }, ...CATEGORIES.map((c) => ({ id: c.id, label: c.label }))].map((opt, idx, arr) => {
+                  const isAll = opt.id === 'all';
+                  const isSelected = isAll ? followedCategories.length === 0 : followedCategories.includes(opt.id);
+                  return (
+                    <React.Fragment key={opt.id}>
+                      <Pressable
+                        onPress={() => toggleFollowedCat(opt.id)}
+                        style={({ pressed }) => ({
+                          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                          paddingHorizontal: 16, paddingVertical: 14,
+                          backgroundColor: pressed ? theme.surface2 : 'transparent',
+                        })}
+                      >
+                        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: isSelected ? theme.text : theme.muted }}>
+                          {opt.label}
+                        </Text>
+                        <View style={{
+                          width: 22, height: 22, borderRadius: 999,
+                          backgroundColor: isSelected ? theme.accent : 'transparent',
+                          borderWidth: isSelected ? 0 : 1.5,
+                          borderColor: theme.faint,
+                          alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          {isSelected && (
+                            <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+                              <Path d="M20 6L9 17l-5-5" />
+                            </Svg>
+                          )}
+                        </View>
+                      </Pressable>
+                      {idx < arr.length - 1 && (
+                        <View style={{ height: 0.5, backgroundColor: theme.hairline, marginLeft: 16 }} />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </>
+            )}
+          </View>
+        </View>
 
         {/* Settings groups */}
         {settingsGroups.map((group) => (

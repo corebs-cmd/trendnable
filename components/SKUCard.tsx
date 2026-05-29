@@ -16,12 +16,13 @@ interface SKUCardProps {
   onPress: () => void;
   onLongPress?: () => void;
   rank?: number;
+  narrativeOverride?: string;
 }
 
 // ── Hero card — "TOP FIND" editorial showcase ─────────────────────────────────
 // Layout matches prototype SKUHeroCard exactly:
 // [eyebrow row padding] → [body: ProductPlaceholder lg + info] → [narrative] → [footer]
-function HeroCard({ sku, theme, onPress, onLongPress }: SKUCardProps) {
+function HeroCard({ sku, theme, onPress, onLongPress, narrativeOverride }: SKUCardProps) {
   const cat = catById(sku.category);
   const fandom = fandomById(sku.fandom);
   const c = categoryColor(sku.category, theme.dark);
@@ -84,10 +85,10 @@ function HeroCard({ sku, theme, onPress, onLongPress }: SKUCardProps) {
       </View>
 
       {/* Narrative — italic Fraunces with gold left border */}
-      {sku.narrative ? (
+      {(narrativeOverride ?? sku.narrative) ? (
         <View style={[styles.narrativeBlock, { borderLeftColor: c.ink }]}>
           <Text numberOfLines={2} ellipsizeMode="tail" style={[styles.narrativeText, { color: theme.text, fontFamily: theme.fontDispItalic }]}>
-            "{sku.narrative}"
+            "{narrativeOverride ?? sku.narrative}"
           </Text>
         </View>
       ) : null}
@@ -202,6 +203,7 @@ export default function SKUCard(props: SKUCardProps) {
   if (props.density === 'hero') return <HeroCard {...props} />;
   return <StandardCard {...props} />;
 }
+export type { SKUCardProps };
 
 const styles = StyleSheet.create({
   // ── Hero ───────────────────────────────────────────────────────────────────

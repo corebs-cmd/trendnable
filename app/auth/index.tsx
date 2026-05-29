@@ -6,6 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { useAppStore } from '../../stores/appStore';
 import { buildTheme } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
@@ -98,6 +99,67 @@ export default function AuthScreen() {
   const handleGuest = () => {
     useAppStore.getState().setIsAuthReady(true);
     router.replace('/');
+  };
+
+  const handleAppleSignIn = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      const { identityToken } = credential;
+      if (!identityToken) throw new Error('No identity token from Apple');
+
+      const { data, error: authError } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: identityToken,
+      });
+      if (authError) throw authError;
+
+      const store = useAppStore.getState();
+      const userId = data.user.id;
+      const userEmail = data.user.email ?? credential.email ?? '';
+
+      // Apple only provides name on first sign-in
+      const displayName = credential.fullName
+        ? [credential.fullName.givenName, credential.fullName.familyName]
+            .filter(Boolean)
+            .join(' ')
+        : null;
+
+      let profile = await api.fetchUserProfile(userId);
+      if (!profile) {
+        profile = await api.createUserProfile(userId, userEmail, displayName);
+      }
+
+      if (profile) {
+        store.setUser(profile);
+        store.setIsPremium(profile.is_premium);
+        store.setFollowedFandoms(profile.followed_fandoms);
+        store.setFollowedCategories(profile.followed_categories);
+        await store.loadUserData(userId);
+      }
+
+      const savedOnboarded = await AsyncStorage.getItem('hasOnboarded');
+      if (!savedOnboarded || savedOnboarded === 'false') {
+        router.replace('/onboarding');
+      } else {
+        router.replace('/');
+      }
+    } catch (e: any) {
+      if (e.code === 'ERR_REQUEST_CANCELED') {
+        // user dismissed the sheet — not an error
+      } else {
+        setError(mapAuthError(e.message));
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -207,8 +269,18 @@ export default function AuthScreen() {
           <View style={[styles.divider, { backgroundColor: theme.hairline }]} />
         </View>
 
-        <Pressable onPress={handleGuest} style={[styles.guestBtn, { borderColor: theme.hairline }]}>
-          <Text style={[styles.guestBtnText, { color: theme.muted, fontFamily: 'Inter_400Regular' }]}>
+        <AppleAuthentication.AppleAuthenticationButton
+          buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+          buttonStyle={isDark
+            ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+            : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+          cornerRadius={10}
+          style={styles.appleBtn}
+          onPress={handleAppleSignIn}
+        />
+
+        <Pressable onPress={handleGuest} style={styles.guestRow}>
+          <Text style={[styles.guestBtnText, { color: theme.faint, fontFamily: 'Inter_400Regular' }]}>
             Continue as guest
           </Text>
         </Pressable>
@@ -242,9 +314,12 @@ const styles = StyleSheet.create({
   dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 24, gap: 12 },
   divider: { flex: 1, height: StyleSheet.hairlineWidth },
   dividerText: { fontSize: 13 },
-  guestBtn: {
-    height: 48, borderRadius: 10, borderWidth: 1,
-    alignItems: 'center', justifyContent: 'center',
+  appleBtn: {
+    height: 52, borderRadius: 10,
   },
-  guestBtnText: { fontSize: 15 },
+  guestRow: {
+    alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 14,
+  },
+  guestBtnText: { fontSize: 14 },
 });

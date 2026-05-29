@@ -19,7 +19,6 @@ import AppHeader from '@/components/AppHeader';
 import UpgradeSheet from '@/components/UpgradeSheet';
 import SKUCard from '@/components/SKUCard';
 import PriceAlertSheet from '@/components/PriceAlertSheet';
-import NotificationsSheet from '@/components/NotificationsSheet';
 import CatalogItemSheet from '@/components/CatalogItemSheet';
 
 const FREE_CAP = 20;
@@ -34,7 +33,6 @@ export default function WatchlistScreen() {
   const deleteAlertsForSku       = useAppStore((s) => s.deleteAlertsForSku);
   const hotSkus                  = useAppStore((s) => s.hotSkus);
   const priceAlerts              = useAppStore((s) => s.priceAlerts);
-  const unreadCount              = useAppStore((s) => s.unreadCount);
   const catalogWatchlist         = useAppStore((s) => s.catalogWatchlist);
   const removeCatalogFromWatchlist = useAppStore((s) => s.removeCatalogFromWatchlist);
   const theme                    = buildTheme(isDark);
@@ -42,7 +40,6 @@ export default function WatchlistScreen() {
   const [scrolled, setScrolled]           = useState(false);
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
   const [alertSkuId, setAlertSkuId]       = useState<string | null>(null);
-  const [notifOpen, setNotifOpen]         = useState(false);
   const [catalogDetailId, setCatalogDetailId] = useState<string | null>(null);
 
   const watched: SKU[] = useMemo(() => {
@@ -95,40 +92,6 @@ export default function WatchlistScreen() {
         title="Watchlist"
         theme={theme}
         scrolled={scrolled}
-        trailing={
-          <Pressable
-            onPress={() => setNotifOpen(true)}
-            accessibilityLabel={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
-            style={({ pressed }) => ({
-              width: 36, height: 36, borderRadius: 999,
-              backgroundColor: unreadCount > 0 ? `${theme.premium}18` : theme.surface,
-              borderWidth: unreadCount > 0 ? 1 : 0,
-              borderColor: `${theme.premium}44`,
-              alignItems: 'center', justifyContent: 'center',
-              opacity: pressed ? 0.7 : 1,
-            })}
-          >
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none"
-              stroke={unreadCount > 0 ? theme.premium : theme.muted}
-              strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <Path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <Path d="M13.73 21a2 2 0 01-3.46 0" />
-            </Svg>
-            {unreadCount > 0 && (
-              <View style={{
-                position: 'absolute', top: -2, right: -2,
-                minWidth: 16, height: 16, borderRadius: 999,
-                backgroundColor: theme.premium,
-                alignItems: 'center', justifyContent: 'center',
-                paddingHorizontal: 3,
-              }}>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, color: theme.premiumInk }}>
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </Text>
-              </View>
-            )}
-          </Pressable>
-        }
       />
 
       <ScrollView
@@ -435,13 +398,6 @@ export default function WatchlistScreen() {
           onUpgrade={() => { setAlertSkuId(null); setUpgradeContext('priceAlerts'); }}
         />
       )}
-
-      <NotificationsSheet
-        open={notifOpen}
-        theme={theme}
-        onClose={() => setNotifOpen(false)}
-        onNavigate={(skuId) => router.push(`/sku/${skuId}`)}
-      />
 
       <CatalogItemSheet
         open={catalogDetailId !== null}

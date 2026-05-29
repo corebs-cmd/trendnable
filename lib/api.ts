@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { CollectionItem, DBUser, DBCollectionItem, SKU, PriceAlert, AppNotification, ScanResult, CatalogWatchlistItem, CatalogCollectionItem } from './types';
+import { CollectionItem, DBUser, DBCollectionItem, SKU, PriceAlert, AppNotification, ScanResult, CatalogWatchlistItem, CatalogCollectionItem, SkuInsight, InsightResponse, InsightDirection } from './types';
 
 // ── Users ────────────────────────────────────────────────────────────────────
 
@@ -164,7 +164,102 @@ export async function fetchHotSkus(): Promise<SKU[]> {
     .order('hot_score', { ascending: false });
 
   if (error) throw new Error(error.message);
-  return (data as Record<string, unknown>[]).map(rowToSku);
+  const skus = (data as Record<string, unknown>[]).map(rowToSku);
+
+  // Merge in current insights (direction badge data)
+  const ids = skus.map((s) => s.id);
+  const insights = await fetchCurrentInsightsMap(ids);
+  return skus.map((s) => {
+    const ins = insights.get(s.id);
+    return ins ? { ...s, direction: ins.direction, insight: ins } : s;
+  });
+}
+
+// Returns a map of sku_id → current SkuInsight
+async function fetchCurrentInsightsMap(skuIds: string[]): Promise<Map<string, SkuInsight>> {
+  if (skuIds.length === 0) return new Map();
+  const { data } = await supabase
+    .from('sku_insights')
+    .select('id, sku_id, insight_type, direction, confidence, narration_short, narration_long, fired_at, expires_at')
+    .in('sku_id', skuIds)
+    .eq('is_current', true);
+
+  const map = new Map<string, SkuInsight>();
+  for (const row of (data ?? []) as Record<string, unknown>[]) {
+    map.set(row.sku_id as string, rowToInsight(row));
+  }
+  return map;
+}
+
+// Fetch the current insight for a single SKU, with personalized action for premium users
+export async function fetchSkuInsight(
+  skuId: string,
+  userId: string | null,
+  isPremium: boolean,
+): Promise<InsightResponse> {
+  const [insightData, narrativeData] = await Promise.all([
+    supabase
+      .from('sku_insights')
+      .select('id, sku_id, insight_type, direction, confidence, narration_short, narration_long, fired_at, expires_at')
+      .eq('sku_id', skuId)
+      .eq('is_current', true)
+      .maybeSingle(),
+    supabase
+      .from('sku_narratives')
+      .select('description')
+      .eq('sku_id', skuId)
+      .maybeSingle(),
+  ]);
+
+  const insight = insightData.data ? rowToInsight(insightData.data as Record<string, unknown>) : null;
+  const fallbackDescription = (narrativeData.data as Record<string, unknown> | null)?.description as string ?? '';
+
+  let personalizedAction: string | null = null;
+  if (isPremium && userId && insight) {
+    const [collectionRow, watchlistRow] = await Promise.all([
+      supabase.from('user_collections').select('id').eq('user_id', userId).eq('sku_id', skuId).limit(1).maybeSingle(),
+      supabase.from('user_watchlists').select('id').eq('user_id', userId).eq('sku_id', skuId).limit(1).maybeSingle(),
+    ]);
+    const owns = !!collectionRow.data;
+    const watches = !!watchlistRow.data;
+    personalizedAction = getPersonalizedAction(insight.direction, owns, watches);
+  }
+
+  return { insight, personalizedAction, fallbackDescription };
+}
+
+function getPersonalizedAction(direction: InsightDirection, owns: boolean, watches: boolean): string | null {
+  if (!owns && !watches) return null;
+  const rel = owns ? 'owns' : 'watches';
+  const lines: Record<string, Record<InsightDirection, string>> = {
+    owns: {
+      rising:  "You're holding well — momentum favors you.",
+      holding: 'Position is stable. No action suggested.',
+      cooling: 'Consider listing in the next 7–14 days before further softening.',
+      falling: 'Momentum has turned. List immediately or hold long-term.',
+    },
+    watches: {
+      rising:  'Buy window may be closing. Acting soon could cost less.',
+      holding: 'Stable entry point. No urgency.',
+      cooling: 'Better buy window may open in the next few weeks.',
+      falling: 'Wait for price to settle before entering.',
+    },
+  };
+  return lines[rel][direction];
+}
+
+function rowToInsight(row: Record<string, unknown>): SkuInsight {
+  return {
+    id:              row.id as string,
+    skuId:           row.sku_id as string,
+    insightType:     row.insight_type as SkuInsight['insightType'],
+    direction:       row.direction as InsightDirection,
+    confidence:      row.confidence as SkuInsight['confidence'],
+    narrationShort:  (row.narration_short as string) ?? null,
+    narrationLong:   (row.narration_long  as string) ?? null,
+    firedAt:         row.fired_at  as string,
+    expiresAt:       row.expires_at as string,
+  };
 }
 
 export async function fetchSkuById(skuId: string): Promise<SKU | null> {
@@ -355,6 +450,7 @@ function rowToSku(row: Record<string, unknown>): SKU {
     priceMintCount: row.price_mint_count != null ? Number(row.price_mint_count) : null,
     priceLoose:     row.price_loose     != null ? Number(row.price_loose)      : null,
     priceLooseCount:row.price_loose_count != null ? Number(row.price_loose_count): null,
+    direction: (row.insight_direction as InsightDirection) ?? undefined,
   };
 }
 

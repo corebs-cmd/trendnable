@@ -64,6 +64,9 @@ export interface SKU {
   priceMintCount?: number | null;
   priceLoose?: number | null;
   priceLooseCount?: number | null;
+  // Directional signal (from sku_insights)
+  direction?: InsightDirection;
+  insight?: SkuInsight | null;
 }
 
 export interface CollectionItem {
@@ -173,6 +176,38 @@ export interface AppNotification {
 
 export type HotScoreViz = 'bar' | 'ring' | 'components' | 'spark';
 export type CardDensity = 'hero' | 'spacious' | 'medium' | 'cozy' | 'dense';
+
+// ── Insights ──────────────────────────────────────────────────────────────────
+
+export type InsightDirection = 'rising' | 'holding' | 'cooling' | 'falling';
+export type InsightType =
+  | 'supply_shock'
+  | 'quiet_accumulation'
+  | 'false_top'
+  | 'confirmed_breakout'
+  | 'stagnation_risk'
+  | 'catalyst_spike'
+  | 'low_data'
+  | 'steady_state';
+export type InsightConfidence = 'low' | 'medium' | 'high';
+
+export interface SkuInsight {
+  id: string;
+  skuId: string;
+  insightType: InsightType;
+  direction: InsightDirection;
+  confidence: InsightConfidence;
+  narrationShort: string | null;
+  narrationLong: string | null;
+  firedAt: string;
+  expiresAt: string;
+}
+
+export interface InsightResponse {
+  insight: SkuInsight | null;
+  personalizedAction: string | null;
+  fallbackDescription: string;
+}
 
 // ── Scan pipeline ─────────────────────────────────────────────────────────────
 

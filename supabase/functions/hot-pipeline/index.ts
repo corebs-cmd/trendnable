@@ -4,21 +4,21 @@
 // Logs every run to pipeline_runs with token usage and cost.
 //
 // Scoring formula (0-100):
-//   velocity    (0-30): new listings per day vs. 7-day baseline
+//   velocity    (0-30): listing count growth vs. most recent snapshot (7-day window)
 //   volume      (0-30): current listing count signal
-//   confirmation(0-25): Reddit mentions + eBay watch count
+//   confirmation(0-25): external trend signal (reserved for future data source)
 //   freshness   (0-15): penalty for old SKUs (>90 days drops score)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { titlePassesTier1, effectivePrice, iqrMedian } from '../_shared/pipeline-utils.ts';
 
-const SUPABASE_URL             = Deno.env.get('SUPABASE_URL') ?? '';
+const SUPABASE_URL              = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-const PIPELINE_SECRET          = Deno.env.get('PIPELINE_SECRET') ?? '';
-const EBAY_CLIENT_ID           = Deno.env.get('EBAY_CLIENT_ID') ?? '';
-const EBAY_CLIENT_SECRET       = Deno.env.get('EBAY_CLIENT_SECRET') ?? '';
-const ANTHROPIC_API_KEY        = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
+const PIPELINE_SECRET           = Deno.env.get('PIPELINE_SECRET') ?? '';
+const EBAY_CLIENT_ID            = Deno.env.get('EBAY_CLIENT_ID') ?? '';
+const EBAY_CLIENT_SECRET        = Deno.env.get('EBAY_CLIENT_SECRET') ?? '';
+const ANTHROPIC_API_KEY         = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
 
 // Claude Haiku 4.5 pricing (USD per token)
 const HAIKU_INPUT_RATE  = 0.80 / 1_000_000;
@@ -60,20 +60,19 @@ async function fetchEbayListings(query: string, token: string) {
 
 function computeHotScore(params: {
   listings: number;
-  prevListings: number;
-  velocity: number;
+  prevListings: number | null; // null = no prior snapshot yet
   age: number;
-  redditMentions: number;
-  ebayWatchers: number;
+  confirmationScore: number;
 }): { hot: number; velocity: number; volume: number; confirmation: number; freshness: number } {
-  const { listings, prevListings, velocity, age, redditMentions, ebayWatchers } = params;
+  const { listings, prevListings, age, confirmationScore } = params;
 
-  const growthRate = prevListings > 0 ? (listings - prevListings) / prevListings : 0;
-  const velocityScore = Math.min(30, Math.round(Math.max(0, growthRate * 100)));
-  const volumeScore = Math.min(30, Math.round(Math.log10(Math.max(1, listings)) * 10));
-  const confirmationScore = Math.min(25, redditMentions * 3 + Math.floor(ebayWatchers / 10));
-  const freshnessScore = age < 7 ? 15 : age < 30 ? 12 : age < 90 ? 8 : age < 180 ? 4 : 1;
-  const hot = velocityScore + volumeScore + confirmationScore + freshnessScore;
+  const growthRate    = (prevListings != null && prevListings > 0)
+    ? (listings - prevListings) / prevListings
+    : 0;
+  const velocityScore     = Math.min(30, Math.round(Math.max(0, growthRate * 100)));
+  const volumeScore       = Math.min(30, Math.round(Math.log10(Math.max(1, listings)) * 10));
+  const freshnessScore    = age < 7 ? 15 : age < 30 ? 12 : age < 90 ? 8 : age < 180 ? 4 : 1;
+  const hot               = velocityScore + volumeScore + confirmationScore + freshnessScore;
 
   return {
     hot: Math.min(100, hot),
@@ -241,15 +240,32 @@ serve(async (req) => {
         const { median: priceMedian, count: _mintCount, low: priceLow, high: priceHigh } =
           iqrMedian(rawPrices);
 
-        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-        const { data: prevSnap } = await supabase
+        // Velocity + Confirmation: pull prior snapshots in a single query
+        const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+        const { data: priorSnaps } = await supabase
           .from('daily_snapshots')
-          .select('listing_count')
+          .select('listing_count, price_median')
           .eq('sku_id', sku.id)
-          .eq('snapshot_date', yesterday)
-          .single();
+          .gte('snapshot_date', sevenDaysAgo)
+          .lt('snapshot_date', today)
+          .order('snapshot_date', { ascending: false });
 
-        const prevListings = prevSnap?.listing_count ?? listingCount;
+        // Velocity: most recent prior snapshot
+        const prevListings: number | null = priorSnaps?.[0]?.listing_count ?? null;
+
+        // Confirmation: price momentum vs 7-day average (0-25)
+        let confirmationScore = 0;
+        if (priceMedian > 0 && priorSnaps && priorSnaps.length >= 2) {
+          const validPrices = priorSnaps
+            .map((r) => Number(r.price_median))
+            .filter((p) => p > 0);
+          if (validPrices.length >= 2) {
+            const avgPrice = validPrices.reduce((s, p) => s + p, 0) / validPrices.length;
+            const pctChange = (priceMedian - avgPrice) / avgPrice;
+            confirmationScore = Math.min(25, Math.max(0, Math.round(pctChange * 100)));
+          }
+        }
+
         const ageDays = Math.floor((Date.now() - new Date(sku.created_at).getTime()) / 86400000);
 
         const { data: prevHotRow } = await supabase
@@ -261,10 +277,8 @@ serve(async (req) => {
         const scores = computeHotScore({
           listings: listingCount,
           prevListings,
-          velocity: listingCount - prevListings,
           age: ageDays,
-          redditMentions: 0,
-          ebayWatchers: 0,
+          confirmationScore,
         });
 
         const delta = Math.round(scores.hot - (prevHotRow?.hot_score ?? scores.hot));
@@ -372,7 +386,7 @@ serve(async (req) => {
     }
 
     const durationMs = Date.now() - startTime;
-    const costUsd = (totalInputTokens * HAIKU_INPUT_RATE) + (totalOutputTokens * HAIKU_OUTPUT_RATE);
+    const costUsd    = (totalInputTokens * HAIKU_INPUT_RATE) + (totalOutputTokens * HAIKU_OUTPUT_RATE);
 
     // Log run — non-blocking, don't let this fail the response
     supabase.from('pipeline_runs').insert({
