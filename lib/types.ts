@@ -248,6 +248,7 @@ export interface CatalogWatchlistItem {
 
 export interface CatalogCollectionItem {
   catalogId: string;
+  skuId?: string | null;
   name: string;
   short: string;
   categoryId: string;

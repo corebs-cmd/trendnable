@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,13 +9,15 @@ import {
   Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import Svg, { Path, Circle } from 'react-native-svg';
 
 import { buildTheme, categoryColor } from '@/lib/theme';
 import { useAppStore } from '@/stores/appStore';
 import { catById, fmtPrice } from '@/lib/appConfig';
 import { CollectionItemEnriched, UpgradeContext, CatalogCollectionItem } from '@/lib/types';
+import { promoteCatalogToSku } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import AppHeader from '@/components/AppHeader';
 import IconButton from '@/components/IconButton';
 import Sparkline from '@/components/Sparkline';
@@ -43,7 +45,40 @@ export default function CollectionScreen() {
   const hotSkus = useAppStore((s) => s.hotSkus);
   const catalogCollection = useAppStore((s) => s.catalogCollection);
   const removeCatalogFromCollection = useAppStore((s) => s.removeCatalogFromCollection);
+  const addToCollection = useAppStore((s) => s.addToCollection);
+  const loadUserData = useAppStore((s) => s.loadUserData);
+  const userId = useAppStore((s) => s.user?.id);
   const theme = buildTheme(isDark);
+
+  useFocusEffect(useCallback(() => {
+    if (!userId) return;
+    let active = true;
+    const run = async () => {
+      await loadUserData(userId);
+      if (!active) return;
+      const stuck = useAppStore.getState().catalogCollection.filter((i) => !i.skuId);
+      if (stuck.length === 0) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token || !active) return;
+      for (const item of stuck) {
+        const promotion = await promoteCatalogToSku(item.catalogId, session.access_token);
+        if (!active) return;
+        if (promotion?.skuId) {
+          removeCatalogFromCollection(item.catalogId);
+          addToCollection({
+            skuId: promotion.skuId,
+            qty: item.qty,
+            purchased: item.purchased,
+            purchaseDate: item.purchaseDate,
+            condition: item.condition,
+            forSale: false,
+          });
+        }
+      }
+    };
+    run();
+    return () => { active = false; };
+  }, [userId]));
 
   const [filter, setFilter] = useState<string>('all');
   const [chartWindow, setChartWindow] = useState<ChartWindow>('30d');
@@ -99,6 +134,7 @@ export default function CollectionScreen() {
       ? []
       : catalogCollection
           .filter((i) => filter === 'all' || i.categoryId === filter)
+          .filter((i) => !(i.skuId && hotSkus.some((s) => s.id === i.skuId)))
           .map((item) => ({ type: 'catalog' as const, item }));
 
     return [...skuRows, ...catalogRows];
@@ -428,7 +464,7 @@ export default function CollectionScreen() {
                       alignSelf: 'flex-start', marginTop: 2,
                     }}>
                       <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 9, color: theme.faint, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        Pending
+                        {item.skuId ? 'Syncing' : 'Pending'}
                       </Text>
                     </View>
                   </View>

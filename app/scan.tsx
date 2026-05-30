@@ -43,9 +43,11 @@ export default function ScanScreen() {
   const isPremium = useAppStore((s) => s.isPremium);
   const theme   = buildTheme(isDark);
 
-  const addCatalogToWatchlist   = useAppStore((s) => s.addCatalogToWatchlist);
-  const addCatalogToCollection  = useAppStore((s) => s.addCatalogToCollection);
-  const isWatchingCatalog       = useAppStore((s) => s.isWatchingCatalog);
+  const addCatalogToWatchlist      = useAppStore((s) => s.addCatalogToWatchlist);
+  const addCatalogToCollection     = useAppStore((s) => s.addCatalogToCollection);
+  const removeCatalogFromCollection = useAppStore((s) => s.removeCatalogFromCollection);
+  const addToCollection            = useAppStore((s) => s.addToCollection);
+  const isWatchingCatalog          = useAppStore((s) => s.isWatchingCatalog);
 
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning]         = useState(false);
@@ -183,6 +185,18 @@ export default function ScanScreen() {
       ? await promoteCatalogToSku(scanResult.catalogId, session.access_token)
       : null;
     const skuId = promotion?.skuId ?? scanResult.skuId;
+
+    if (promotion?.skuId) {
+      removeCatalogFromCollection(scanResult.catalogId);
+      addToCollection({
+        skuId:        promotion.skuId,
+        qty:          1,
+        purchased:    scanResult.price.median,
+        purchaseDate: new Date().toISOString().split('T')[0],
+        condition:    'Good',
+        forSale:      false,
+      });
+    }
 
     Alert.alert(
       'Added to Collection',

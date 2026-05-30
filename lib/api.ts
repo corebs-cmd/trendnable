@@ -76,6 +76,7 @@ export async function fetchCollection(userId: string): Promise<CollectionItem[]>
     .from('user_collections')
     .select('*')
     .eq('user_id', userId)
+    .not('sku_id', 'is', null)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -629,10 +630,9 @@ export async function removeCatalogWatchlistItem(userId: string, catalogId: stri
 export async function fetchCatalogCollection(userId: string): Promise<CatalogCollectionItem[]> {
   const { data, error } = await supabase
     .from('user_collections')
-    .select('catalog_id, qty, purchased_price, purchase_date, condition, notes, created_at, product_catalog(name, short, category_id, price_latest, image_url)')
+    .select('catalog_id, sku_id, qty, purchased_price, purchase_date, condition, notes, created_at, product_catalog(name, short, category_id, price_latest, image_url)')
     .eq('user_id', userId)
     .not('catalog_id', 'is', null)
-    .is('sku_id', null)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -644,6 +644,7 @@ export async function fetchCatalogCollection(userId: string): Promise<CatalogCol
     const cat = row.product_catalog as Record<string, unknown> | null;
     return {
       catalogId:    row.catalog_id as string,
+      skuId:        (row.sku_id as string | null) ?? null,
       name:         (cat?.name as string) ?? '',
       short:        (cat?.short as string) ?? '',
       categoryId:   (cat?.category_id as string) ?? '',
