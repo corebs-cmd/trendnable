@@ -16,17 +16,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle, Defs, Pattern, Rect, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 
-import { buildTheme, categoryColor, RADIUS } from '@/lib/theme';
+import { buildTheme, categoryColor } from '@/lib/theme';
 import { catById, fandomById, fmtPrice } from '@/lib/appConfig';
 import { useAppStore } from '@/stores/appStore';
 import { fetchSkuHistory, fetchSkuById, fetchSkuInsight } from '@/lib/api';
 import { SKU, InsightResponse } from '@/lib/types';
 
-import { HotScoreBadge } from '@/components/HotScore';
 import { InsightTypePill } from '@/components/signals/DirectionBadge';
+import Sparkline from '@/components/Sparkline';
 import Chip from '@/components/Chip';
-import IconButton from '@/components/IconButton';
-import PrimaryButton from '@/components/PrimaryButton';
 import IOSShareSheet from '@/components/IOSShareSheet';
 import AddToCollectionSheet from '@/components/AddToCollectionSheet';
 import ProductPlaceholder from '@/components/ProductPlaceholder';
@@ -35,6 +33,18 @@ import PriceAlertSheet from '@/components/PriceAlertSheet';
 import { UpgradeContext } from '@/lib/types';
 
 const { width: SCREEN_W } = Dimensions.get('window');
+
+// Design color constants (from the Almanac dark theme)
+const C = {
+  gold:        '#f1c24c',
+  amber:       '#f3963c',
+  purple:      '#8071f6',
+  green:       '#37d49b',
+  navPill:     'rgba(28,38,64,0.72)',
+  cardBorder:  'rgba(255,255,255,0.07)',
+  cardBg:      '#0F1730',
+  scoreBars:   ['#4d8bff', '#37d49b', '#f3963c', '#8071f6'] as const,
+};
 
 function formatFiredAt(firedAt: string): string {
   const days = Math.floor((Date.now() - new Date(firedAt).getTime()) / 86400000);
@@ -56,15 +66,32 @@ function DotPattern({ height }: { height: number }) {
   );
 }
 
-function SectionHeader({ title, theme }: {
-  title: string;
-  theme: ReturnType<typeof buildTheme>;
+/* Card with hairline border — matches design's `var(--card)` + `1px solid var(--line)` */
+function Card({ children, style, isDark }: {
+  children: React.ReactNode;
+  style?: object;
+  isDark: boolean;
 }) {
   return (
-    <View style={{ paddingHorizontal: 18, paddingTop: 24, paddingBottom: 10 }}>
+    <View style={[{
+      backgroundColor: isDark ? C.cardBg : '#fff',
+      borderRadius: 20,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: isDark ? C.cardBorder : 'rgba(0,0,0,0.07)',
+    }, style]}>
+      {children}
+    </View>
+  );
+}
+
+/* Section title — Fraunces serif 27px matching design's SectionTitle */
+function SectionHeader({ title }: { title: string }) {
+  return (
+    <View style={{ paddingHorizontal: 18, paddingTop: 24, paddingBottom: 14 }}>
       <Text style={{
-        fontFamily: 'Fraunces_700Bold', fontSize: 24,
-        color: theme.text, letterSpacing: -0.4, lineHeight: 28,
+        fontFamily: 'Fraunces_700Bold', fontSize: 27,
+        color: '#efece2', letterSpacing: -0.3, lineHeight: 30,
       }}>
         {title}
       </Text>
@@ -72,22 +99,64 @@ function SectionHeader({ title, theme }: {
   );
 }
 
-function StatBox({ label, value, theme, valueColor }: {
+/* Gold tier pill — gold dot + tier label + score number */
+function TierPill({ score }: { score: number }) {
+  const tier = score >= 80 ? 'HOT' : score >= 65 ? 'STRONG' : score >= 40 ? 'HOLDING' : 'WATCH';
+  return (
+    <View style={{
+      flexDirection: 'row', alignItems: 'center', gap: 11,
+      backgroundColor: 'rgba(241,194,76,0.12)',
+      borderWidth: 1, borderColor: 'rgba(241,194,76,0.32)',
+      borderRadius: 999,
+      paddingVertical: 9, paddingLeft: 13, paddingRight: 16,
+    }}>
+      <View style={{
+        width: 13, height: 13, borderRadius: 999,
+        backgroundColor: C.gold,
+        shadowColor: C.gold, shadowOpacity: 0.7, shadowRadius: 6, shadowOffset: { width: 0, height: 0 },
+      }} />
+      <Text style={{
+        fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 1,
+        color: C.gold, textTransform: 'uppercase',
+      }}>
+        {tier}
+      </Text>
+      <Text style={{
+        fontFamily: 'JetBrainsMono_700Bold', fontSize: 22, color: '#efece2',
+        fontVariant: ['tabular-nums'],
+      }}>
+        {score}
+      </Text>
+    </View>
+  );
+}
+
+/* Stat tile — matches design's StatTile: 22px mono value */
+function StatBox({ label, value, valueColor, isDark }: {
   label: string;
   value: string;
-  theme: ReturnType<typeof buildTheme>;
+  isDark: boolean;
   valueColor?: string;
 }) {
   return (
-    <View style={{ flex: 1, backgroundColor: theme.surface, borderRadius: theme.radius, padding: 14 }}>
+    <View style={{
+      flex: 1,
+      backgroundColor: isDark ? C.cardBg : '#fff',
+      borderRadius: 20,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: isDark ? C.cardBorder : 'rgba(0,0,0,0.07)',
+    }}>
       <Text style={{
-        fontFamily: 'Inter_600SemiBold', fontSize: 10.5, color: theme.muted,
+        fontFamily: 'Inter_600SemiBold', fontSize: 10.5,
+        color: '#808aa1',
         letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6,
       }}>
         {label}
       </Text>
       <Text style={{
-        fontFamily: 'JetBrainsMono_700Bold', fontSize: 22, color: valueColor ?? theme.text,
+        fontFamily: 'JetBrainsMono_700Bold', fontSize: 22,
+        color: valueColor ?? '#efece2',
         letterSpacing: -0.4, fontVariant: ['tabular-nums'],
       }}>
         {value}
@@ -96,26 +165,28 @@ function StatBox({ label, value, theme, valueColor }: {
   );
 }
 
-function ScoreBar({ label, value, max = 30, hint, theme }: {
+/* Score bar — Fraunces 18px label, per-bar accent color */
+function ScoreBar({ label, value, max = 30, hint, color }: {
   label: string;
   value: number;
   max?: number;
   hint: string;
-  theme: ReturnType<typeof buildTheme>;
+  color: string;
 }) {
   const pct = Math.min(100, (value / max) * 100);
   return (
-    <View style={{ marginBottom: 14 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 7 }}>
-        <Text style={{ fontFamily: 'Fraunces_600SemiBold', fontSize: 17, color: theme.text }}>{label}</Text>
-        <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 12, color: theme.muted, fontVariant: ['tabular-nums'] }}>
-          {value}<Text style={{ color: theme.faint }}> / {max}</Text>
+    <View style={{ marginBottom: 17 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+        <Text style={{ fontFamily: 'Fraunces_600SemiBold', fontSize: 18, color: '#efece2' }}>{label}</Text>
+        <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 14, color: '#808aa1', fontVariant: ['tabular-nums'] }}>
+          <Text style={{ color: value > 0 ? '#c8cee0' : '#545e76', fontFamily: 'JetBrainsMono_700Bold' }}>{value}</Text>
+          {' / '}{max}
         </Text>
       </View>
-      <View style={{ height: 5, backgroundColor: theme.hotBarTrack, borderRadius: 999, overflow: 'hidden' }}>
-        <View style={{ height: 5, width: `${pct}%`, backgroundColor: theme.accent, borderRadius: 999 }} />
+      <View style={{ height: 5, backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 999, overflow: 'hidden' }}>
+        <View style={{ height: 5, width: `${pct}%`, backgroundColor: color, borderRadius: 999 }} />
       </View>
-      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11.5, color: theme.faint, marginTop: 5 }}>{hint}</Text>
+      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: '#545e76', marginTop: 7 }}>{hint}</Text>
     </View>
   );
 }
@@ -134,14 +205,17 @@ function WindowBtn({ label, locked, active, onPress, theme }: {
       onPress={onPress}
       style={({ pressed }) => ({
         paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999,
-        backgroundColor: active ? theme.surface2 : 'transparent',
+        backgroundColor: active ? 'rgba(255,255,255,0.10)' : 'transparent',
+        borderWidth: active ? 1 : 0,
+        borderColor: active ? 'transparent' : 'transparent',
         opacity: pressed ? 0.72 : 1,
       })}
     >
       <Text style={{
-        fontFamily: active ? 'Inter_600SemiBold' : 'Inter_400Regular',
-        fontSize: 12.5,
-        color: locked ? theme.faint : active ? theme.text : theme.muted,
+        fontFamily: active ? 'JetBrainsMono_700Bold' : 'JetBrainsMono_400Regular',
+        fontSize: 13,
+        color: locked ? '#545e76' : active ? '#efece2' : '#808aa1',
+        letterSpacing: 0.5,
       }}>
         {label}{locked ? ' ◆' : ''}
       </Text>
@@ -182,7 +256,7 @@ function HistoryCard({ sku, theme, isPremium, window, setWindow, loading, error 
 }) {
   const [metric, setMetric] = React.useState<'score' | 'price'>('score');
   const data = metric === 'score' ? sku.history : sku.priceHist;
-  const color = metric === 'score' ? theme.accent : theme.gold;
+  const color = metric === 'score' ? theme.accent : C.amber;
   const curLabel = metric === 'score' ? 'HOT SCORE' : 'MEDIAN PRICE';
   const curVal = metric === 'score' ? String(sku.hot) : fmtPrice(sku.price.median);
   const gid = `hg-${metric}`;
@@ -192,97 +266,99 @@ function HistoryCard({ sku, theme, isPremium, window, setWindow, loading, error 
   const windowLabel = window === '1Y' ? '−1y' : window === '90D' ? '−90d' : '−30d';
 
   return (
-    <View style={{ marginHorizontal: 18, backgroundColor: theme.surface, borderRadius: theme.radius, padding: 18 }}>
-      {/* Tab row: window pills + metric toggle */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-        <View style={{ flex: 1, flexDirection: 'row', gap: 2 }}>
-          <WindowBtn label="30D" active={window === '30D'} onPress={() => setWindow('30D')} theme={theme} />
-          <WindowBtn label="90D" locked={!isPremium} active={window === '90D'} onPress={() => { if (isPremium) setWindow('90D'); }} theme={theme} />
-          <WindowBtn label="1Y"  locked={!isPremium} active={window === '1Y'}  onPress={() => { if (isPremium) setWindow('1Y'); }}  theme={theme} />
-        </View>
-        {/* Score / Price segmented toggle */}
-        <View style={{
-          flexDirection: 'row', borderRadius: 999,
-          borderWidth: 1, borderColor: theme.hairline, overflow: 'hidden',
-        }}>
-          {(['score', 'price'] as const).map((m) => (
-            <Pressable
-              key={m}
-              onPress={() => setMetric(m)}
-              style={{
-                paddingHorizontal: 13, paddingVertical: 7,
-                backgroundColor: metric === m
-                  ? (m === 'score' ? theme.accent : theme.gold)
-                  : 'transparent',
-              }}
-            >
-              <Text style={{
-                fontFamily: 'Inter_600SemiBold', fontSize: 12,
-                color: metric === m ? (theme.dark ? '#08101f' : '#fff') : theme.muted,
-              }}>
-                {m === 'score' ? 'Score' : 'Price'}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-
-      {loading ? (
-        <View style={{ alignItems: 'center', paddingVertical: 60 }}>
-          <ActivityIndicator color={theme.accent} />
-        </View>
-      ) : error ? (
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.neg, textAlign: 'center', paddingVertical: 30 }}>
-          {error}
-        </Text>
-      ) : (
-        <>
-          {/* Current value */}
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.muted, letterSpacing: 1.1, textTransform: 'uppercase' }}>
-              {curLabel}
-            </Text>
-            <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 18, color, fontVariant: ['tabular-nums'] }}>
-              {curVal}
-            </Text>
+    <View style={{ marginHorizontal: 18 }}>
+      <Card isDark={theme.dark} style={{ padding: 18 }}>
+        {/* Tab row: window pills + metric toggle */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+          <View style={{ flex: 1, flexDirection: 'row', gap: 2 }}>
+            <WindowBtn label="30D" active={window === '30D'} onPress={() => setWindow('30D')} theme={theme} />
+            <WindowBtn label="90D" locked={!isPremium} active={window === '90D'} onPress={() => { if (isPremium) setWindow('90D'); }} theme={theme} />
+            <WindowBtn label="1Y"  locked={!isPremium} active={window === '1Y'}  onPress={() => { if (isPremium) setWindow('1Y'); }}  theme={theme} />
           </View>
-
-          {/* Chart */}
-          <Svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'flex' }}>
-            <Defs>
-              <SvgLinearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0%" stopColor={color} stopOpacity={0.28} />
-                <Stop offset="100%" stopColor={color} stopOpacity={0} />
-              </SvgLinearGradient>
-            </Defs>
-            {[0.25, 0.5, 0.75].map((g) => (
-              <Path
-                key={g}
-                d={`M8,${H * g} L${W - 8},${H * g}`}
-                stroke="rgba(255,255,255,0.05)"
-                strokeWidth={1}
-              />
+          {/* Score / Price segmented toggle */}
+          <View style={{
+            flexDirection: 'row', borderRadius: 999,
+            borderWidth: 1, borderColor: C.cardBorder, overflow: 'hidden',
+          }}>
+            {(['score', 'price'] as const).map((m) => (
+              <Pressable
+                key={m}
+                onPress={() => setMetric(m)}
+                style={{
+                  paddingHorizontal: 13, paddingVertical: 7,
+                  backgroundColor: metric === m
+                    ? (m === 'score' ? theme.accent : C.amber)
+                    : 'transparent',
+                }}
+              >
+                <Text style={{
+                  fontFamily: 'Inter_600SemiBold', fontSize: 12.5,
+                  color: metric === m ? '#08101f' : '#808aa1',
+                }}>
+                  {m === 'score' ? 'Score' : 'Price'}
+                </Text>
+              </Pressable>
             ))}
-            {area ? <Path d={area} fill={`url(#${gid})`} /> : null}
-            {d ? (
-              <Path d={d} fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-            ) : null}
-            {lastX > 0 ? (
-              <Circle cx={lastX} cy={lastY} r={4.5} fill={color} stroke={theme.surface} strokeWidth={2.5} />
-            ) : null}
-          </Svg>
-
-          {/* Axis labels */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
-            <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: theme.faint }}>
-              {windowLabel}
-            </Text>
-            <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: theme.faint }}>
-              today
-            </Text>
           </View>
-        </>
-      )}
+        </View>
+
+        {loading ? (
+          <View style={{ alignItems: 'center', paddingVertical: 60 }}>
+            <ActivityIndicator color={theme.accent} />
+          </View>
+        ) : error ? (
+          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.neg, textAlign: 'center', paddingVertical: 30 }}>
+            {error}
+          </Text>
+        ) : (
+          <>
+            {/* Current value */}
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#808aa1', letterSpacing: 1.1, textTransform: 'uppercase' }}>
+                {curLabel}
+              </Text>
+              <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 18, color, fontVariant: ['tabular-nums'] }}>
+                {curVal}
+              </Text>
+            </View>
+
+            {/* Chart */}
+            <Svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'flex' }}>
+              <Defs>
+                <SvgLinearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0%" stopColor={color} stopOpacity={0.28} />
+                  <Stop offset="100%" stopColor={color} stopOpacity={0} />
+                </SvgLinearGradient>
+              </Defs>
+              {[0.25, 0.5, 0.75].map((g) => (
+                <Path
+                  key={g}
+                  d={`M8,${H * g} L${W - 8},${H * g}`}
+                  stroke="rgba(255,255,255,0.05)"
+                  strokeWidth={1}
+                />
+              ))}
+              {area ? <Path d={area} fill={`url(#${gid})`} /> : null}
+              {d ? (
+                <Path d={d} fill="none" stroke={color} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
+              ) : null}
+              {lastX > 0 ? (
+                <Circle cx={lastX} cy={lastY} r={4.5} fill={color} stroke={C.cardBg} strokeWidth={2.5} />
+              ) : null}
+            </Svg>
+
+            {/* Axis labels */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: '#545e76' }}>
+                {windowLabel}
+              </Text>
+              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: '#545e76' }}>
+                today
+              </Text>
+            </View>
+          </>
+        )}
+      </Card>
     </View>
   );
 }
@@ -392,7 +468,6 @@ export default function SKUDetailScreen() {
   const NAV_H = insets.top + (Platform.OS === 'android' ? 8 : 0) + 52;
   const HERO_MAX = 300 + NAV_H;
 
-  // Scroll-driven animation
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const heroCropH = scrollY.interpolate({
@@ -446,8 +521,8 @@ export default function SKUDetailScreen() {
     );
   }
 
-  const deltaColor = sku.delta >= 0 ? theme.pos : theme.neg;
-  const deltaLabel = sku.delta >= 0 ? `+${sku.delta}` : `${sku.delta}`;
+  const deltaColor = sku.delta > 0 ? C.green : sku.delta < 0 ? theme.neg : C.green;
+  const deltaLabel = sku.delta > 0 ? `+${sku.delta}` : sku.delta < 0 ? `−${Math.abs(sku.delta)}` : `+${sku.delta}`;
 
   const marketplaces = [
     ...(sku.ebay_url ? [{
@@ -493,19 +568,9 @@ export default function SKUDetailScreen() {
         )}
         scrollEventThrottle={16}
       >
-        {/* ── Collapsing hero ── */}
-        <Animated.View style={{ height: heroCropH, overflow: 'hidden', position: 'relative' }}>
-          <LinearGradient
-            colors={[c.tint, c.tint2]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFillObject}
-          />
+        {/* ── Collapsing hero — dark bg with dot texture ── */}
+        <Animated.View style={{ height: heroCropH, overflow: 'hidden', position: 'relative', backgroundColor: theme.bg }}>
           {isDark && <DotPattern height={HERO_MAX} />}
-          <View
-            pointerEvents="none"
-            style={[StyleSheet.absoluteFillObject, { backgroundColor: isDark ? 'rgba(0,0,0,0.10)' : 'transparent' }]}
-          />
           {/* Image centered below nav, scales + fades on scroll */}
           <Animated.View style={{
             position: 'absolute',
@@ -530,13 +595,13 @@ export default function SKUDetailScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
             {cat && (
               <View style={{
-                borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4,
-                backgroundColor: isDark ? 'rgba(0,0,0,0.30)' : 'rgba(0,0,0,0.08)',
-                borderWidth: 1, borderColor: c.ink + '50',
+                borderRadius: 9, paddingHorizontal: 9, paddingVertical: 5,
+                backgroundColor: isDark ? 'rgba(128,113,246,0.16)' : 'rgba(0,0,0,0.08)',
+                borderWidth: 1, borderColor: isDark ? 'rgba(128,113,246,0.40)' : 'rgba(0,0,0,0.10)',
               }}>
                 <Text style={{
-                  fontFamily: 'Inter_700Bold', fontSize: 11, color: c.ink,
-                  letterSpacing: 1.1, textTransform: 'uppercase',
+                  fontFamily: 'Inter_700Bold', fontSize: 12, color: isDark ? C.purple : '#6B46C1',
+                  letterSpacing: 1.4, textTransform: 'uppercase',
                 }}>
                   {cat.short}
                 </Text>
@@ -544,7 +609,7 @@ export default function SKUDetailScreen() {
             )}
             <Text
               style={{
-                fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.muted,
+                fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#808aa1',
                 letterSpacing: 1.0, textTransform: 'uppercase', flexShrink: 1,
               }}
               numberOfLines={1}
@@ -553,12 +618,12 @@ export default function SKUDetailScreen() {
             </Text>
           </View>
           <Text style={{
-            fontFamily: 'Fraunces_700Bold', fontSize: 28, color: theme.text,
-            letterSpacing: -0.62, lineHeight: 32,
+            fontFamily: 'Fraunces_700Bold', fontSize: 31, color: '#efece2',
+            letterSpacing: -0.6, lineHeight: 33,
           }}>
             {sku.name}
           </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 15 }}>
             {fandom && <Chip theme={theme} size="sm">{fandom.label}</Chip>}
             {sku.category === 'tcg' && sku.cardVariant && (
               <Chip theme={theme} size="sm" active>
@@ -598,51 +663,64 @@ export default function SKUDetailScreen() {
           </View>
         </View>
 
-        {/* ── Hot Score card ── */}
+        {/* ── Hot Score card — sparkline + TierPill + delta ── */}
         <View style={{ marginHorizontal: 18, marginTop: 20, marginBottom: 4 }}>
-          <View style={{
-            backgroundColor: theme.surface, borderRadius: theme.radius, padding: 18,
-            flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-          }}>
-            <View>
+          <Card isDark={isDark} style={{ padding: 18 }}>
+            {/* Header row */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <Text style={{
-                fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.muted,
-                letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6,
+                fontFamily: 'Inter_700Bold', fontSize: 11, color: '#808aa1',
+                letterSpacing: 1.3, textTransform: 'uppercase',
               }}>
                 Hot Score
               </Text>
-              <HotScoreBadge sku={sku} theme={theme} size="lg" showSpark />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{
+                  fontFamily: 'Inter_700Bold', fontSize: 11, color: '#808aa1',
+                  letterSpacing: 1.0, textTransform: 'uppercase',
+                }}>
+                  24H
+                </Text>
+                <Svg width={22} height={13} viewBox="0 0 22 13" fill="none">
+                  <Path d="M5 9V2M5 2L2.5 4.5M5 2l2.5 2.5" stroke="#808aa1" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+                  <Path d="M14 4v7M14 11l2.5-2.5M14 11l-2.5-2.5" stroke="#808aa1" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </View>
             </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={{
-                fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.muted,
-                letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6,
-              }}>
-                24H ↑↓
-              </Text>
+            {/* Body row: sparkline | TierPill | spacer | delta */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              <Sparkline
+                data={sku.history}
+                theme={theme}
+                w={84}
+                h={34}
+                color={theme.accent}
+              />
+              <TierPill score={sku.hot} />
+              <View style={{ flex: 1 }} />
               <Text style={{
                 fontFamily: 'JetBrainsMono_700Bold', fontSize: 28, color: deltaColor,
-                letterSpacing: -0.56, fontVariant: ['tabular-nums'],
+                letterSpacing: -0.56, fontVariant: ['tabular-nums'], lineHeight: 30,
               }}>
                 {deltaLabel}
               </Text>
             </View>
-          </View>
+          </Card>
         </View>
 
         {/* ── Stats grid ── */}
         <View style={{ paddingHorizontal: 18, paddingTop: 8, gap: 8 }}>
           {/* Row 1: Median / Lowest / Highest */}
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <StatBox label="Median"  value={fmtPrice(sku.price.median)} theme={theme} valueColor="#FC792E" />
-            <StatBox label="Lowest"  value={fmtPrice(sku.price.low)}    theme={theme} />
-            <StatBox label="Highest" value={fmtPrice(sku.price.high)}   theme={theme} />
+            <StatBox label="Median"  value={fmtPrice(sku.price.median)} isDark={isDark} valueColor={C.amber} />
+            <StatBox label="Lowest"  value={fmtPrice(sku.price.low)}    isDark={isDark} />
+            <StatBox label="Highest" value={fmtPrice(sku.price.high)}   isDark={isDark} />
           </View>
           {/* Row 2: Listings / Days Tracked */}
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <StatBox label={salesLabel}    value={String(salesValue)} theme={theme} />
+            <StatBox label={salesLabel}    value={String(salesValue)} isDark={isDark} />
             {sku.age >= 1 && (
-              <StatBox label="Days Tracked" value={`${sku.age}d`}     theme={theme} />
+              <StatBox label="Days Tracked" value={`${sku.age}d`} isDark={isDark} />
             )}
           </View>
         </View>
@@ -650,65 +728,64 @@ export default function SKUDetailScreen() {
         {/* ── Condition breakdown ── */}
         {((sku.priceMint != null && (sku.priceMintCount ?? 0) >= 2) ||
           (sku.priceLoose != null && (sku.priceLooseCount ?? 0) >= 2)) && (
-          <View style={{
-            marginHorizontal: 18, marginTop: 8,
-            backgroundColor: theme.surface, borderRadius: theme.radius, overflow: 'hidden',
-          }}>
-            <View style={{
-              paddingHorizontal: 16, paddingVertical: 10,
-              borderBottomWidth: 0.5, borderBottomColor: theme.hairline,
-            }}>
-              <Text style={{
-                fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.muted,
-                letterSpacing: 1.1, textTransform: 'uppercase',
-              }}>
-                Condition breakdown
-              </Text>
-            </View>
-            {sku.priceMint != null && (sku.priceMintCount ?? 0) >= 2 && (
+          <View style={{ marginHorizontal: 18, marginTop: 8 }}>
+            <Card isDark={isDark} style={{ padding: 0 }}>
               <View style={{
-                flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-                paddingHorizontal: 16, paddingVertical: 13,
-                borderBottomWidth: sku.priceLoose != null && (sku.priceLooseCount ?? 0) >= 2 ? 0.5 : 0,
-                borderBottomColor: theme.hairline,
+                paddingHorizontal: 16, paddingVertical: 10,
+                borderBottomWidth: 0.5, borderBottomColor: C.cardBorder,
               }}>
-                <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: theme.text }}>
-                  Mint / Complete
+                <Text style={{
+                  fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#808aa1',
+                  letterSpacing: 1.1, textTransform: 'uppercase',
+                }}>
+                  Condition breakdown
                 </Text>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={{
-                    fontFamily: 'JetBrainsMono_700Bold', fontSize: 15, color: theme.text,
-                    fontVariant: ['tabular-nums'],
-                  }}>
-                    {fmtPrice(sku.priceMint)}
-                  </Text>
-                  <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: theme.muted }}>
-                    {sku.priceMintCount} sales
-                  </Text>
-                </View>
               </View>
-            )}
-            {sku.priceLoose != null && (sku.priceLooseCount ?? 0) >= 2 && (
-              <View style={{
-                flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-                paddingHorizontal: 16, paddingVertical: 13,
-              }}>
-                <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: theme.muted }}>
-                  Loose / OOB
-                </Text>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={{
-                    fontFamily: 'JetBrainsMono_700Bold', fontSize: 15, color: theme.muted,
-                    fontVariant: ['tabular-nums'],
-                  }}>
-                    {fmtPrice(sku.priceLoose)}
+              {sku.priceMint != null && (sku.priceMintCount ?? 0) >= 2 && (
+                <View style={{
+                  flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                  paddingHorizontal: 16, paddingVertical: 13,
+                  borderBottomWidth: sku.priceLoose != null && (sku.priceLooseCount ?? 0) >= 2 ? 0.5 : 0,
+                  borderBottomColor: C.cardBorder,
+                }}>
+                  <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: '#efece2' }}>
+                    Mint / Complete
                   </Text>
-                  <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: theme.faint }}>
-                    {sku.priceLooseCount} sales
-                  </Text>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{
+                      fontFamily: 'JetBrainsMono_700Bold', fontSize: 15, color: '#efece2',
+                      fontVariant: ['tabular-nums'],
+                    }}>
+                      {fmtPrice(sku.priceMint)}
+                    </Text>
+                    <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: '#808aa1' }}>
+                      {sku.priceMintCount} sales
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            )}
+              )}
+              {sku.priceLoose != null && (sku.priceLooseCount ?? 0) >= 2 && (
+                <View style={{
+                  flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                  paddingHorizontal: 16, paddingVertical: 13,
+                }}>
+                  <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: '#808aa1' }}>
+                    Loose / OOB
+                  </Text>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{
+                      fontFamily: 'JetBrainsMono_700Bold', fontSize: 15, color: '#808aa1',
+                      fontVariant: ['tabular-nums'],
+                    }}>
+                      {fmtPrice(sku.priceLoose)}
+                    </Text>
+                    <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: '#545e76' }}>
+                      {sku.priceLooseCount} sales
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </Card>
           </View>
         )}
 
@@ -720,177 +797,212 @@ export default function SKUDetailScreen() {
           const myPL           = myCurrentValue - myTotalCost;
           const myPLPct        = myTotalCost > 0 ? (myPL / myTotalCost) * 100 : 0;
           const myPLPos        = myPL >= 0;
+          const plColor        = myPLPos ? C.green : theme.neg;
           return (
-            <View style={{ marginHorizontal: 18, marginTop: 8, backgroundColor: theme.surface, borderRadius: theme.radius, overflow: 'hidden' }}>
-              <View style={{
-                paddingHorizontal: 16, paddingVertical: 12,
-                flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-                borderBottomWidth: 0.5, borderBottomColor: theme.hairline,
-              }}>
-                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.muted, letterSpacing: 1.1, textTransform: 'uppercase' }}>
-                  Your position
-                </Text>
-                {myTotalCost > 0 && (
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ fontFamily: theme.fontMonoBold, fontSize: 16, color: myPLPos ? theme.pos : theme.neg, fontVariant: ['tabular-nums'] }}>
-                      {myPLPos ? '+' : ''}{fmtPrice(myPL)}
-                    </Text>
-                    <Text style={{ fontFamily: theme.fontMono, fontSize: 11, color: myPLPos ? theme.pos : theme.neg, marginTop: 1 }}>
-                      {myPLPos ? '+' : ''}{myPLPct.toFixed(1)}%
-                    </Text>
+            <View style={{ marginHorizontal: 18, marginTop: 8 }}>
+              <Card isDark={isDark} style={{ padding: 0 }}>
+                <View style={{
+                  paddingHorizontal: 16, paddingVertical: 12,
+                  flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                  borderBottomWidth: 0.5, borderBottomColor: C.cardBorder,
+                }}>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#808aa1', letterSpacing: 1.1, textTransform: 'uppercase' }}>
+                    Your position
+                  </Text>
+                  {myTotalCost > 0 && (
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 30, color: plColor, fontVariant: ['tabular-nums'], lineHeight: 32 }}>
+                        {myPLPos ? '+' : '−'}${Math.abs(Math.round(myPL)).toLocaleString()}
+                      </Text>
+                      <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 13, color: plColor, marginTop: 3 }}>
+                        {myPLPos ? '+' : ''}{myPLPct.toFixed(1)}%
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                {/* Divider */}
+                <View style={{ height: 1, backgroundColor: C.cardBorder, marginHorizontal: 0 }} />
+                {/* Qty / Paid / Value grid */}
+                <View style={{ flexDirection: 'row', padding: 14, gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10.5, color: '#808aa1', letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6 }}>Qty</Text>
+                    <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 23, color: '#efece2', fontVariant: ['tabular-nums'] }}>×{myQty}</Text>
                   </View>
-                )}
-              </View>
-              <View style={{ flexDirection: 'row', padding: 14 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10.5, color: theme.muted, letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6 }}>Qty</Text>
-                  <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 17, color: theme.text, fontVariant: ['tabular-nums'] }}>×{myQty}</Text>
+                  <View style={{ flex: 1, borderLeftWidth: 0.5, borderLeftColor: C.cardBorder, paddingLeft: 14 }}>
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10.5, color: '#808aa1', letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6 }}>Paid</Text>
+                    <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 23, color: '#efece2', fontVariant: ['tabular-nums'] }}>${Math.round(myTotalCost).toLocaleString()}</Text>
+                  </View>
+                  <View style={{ flex: 1, borderLeftWidth: 0.5, borderLeftColor: C.cardBorder, paddingLeft: 14 }}>
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10.5, color: '#808aa1', letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6 }}>Value</Text>
+                    <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 23, color: C.amber, fontVariant: ['tabular-nums'] }}>${Math.round(myCurrentValue).toLocaleString()}</Text>
+                  </View>
                 </View>
-                <View style={{ flex: 1, borderLeftWidth: 0.5, borderLeftColor: theme.hairline, paddingLeft: 14 }}>
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10.5, color: theme.muted, letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6 }}>Paid</Text>
-                  <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 17, color: theme.text, fontVariant: ['tabular-nums'] }}>{fmtPrice(myTotalCost)}</Text>
+                {/* Action buttons */}
+                <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 14, paddingBottom: 14 }}>
+                  <Pressable
+                    onPress={() => updateCollectionItem(collectionItem.skuId, { forSale: !collectionItem.forSale })}
+                    style={({ pressed }) => ({
+                      flex: 1, height: 52, borderRadius: 13,
+                      backgroundColor: collectionItem.forSale ? 'rgba(241,194,76,0.08)' : 'rgba(255,255,255,0.04)',
+                      alignItems: 'center', justifyContent: 'center',
+                      borderWidth: 1,
+                      borderColor: collectionItem.forSale ? 'rgba(241,194,76,0.40)' : C.cardBorder,
+                      opacity: pressed ? 0.7 : 1,
+                    })}
+                  >
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: collectionItem.forSale ? C.gold : '#c8cee0' }}>
+                      {collectionItem.forSale ? '✓ For sale' : 'List for sale'}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() =>
+                      Alert.alert('Mark as sold', `Remove ${sku.name} from your collection?`, [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Mark sold', onPress: () => removeFromCollection(collectionItem.skuId) },
+                      ])
+                    }
+                    style={({ pressed }) => ({
+                      flex: 1, height: 52, borderRadius: 13,
+                      backgroundColor: 'rgba(255,255,255,0.04)',
+                      alignItems: 'center', justifyContent: 'center',
+                      borderWidth: 1, borderColor: C.cardBorder,
+                      opacity: pressed ? 0.7 : 1,
+                    })}
+                  >
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#c8cee0' }}>
+                      Mark as sold
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() =>
+                      Alert.alert('Remove from collection', `Remove ${sku.name}?`, [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Remove', style: 'destructive', onPress: () => removeFromCollection(collectionItem.skuId) },
+                      ])
+                    }
+                    style={({ pressed }) => ({
+                      width: 52, height: 52, borderRadius: 13,
+                      backgroundColor: 'rgba(255,255,255,0.04)',
+                      alignItems: 'center', justifyContent: 'center',
+                      borderWidth: 1, borderColor: C.cardBorder,
+                      opacity: pressed ? 0.7 : 1,
+                    })}
+                    accessibilityLabel="Remove from collection"
+                  >
+                    <Svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={theme.neg} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
+                    </Svg>
+                  </Pressable>
                 </View>
-                <View style={{ flex: 1, borderLeftWidth: 0.5, borderLeftColor: theme.hairline, paddingLeft: 14 }}>
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10.5, color: theme.muted, letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6 }}>Value</Text>
-                  <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 17, color: theme.premium, fontVariant: ['tabular-nums'] }}>{fmtPrice(myCurrentValue)}</Text>
-                </View>
-              </View>
-              <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 14, paddingBottom: 14 }}>
-                <Pressable
-                  onPress={() => updateCollectionItem(collectionItem.skuId, { forSale: !collectionItem.forSale })}
-                  style={({ pressed }) => ({
-                    flex: 1, height: 38, borderRadius: theme.radius,
-                    backgroundColor: collectionItem.forSale ? `${theme.gold}22` : theme.surface2,
-                    alignItems: 'center', justifyContent: 'center',
-                    borderWidth: 1,
-                    borderColor: collectionItem.forSale ? `${theme.gold}66` : 'transparent',
-                    opacity: pressed ? 0.7 : 1,
-                  })}
-                >
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12.5, color: collectionItem.forSale ? theme.gold : theme.muted }}>
-                    {collectionItem.forSale ? '✓ For sale' : 'List for sale'}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() =>
-                    Alert.alert('Mark as sold', `Remove ${sku.name} from your collection?`, [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Mark sold', onPress: () => removeFromCollection(collectionItem.skuId) },
-                    ])
-                  }
-                  style={({ pressed }) => ({
-                    flex: 1, height: 38, borderRadius: theme.radius,
-                    backgroundColor: theme.surface2,
-                    alignItems: 'center', justifyContent: 'center',
-                    opacity: pressed ? 0.7 : 1,
-                  })}
-                >
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12.5, color: theme.muted }}>
-                    Mark as sold
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() =>
-                    Alert.alert('Remove from collection', `Remove ${sku.name}?`, [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Remove', style: 'destructive', onPress: () => removeFromCollection(collectionItem.skuId) },
-                    ])
-                  }
-                  style={({ pressed }) => ({
-                    width: 38, height: 38, borderRadius: theme.radius,
-                    backgroundColor: theme.surface2,
-                    alignItems: 'center', justifyContent: 'center',
-                    opacity: pressed ? 0.7 : 1,
-                  })}
-                  accessibilityLabel="Remove from collection"
-                >
-                  <Svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke={theme.neg} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    <Path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
-                  </Svg>
-                </Pressable>
-              </View>
+              </Card>
             </View>
           );
         })()}
 
         {/* ── Why it's hot ── */}
-        <SectionHeader title="Why it's hot" theme={theme} />
-        <View style={{ marginHorizontal: 18, backgroundColor: theme.surface, borderRadius: theme.radius, padding: 18 }}>
-          {(() => {
-            const insight = insightData?.insight;
-            const showInsight = isPremium && insight && insight.narrationLong;
-            const prose = showInsight ? insight.narrationLong! : (sku.narrative ?? insightData?.fallbackDescription ?? '');
+        <SectionHeader title="Why it's hot" />
 
-            return prose ? (
-              <View style={{ marginBottom: 18 }}>
-                {showInsight && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                    <InsightTypePill insightType={insight.insightType} theme={theme} />
-                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.faint }}>
-                      {formatFiredAt(insight.firedAt)}
-                    </Text>
-                  </View>
-                )}
-                <View style={{ paddingLeft: 14, borderLeftWidth: 2, borderLeftColor: c?.ink ?? theme.gold }}>
-                  <Text style={{
-                    fontFamily: 'Fraunces_400Regular_Italic', fontSize: 15,
-                    color: theme.text, lineHeight: 23,
-                  }}>
-                    {showInsight ? prose : `"${prose}"`}
+        {/* WhyCard — blockquote with purple left bar, NO card wrapper */}
+        {(() => {
+          const insight = insightData?.insight;
+          const showInsight = isPremium && insight && insight.narrationLong;
+          const prose = showInsight ? insight.narrationLong! : (sku.narrative ?? insightData?.fallbackDescription ?? '');
+          if (!prose) return null;
+          return (
+            <View style={{ marginHorizontal: 18 }}>
+              {showInsight && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <InsightTypePill insightType={insight.insightType} theme={theme} />
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: '#808aa1' }}>
+                    {formatFiredAt(insight.firedAt)}
                   </Text>
                 </View>
-              </View>
-            ) : null;
-          })()}
-
-          {(() => {
-            const action = insightData?.personalizedAction;
-            if (!isPremium || !action) return null;
-            return (
-              <View style={{
-                backgroundColor: 'rgba(249,115,22,0.08)',
-                borderLeftWidth: 3, borderLeftColor: '#f97316',
-                borderRadius: 6, padding: 14, marginBottom: 18,
-              }}>
+              )}
+              <View style={{ position: 'relative', paddingLeft: 18 }}>
+                <View style={{
+                  position: 'absolute', left: 0, top: 4, bottom: 4,
+                  width: 3, borderRadius: 3, backgroundColor: C.purple,
+                }} />
                 <Text style={{
-                  fontFamily: 'Inter_600SemiBold', fontSize: 10, color: theme.faint,
-                  letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6,
+                  fontFamily: 'Fraunces_400Regular_Italic', fontStyle: 'italic',
+                  fontSize: 18.5, lineHeight: 27.75,
+                  color: '#c8cee0',
                 }}>
-                  FOR YOUR POSITION
-                </Text>
-                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: theme.text, lineHeight: 20 }}>
-                  {action}
+                  {showInsight ? prose : `"${prose}"`}
                 </Text>
               </View>
-            );
-          })()}
 
-          <View style={{ borderTopWidth: 0.5, borderTopColor: theme.hairline, paddingTop: 18 }}>
+              {/* Personalized action (premium) */}
+              {(() => {
+                const action = insightData?.personalizedAction;
+                if (!isPremium || !action) return null;
+                return (
+                  <View style={{
+                    backgroundColor: 'rgba(249,115,22,0.08)',
+                    borderLeftWidth: 3, borderLeftColor: '#f97316',
+                    borderRadius: 6, padding: 14, marginTop: 16,
+                  }}>
+                    <Text style={{
+                      fontFamily: 'Inter_600SemiBold', fontSize: 10, color: '#808aa1',
+                      letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6,
+                    }}>
+                      FOR YOUR POSITION
+                    </Text>
+                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: '#efece2', lineHeight: 20 }}>
+                      {action}
+                    </Text>
+                  </View>
+                );
+              })()}
+            </View>
+          );
+        })()}
+
+        {/* ── Score breakdown — separate Card ── */}
+        <View style={{ marginHorizontal: 18, marginTop: 20 }}>
+          <Card isDark={isDark} style={{ padding: 18 }}>
             <Text style={{
-              fontFamily: 'Inter_700Bold', fontSize: 11, color: theme.faint,
-              letterSpacing: 1.3, textTransform: 'uppercase', marginBottom: 14,
+              fontFamily: 'Inter_700Bold', fontSize: 11, color: '#808aa1',
+              letterSpacing: 1.3, textTransform: 'uppercase', marginBottom: 18,
             }}>
               Score breakdown
             </Text>
-            <ScoreBar label="Velocity"     value={sku.score.velocity}     hint={sku.score.velocity === 0 ? 'Listings stable — no new supply detected' : 'Listing count is growing'} theme={theme} />
-            <ScoreBar label="Volume"       value={sku.score.volume}       hint="Active listing count"       theme={theme} />
-            <ScoreBar label="Confirmation" value={sku.score.confirmation} hint="Price momentum vs 7-day avg" theme={theme} />
-            <ScoreBar label="Freshness"    value={sku.score.freshness}    hint="Recent appearance"           theme={theme} />
-          </View>
+            <ScoreBar
+              label="Velocity"
+              value={sku.score.velocity}
+              hint={sku.score.velocity === 0 ? 'Listings stable — no new supply detected' : 'Listing count is growing'}
+              color={C.scoreBars[0]}
+            />
+            <ScoreBar
+              label="Volume"
+              value={sku.score.volume}
+              hint="Active listing count"
+              color={C.scoreBars[1]}
+            />
+            <ScoreBar
+              label="Confirmation"
+              value={sku.score.confirmation}
+              hint="Price momentum vs 7-day avg"
+              color={C.scoreBars[2]}
+            />
+            <ScoreBar
+              label="Freshness"
+              value={sku.score.freshness}
+              hint="Recent appearance"
+              color={C.scoreBars[3]}
+            />
+          </Card>
         </View>
 
         {/* ── Where to buy ── */}
-        <SectionHeader title="Where to buy" theme={theme} />
+        <SectionHeader title="Where to buy" />
         <View style={{ marginHorizontal: 18, gap: 8 }}>
           {marketplaces.length === 0 ? (
-            <View style={{
-              backgroundColor: theme.surface, borderRadius: theme.radius,
-              padding: 20, alignItems: 'center',
-            }}>
-              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.faint, textAlign: 'center' }}>
+            <Card isDark={isDark} style={{ padding: 20, alignItems: 'center' }}>
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: '#545e76', textAlign: 'center' }}>
                 No marketplace links set yet.{'\n'}Check back after the next pipeline run.
               </Text>
-            </View>
+            </Card>
           ) : marketplaces.map((mp) => (
             <Pressable
               key={mp.id}
@@ -898,50 +1010,55 @@ export default function SKUDetailScreen() {
               accessibilityLabel={`Open ${mp.name}`}
               onPress={() => Linking.openURL(mp.url).catch(() => {})}
               style={({ pressed }) => ({
-                backgroundColor: theme.surface, borderRadius: theme.radius,
-                padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12,
+                backgroundColor: mp.primary
+                  ? (isDark ? `rgba(45,100,235,0.07)` : 'rgba(37,99,235,0.05)')
+                  : (isDark ? C.cardBg : '#fff'),
+                borderRadius: 20,
+                padding: 14,
+                flexDirection: 'row', alignItems: 'center', gap: 14,
                 opacity: pressed ? 0.78 : 1,
-                borderWidth: mp.primary ? 1 : 0,
-                borderColor: mp.primary ? theme.accent : 'transparent',
+                borderWidth: 1,
+                borderColor: mp.primary ? theme.accent : (isDark ? C.cardBorder : 'rgba(0,0,0,0.07)'),
               })}
             >
               <View style={{
-                width: 38, height: 38, borderRadius: 10,
-                backgroundColor: theme.surface2, alignItems: 'center', justifyContent: 'center',
+                width: 46, height: 46, borderRadius: 12,
+                backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+                alignItems: 'center', justifyContent: 'center',
               }}>
                 <Text style={{
-                  fontFamily: 'Fraunces_700Bold', fontSize: 14,
-                  color: mp.primary ? theme.accent : theme.text, letterSpacing: -0.2,
+                  fontFamily: 'Fraunces_700Bold', fontSize: 17,
+                  color: mp.primary ? theme.accent : '#efece2', letterSpacing: -0.2,
                 }}>
                   {mp.name.slice(0, 2)}
                 </Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: 'Fraunces_600SemiBold', fontSize: 15, color: theme.text, letterSpacing: -0.2 }}>
+                <Text style={{ fontFamily: 'Fraunces_700Bold', fontSize: 19, color: '#efece2', letterSpacing: -0.2 }}>
                   {mp.name}
                 </Text>
                 {mp.listings != null && mp.median != null ? (
-                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginTop: 2 }}>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13.5, color: '#808aa1', marginTop: 2 }}>
                     {mp.listings} listings · median{' '}
-                    <Text style={{ fontFamily: 'JetBrainsMono_700Bold', color: theme.premium }}>
+                    <Text style={{ fontFamily: 'JetBrainsMono_700Bold', color: C.amber }}>
                       {fmtPrice(mp.median)}
                     </Text>
                   </Text>
                 ) : (
-                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginTop: 2 }}>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13.5, color: '#808aa1', marginTop: 2 }}>
                     View listings
                   </Text>
                 )}
               </View>
-              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={theme.faint} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <Path d="M7 17L17 7M7 7h10v10" />
+              <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
+                <Path d="M4 10l6-6M5 4h5v5" stroke="#545e76" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
             </Pressable>
           ))}
         </View>
 
         {/* ── History ── */}
-        <SectionHeader title="History" theme={theme} />
+        <SectionHeader title="History" />
         <HistoryCard
           sku={sku}
           theme={theme}
@@ -963,24 +1080,37 @@ export default function SKUDetailScreen() {
           height: NAV_H, flexDirection: 'row', alignItems: 'flex-end',
           paddingBottom: 6, paddingHorizontal: 16,
         }}>
+          {/* Dark top fade so buttons are visible over the hero image */}
           <LinearGradient
-            colors={[c.tint, c.tint2, 'transparent']}
-            locations={[0, 0.65, 1]}
+            colors={['rgba(10,15,30,0.72)', 'rgba(10,15,30,0.40)', 'transparent']}
+            locations={[0, 0.6, 1]}
             style={StyleSheet.absoluteFillObject}
             pointerEvents="none"
           />
 
-          <IconButton theme={theme} onPress={() => router.back()} accessibilityLabel="Go back">
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2.2} strokeLinecap="round">
-              <Path d="M19 12H5M12 5l-7 7 7 7" />
+          {/* Back button — design pill style */}
+          <Pressable
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            style={({ pressed }) => ({
+              width: 44, height: 44, borderRadius: 999,
+              backgroundColor: C.navPill,
+              borderWidth: 1, borderColor: C.cardBorder,
+              alignItems: 'center', justifyContent: 'center',
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <Svg width={11} height={18} viewBox="0 0 11 18" fill="none">
+              <Path d="M9 2L2 9l7 7" stroke="#c8cee0" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
-          </IconButton>
+          </Pressable>
 
           <View style={{ flex: 1, alignItems: 'center' }} pointerEvents="box-none">
             {filterTotal > 0 && (
               <View style={{
                 flexDirection: 'row', alignItems: 'center',
-                backgroundColor: isDark ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.88)',
+                backgroundColor: 'rgba(0,0,0,0.55)',
                 borderRadius: 999, paddingVertical: 5, paddingHorizontal: 2,
               }}>
                 <Pressable
@@ -993,12 +1123,12 @@ export default function SKUDetailScreen() {
                     opacity: filterIdx > 0 ? (pressed ? 0.5 : 1) : 0.3,
                   })}
                 >
-                  <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2.5} strokeLinecap="round">
+                  <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#efece2" strokeWidth={2.5} strokeLinecap="round">
                     <Path d="M15 18l-6-6 6-6" />
                   </Svg>
                 </Pressable>
                 <Text style={{
-                  fontFamily: 'Inter_600SemiBold', fontSize: 12, color: theme.text, letterSpacing: -0.1,
+                  fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#efece2', letterSpacing: -0.1,
                 }} numberOfLines={1}>
                   {filterLabel ?? filterId ?? ''} {filterIdx >= 0 ? filterIdx + 1 : 1}/{filterTotal}
                 </Text>
@@ -1012,7 +1142,7 @@ export default function SKUDetailScreen() {
                     opacity: filterIdx < filterTotal - 1 ? (pressed ? 0.5 : 1) : 0.3,
                   })}
                 >
-                  <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2.5} strokeLinecap="round">
+                  <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#efece2" strokeWidth={2.5} strokeLinecap="round">
                     <Path d="M9 18l6-6-6-6" />
                   </Svg>
                 </Pressable>
@@ -1020,21 +1150,33 @@ export default function SKUDetailScreen() {
             )}
           </View>
 
-          <IconButton theme={theme} onPress={() => setShareOpen(true)} accessibilityLabel="Share this SKU">
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <Path d="M12 16V4M8 8l4-4 4 4" />
-              <Path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6" />
+          {/* Share button — design pill style */}
+          <Pressable
+            onPress={() => setShareOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Share this SKU"
+            style={({ pressed }) => ({
+              width: 44, height: 44, borderRadius: 999,
+              backgroundColor: C.navPill,
+              borderWidth: 1, borderColor: C.cardBorder,
+              alignItems: 'center', justifyContent: 'center',
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <Svg width={18} height={20} viewBox="0 0 18 20" fill="none">
+              <Path d="M9 13V2.5M9 2.5L5.5 6M9 2.5L12.5 6" stroke="#c8cee0" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M3.5 9.5H2.5V18h13V9.5h-1" stroke="#c8cee0" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
-          </IconButton>
+          </Pressable>
         </View>
 
-        {/* Ticker — slides down on scroll, solid background so no bleed-through */}
+        {/* Ticker — slides down on scroll */}
         <Animated.View style={{
           height: tickerHeight,
           overflow: 'hidden',
-          backgroundColor: theme.navBg,
+          backgroundColor: isDark ? 'rgba(15,23,48,0.97)' : theme.navBg,
           borderBottomWidth: 0.5,
-          borderBottomColor: theme.hairline,
+          borderBottomColor: C.cardBorder,
         }}>
           <View style={{
             height: 56,
@@ -1042,33 +1184,34 @@ export default function SKUDetailScreen() {
             paddingHorizontal: 16, gap: 10,
           }}>
             <View style={{
-              width: 28, height: 36, borderRadius: 5,
-              backgroundColor: c.tint,
+              width: 34, height: 36, borderRadius: 5,
+              backgroundColor: isDark ? 'rgba(128,113,246,0.16)' : c.tint,
+              borderWidth: 1, borderColor: isDark ? 'rgba(128,113,246,0.30)' : 'transparent',
               alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             }}>
               <Text style={{
-                fontFamily: 'Inter_700Bold', fontSize: 9, color: c.ink,
+                fontFamily: 'Inter_700Bold', fontSize: 9, color: isDark ? C.purple : c.ink,
                 textTransform: 'uppercase', letterSpacing: 0.5,
               }}>
                 {cat?.short?.slice(0, 3) ?? sku.category.slice(0, 3).toUpperCase()}
               </Text>
             </View>
             <Text style={{
-              flex: 1, fontFamily: 'Fraunces_600SemiBold', fontSize: 14,
-              color: theme.text, letterSpacing: -0.2,
+              flex: 1, fontFamily: 'Fraunces_700Bold', fontSize: 15,
+              color: '#efece2', letterSpacing: -0.2,
             }} numberOfLines={1}>
               {sku.short || sku.name}
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <View style={{ width: 7, height: 7, borderRadius: 999, backgroundColor: theme.gold }} />
-              <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 15, color: theme.text }}>
+              <View style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: C.gold }} />
+              <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 16, color: '#efece2' }}>
                 {sku.hot}
               </Text>
             </View>
-            <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 15, color: '#FC792E' }}>
+            <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 16, color: C.amber }}>
               {fmtPrice(sku.price.median)}
             </Text>
-            <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 13, color: deltaColor }}>
+            <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 14, color: deltaColor }}>
               {deltaLabel}
             </Text>
           </View>
@@ -1078,12 +1221,13 @@ export default function SKUDetailScreen() {
       {/* ── Bottom action bar ── */}
       <View style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
-        backgroundColor: theme.navBg,
-        paddingTop: 14, paddingBottom: insets.bottom + 14,
-        paddingHorizontal: 20,
-        flexDirection: 'row', gap: 10,
-        borderTopWidth: 0.5, borderTopColor: theme.hairline,
+        paddingTop: 12, paddingBottom: insets.bottom + 12,
+        paddingHorizontal: 14,
+        flexDirection: 'row', gap: 10, alignItems: 'stretch',
+        backgroundColor: isDark ? 'rgba(8,11,22,0.96)' : theme.navBg,
+        borderTopWidth: 0.5, borderTopColor: C.cardBorder,
       }}>
+        {/* Watch button */}
         <Pressable
           onPress={() => {
             const added = toggleWatchlist(sku.id);
@@ -1093,59 +1237,59 @@ export default function SKUDetailScreen() {
           accessibilityLabel={watching ? 'Remove from watchlist' : 'Add to watchlist'}
           accessibilityState={{ selected: watching }}
           style={({ pressed }) => ({
-            height: 50, paddingHorizontal: 16,
+            flex: 1, height: 52,
             borderWidth: 1.5,
-            borderColor: watching ? theme.accent : theme.hairline,
-            backgroundColor: watching ? theme.surface2 : 'transparent',
-            borderRadius: RADIUS.button,
+            borderColor: watching ? theme.accent : (isDark ? 'rgba(255,255,255,0.13)' : theme.hairline),
+            backgroundColor: watching
+              ? (isDark ? `rgba(37,99,235,0.12)` : `rgba(37,99,235,0.08)`)
+              : 'transparent',
+            borderRadius: 15,
             alignItems: 'center', justifyContent: 'center',
-            flexDirection: 'row', gap: 7,
+            flexDirection: 'row', gap: 9,
             opacity: pressed ? 0.7 : 1,
           })}
         >
-          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none"
-            stroke={watching ? theme.accent : theme.faint}
-            strokeWidth={2}
-          >
-            <Path fill="none" d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" />
-            <Circle cx="12" cy="12" r="3" fill={watching ? theme.accent : 'none'} />
+          <Svg width={20} height={14} viewBox="0 0 20 14" fill="none">
+            <Path d="M1 7s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z" stroke={watching ? theme.accent : '#808aa1'} strokeWidth={1.8} />
+            <Circle cx="10" cy="7" r="2.6" stroke={watching ? theme.accent : '#808aa1'} strokeWidth={1.8} fill={watching ? theme.accent : 'none'} />
           </Svg>
           <Text style={{
-            fontFamily: 'Inter_600SemiBold', fontSize: 14,
-            color: watching ? theme.accent : theme.muted,
+            fontFamily: 'Inter_700Bold', fontSize: 15.5,
+            color: watching ? theme.accent : '#808aa1',
           }}>
             {watching ? 'Watching' : 'Watch'}
           </Text>
         </Pressable>
 
+        {/* Bell button (only shown when watching) */}
         {watching && (
           <Pressable
             onPress={() => isPremium ? setAlertOpen(true) : setUpgradeContext('priceAlerts')}
             accessibilityLabel="Set price alert"
             style={({ pressed }) => ({
-              width: 50, height: 50,
-              borderWidth: 1.5,
-              borderColor: activeAlertCount > 0 ? `${theme.premium}66` : theme.hairline,
-              backgroundColor: activeAlertCount > 0 ? `${theme.premium}12` : 'transparent',
-              borderRadius: RADIUS.button,
+              width: 56, height: 52,
+              borderWidth: 1,
+              borderColor: activeAlertCount > 0 ? 'rgba(241,194,76,0.40)' : (isDark ? 'rgba(255,255,255,0.13)' : theme.hairline),
+              backgroundColor: activeAlertCount > 0 ? 'rgba(241,194,76,0.08)' : 'transparent',
+              borderRadius: 15,
               alignItems: 'center', justifyContent: 'center',
+              position: 'relative',
               opacity: pressed ? 0.7 : 1,
             })}
           >
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none"
-              stroke={activeAlertCount > 0 ? theme.premium : theme.faint}
-              strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-              <Path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <Path d="M13.73 21a2 2 0 01-3.46 0" />
+            <Svg width={18} height={20} viewBox="0 0 18 20" fill="none">
+              <Path d="M4 8a5 5 0 0 1 10 0c0 4 1.5 6 1.5 6h-13S4 12 4 8Z" stroke={activeAlertCount > 0 ? C.gold : '#808aa1'} strokeWidth={1.8} strokeLinejoin="round" />
+              <Path d="M7.5 17a1.8 1.8 0 0 0 3 0" stroke={activeAlertCount > 0 ? C.gold : '#808aa1'} strokeWidth={1.8} strokeLinecap="round" />
             </Svg>
             {activeAlertCount > 0 && (
               <View style={{
-                position: 'absolute', top: 4, right: 4,
-                width: 14, height: 14, borderRadius: 999,
-                backgroundColor: theme.premium,
+                position: 'absolute', top: -7, right: -7,
+                width: 22, height: 22, borderRadius: 999,
+                backgroundColor: C.gold,
                 alignItems: 'center', justifyContent: 'center',
+                borderWidth: 2, borderColor: isDark ? '#08101f' : theme.bg,
               }}>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 8, color: theme.premiumInk }}>
+                <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 12, color: '#1a1505' }}>
                   {activeAlertCount}
                 </Text>
               </View>
@@ -1153,11 +1297,38 @@ export default function SKUDetailScreen() {
           </Pressable>
         )}
 
-        <View style={{ flex: 1 }}>
-          <PrimaryButton theme={theme} size="md" tone={inCollection ? 'soft' : 'accent'} full onPress={() => setAddOpen(true)}>
-            {inCollection ? '✓ In Collection' : 'Add to Collection'}
-          </PrimaryButton>
-        </View>
+        {/* Add to collection button */}
+        <Pressable
+          onPress={() => setAddOpen(true)}
+          style={({ pressed }) => ({
+            flex: 1.3, height: 52,
+            borderRadius: 15,
+            backgroundColor: inCollection ? 'rgba(255,255,255,0.10)' : theme.accent,
+            alignItems: 'center', justifyContent: 'center',
+            flexDirection: 'row', gap: 9,
+            opacity: pressed ? 0.85 : 1,
+          })}
+        >
+          {inCollection ? (
+            <>
+              <Svg width={18} height={14} viewBox="0 0 18 14" fill="none">
+                <Path d="M2 7.5L6.5 12 16 2" stroke="#efece2" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15.5, color: '#efece2' }}>
+                In Collection
+              </Text>
+            </>
+          ) : (
+            <>
+              <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+                <Path d="M8 2v12M2 8h12" stroke="#08101f" strokeWidth={2.2} strokeLinecap="round" />
+              </Svg>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15.5, color: '#08101f' }}>
+                Add
+              </Text>
+            </>
+          )}
+        </Pressable>
       </View>
 
       {/* ── Sheets ── */}
