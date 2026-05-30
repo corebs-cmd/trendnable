@@ -98,15 +98,16 @@ function detectInsight(sku: SkuData): DetectionResult {
   const lastWeek  = sortedSig[1] ?? null;
 
   // Minimum data thresholds → low_data
+  // Note: weekly_signals absence is NOT a gate — social data (Reddit/eBay watchers) is
+  // optional. Rules that need it guard with null-checks internally. We only block on
+  // insufficient price/listing history which makes score signals unreliable.
   if (
     sku.snapshots.length < 14 ||
-    (today?.listing_count ?? 0) < 5 ||
-    sku.signals.length === 0
+    (today?.listing_count ?? 0) < 5
   ) {
     const reason =
       sku.snapshots.length < 14 ? 'insufficient_history'
-      : (today?.listing_count ?? 0) < 5 ? 'low_listing_count'
-      : 'no_weekly_signals';
+      : 'low_listing_count';
     return {
       type: 'low_data', direction: 'holding', confidence: 'low',
       payload: { days_tracked: sku.snapshots.length, listing_count: today?.listing_count ?? 0, reason },
@@ -444,13 +445,14 @@ serve(async (req) => {
       });
     }
 
-    // ── 3. Bulk fetch last 30 days of daily_snapshots ─────────────────────────
-    const since30 = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+    // ── 3. Bulk fetch last 90 days of daily_snapshots ─────────────────────────
+    // 90 days needed so Rule 6 (stagnation_risk, requires 60d) can evaluate correctly.
+    const since90 = new Date(Date.now() - 90 * 86400000).toISOString().split('T')[0];
     const { data: snapRows } = await supabase
       .from('daily_snapshots')
       .select('sku_id, snapshot_date, listing_count, price_median, hot_score')
       .in('sku_id', skuIds)
-      .gte('snapshot_date', since30)
+      .gte('snapshot_date', since90)
       .order('snapshot_date', { ascending: true });
 
     const snapMap = new Map<string, Snapshot[]>();
