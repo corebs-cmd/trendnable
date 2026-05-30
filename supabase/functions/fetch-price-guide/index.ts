@@ -131,19 +131,35 @@ serve(async (req) => {
       query = query.eq('id', body.sku_id) as typeof query;
     }
 
+    const startedAt = Date.now();
     const { data: skus, error } = await query;
     if (error) throw error;
     if (!skus?.length) {
+      await supabase.from('pipeline_runs').insert({
+        pipeline: 'fetch-price-guide', ran_at: new Date().toISOString(),
+        duration_ms: Date.now() - startedAt, input_tokens: 0, output_tokens: 0, cost_usd: 0,
+        meta: { total: 0, processed: 0, skipped: 0, errors: 0 },
+      });
       return new Response(
         JSON.stringify({ ok: true, total: 0, updated: 0, failed: 0, unmatched: 0 }),
         { headers: { ...cors, 'Content-Type': 'application/json' } },
       );
     }
-
     const { updated, failed, unmatched } = await processBatch(supabase, skus);
+    const duration_ms = Date.now() - startedAt;
+
+    await supabase.from('pipeline_runs').insert({
+      pipeline:      'fetch-price-guide',
+      ran_at:        new Date().toISOString(),
+      duration_ms,
+      input_tokens:  0,
+      output_tokens: 0,
+      cost_usd:      0,
+      meta:          { total: skus.length, processed: updated, skipped: unmatched, errors: failed },
+    });
 
     return new Response(
-      JSON.stringify({ ok: true, total: skus.length, updated, failed, unmatched }),
+      JSON.stringify({ ok: true, total: skus.length, updated, failed, unmatched, duration_ms }),
       { headers: { ...cors, 'Content-Type': 'application/json' } },
     );
   } catch (err) {

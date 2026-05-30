@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   Pressable,
   Dimensions,
   Platform,
@@ -10,6 +9,7 @@ import {
   StyleSheet,
   Linking,
   Alert,
+  Animated,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -57,16 +57,15 @@ function DotPattern({ height }: { height: number }) {
   );
 }
 
-// ── Section header ─────────────────────────────────────────────────────────────
 function SectionHeader({ title, theme }: {
   title: string;
   theme: ReturnType<typeof buildTheme>;
 }) {
   return (
-    <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 10 }}>
+    <View style={{ paddingHorizontal: 18, paddingTop: 24, paddingBottom: 10 }}>
       <Text style={{
-        fontFamily: 'Fraunces_600SemiBold', fontSize: 22,
-        color: theme.text, letterSpacing: -0.3, lineHeight: 26,
+        fontFamily: 'Fraunces_700Bold', fontSize: 24,
+        color: theme.text, letterSpacing: -0.4, lineHeight: 28,
       }}>
         {title}
       </Text>
@@ -74,7 +73,6 @@ function SectionHeader({ title, theme }: {
   );
 }
 
-// ── Stat box ──────────────────────────────────────────────────────────────────
 function StatBox({ label, value, theme, valueColor }: {
   label: string;
   value: string;
@@ -99,7 +97,6 @@ function StatBox({ label, value, theme, valueColor }: {
   );
 }
 
-// ── Score bar ─────────────────────────────────────────────────────────────────
 function ScoreBar({ label, value, max = 30, hint, theme }: {
   label: string;
   value: number;
@@ -109,22 +106,21 @@ function ScoreBar({ label, value, max = 30, hint, theme }: {
 }) {
   const pct = Math.min(100, (value / max) * 100);
   return (
-    <View style={{ marginBottom: 12 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13.5, color: theme.text }}>{label}</Text>
+    <View style={{ marginBottom: 14 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 7 }}>
+        <Text style={{ fontFamily: 'Fraunces_600SemiBold', fontSize: 17, color: theme.text }}>{label}</Text>
         <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 12, color: theme.muted, fontVariant: ['tabular-nums'] }}>
           {value}<Text style={{ color: theme.faint }}> / {max}</Text>
         </Text>
       </View>
-      <View style={{ height: 4, backgroundColor: theme.hotBarTrack, borderRadius: 999, overflow: 'hidden' }}>
-        <View style={{ height: 4, width: `${pct}%`, backgroundColor: theme.accent, borderRadius: 999 }} />
+      <View style={{ height: 5, backgroundColor: theme.hotBarTrack, borderRadius: 999, overflow: 'hidden' }}>
+        <View style={{ height: 5, width: `${pct}%`, backgroundColor: theme.accent, borderRadius: 999 }} />
       </View>
-      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11.5, color: theme.faint, marginTop: 4 }}>{hint}</Text>
+      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11.5, color: theme.faint, marginTop: 5 }}>{hint}</Text>
     </View>
   );
 }
 
-// ── History window button ─────────────────────────────────────────────────────
 type HistoryWindow = '30D' | '90D' | '1Y';
 
 function WindowBtn({ label, locked, active, onPress, theme }: {
@@ -154,7 +150,6 @@ function WindowBtn({ label, locked, active, onPress, theme }: {
   );
 }
 
-// ── Main screen ───────────────────────────────────────────────────────────────
 export default function SKUDetailScreen() {
   const { id, filterKind, filterId } = useLocalSearchParams<{
     id: string;
@@ -202,8 +197,6 @@ export default function SKUDetailScreen() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
-  // If the SKU isn't in the hot feed (e.g. just promoted from a scan),
-  // fetch it directly from the DB so the page renders instead of spinning forever.
   useEffect(() => {
     if (!id) return;
     if (storeBaseSku) { setFetchedSku(null); return; }
@@ -232,7 +225,6 @@ export default function SKUDetailScreen() {
     ? { ...baseSku, history, listingsHist, priceHist }
     : undefined;
 
-  // Still waiting on the DB fetch — keep showing the spinner
   const stillFetching = !storeBaseSku && fetchedSku === undefined;
 
   const cat = sku ? catById(sku.category) : undefined;
@@ -244,7 +236,7 @@ export default function SKUDetailScreen() {
   const [alertOpen, setAlertOpen]           = useState(false);
   const [historyWindow, setHistoryWindow]   = useState<HistoryWindow>('30D');
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
-  const [insightData, setInsightData] = useState<InsightResponse | null>(null);
+  const [insightData, setInsightData]       = useState<InsightResponse | null>(null);
 
   const userId = useAppStore((s) => s.user?.id ?? null);
 
@@ -261,6 +253,36 @@ export default function SKUDetailScreen() {
 
   const BOTTOM_BAR_H = 76 + insets.bottom;
   const NAV_H = insets.top + (Platform.OS === 'android' ? 8 : 0) + 52;
+  const HERO_MAX = 300 + NAV_H;
+
+  // Scroll-driven animation
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  const heroCropH = scrollY.interpolate({
+    inputRange: [0, 200],
+    outputRange: [HERO_MAX, NAV_H + 16],
+    extrapolate: 'clamp',
+  });
+  const heroImgScale = scrollY.interpolate({
+    inputRange: [0, 200],
+    outputRange: [1, 0.5],
+    extrapolate: 'clamp',
+  });
+  const heroImgOpacity = scrollY.interpolate({
+    inputRange: [0, 180],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+  const tickerOpacity = scrollY.interpolate({
+    inputRange: [130, 210],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+  const tickerHeight = scrollY.interpolate({
+    inputRange: [130, 210],
+    outputRange: [0, 56],
+    extrapolate: 'clamp',
+  });
 
   if (stillFetching || (!sku && !fetchedSku && fetchedSku !== null)) {
     return (
@@ -295,7 +317,6 @@ export default function SKUDetailScreen() {
   const deltaColor = sku.delta >= 0 ? theme.pos : theme.neg;
   const deltaLabel = sku.delta >= 0 ? `+${sku.delta}` : `${sku.delta}`;
 
-  const encodedQuery = encodeURIComponent(sku.ebay_query || sku.name);
   const marketplaces = [
     ...(sku.ebay_url ? [{
       id: 'ebay',
@@ -323,56 +344,45 @@ export default function SKUDetailScreen() {
     }] : []),
   ];
 
+  const totalSoldCount = (sku.priceMintCount ?? 0) + (sku.priceLooseCount ?? 0);
+  const salesLabel = totalSoldCount > 0 ? 'Recent Sales' : 'Listings';
+  const salesValue = totalSoldCount > 0 ? totalSoldCount : sku.listings;
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
-      <ScrollView
+
+      {/* ── Scrollable content ── */}
+      <Animated.ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: BOTTOM_BAR_H + 24 }}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
       >
-        {/* ── Full-bleed category-tinted hero ── */}
-        <LinearGradient
-          colors={[c.tint, c.tint2]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ width: '100%', height: 320 + NAV_H, overflow: 'hidden' }}
-        >
-          {isDark && <DotPattern height={320 + NAV_H} />}
-          {/* Subtle vignette */}
-          <View
-            pointerEvents="none"
-            style={[
-              StyleSheet.absoluteFillObject,
-              { backgroundColor: isDark ? 'rgba(0,0,0,0.12)' : 'transparent' },
-            ]}
+        {/* ── Collapsing hero ── */}
+        <Animated.View style={{ height: heroCropH, overflow: 'hidden', position: 'relative' }}>
+          <LinearGradient
+            colors={[c.tint, c.tint2]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
           />
-
-          {/* Category name tag */}
-          <View style={{
-            position: 'absolute', top: NAV_H + 16, left: 20,
-            backgroundColor: isDark ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.65)',
-            borderRadius: 4, paddingHorizontal: 9, paddingVertical: 5,
-          }}>
-            <Text style={{
-              fontFamily: 'Inter_700Bold', fontSize: 11, color: c.ink,
-              letterSpacing: 1.1, textTransform: 'uppercase',
-            }}>
-              {c.name}
-            </Text>
-          </View>
-
-          {/* Product illustration — centered in the visible 320px area below nav */}
+          {isDark && <DotPattern height={HERO_MAX} />}
           <View
-            style={{
-              position: 'absolute',
-              top: NAV_H,
-              left: 0,
-              right: 0,
-              height: 320,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
             pointerEvents="none"
-          >
+            style={[StyleSheet.absoluteFillObject, { backgroundColor: isDark ? 'rgba(0,0,0,0.10)' : 'transparent' }]}
+          />
+          {/* Image centered below nav, scales + fades on scroll */}
+          <Animated.View style={{
+            position: 'absolute',
+            top: NAV_H,
+            left: 0, right: 0, bottom: 0,
+            alignItems: 'center', justifyContent: 'center',
+            transform: [{ scale: heroImgScale }],
+            opacity: heroImgOpacity,
+          }}>
             <ProductPlaceholder
               sku={sku}
               theme={theme}
@@ -380,17 +390,36 @@ export default function SKUDetailScreen() {
               showTag={false}
               style={{ backgroundColor: 'transparent' }}
             />
-          </View>
-        </LinearGradient>
+          </Animated.View>
+        </Animated.View>
 
         {/* ── Title block ── */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 16, marginBottom: 4 }}>
-          <Text style={{
-            fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.muted,
-            letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 6,
-          }}>
-            {sku.series}
-          </Text>
+        <View style={{ paddingHorizontal: 18, paddingTop: 18, marginBottom: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            {cat && (
+              <View style={{
+                borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4,
+                backgroundColor: isDark ? 'rgba(0,0,0,0.30)' : 'rgba(0,0,0,0.08)',
+                borderWidth: 1, borderColor: c.ink + '50',
+              }}>
+                <Text style={{
+                  fontFamily: 'Inter_700Bold', fontSize: 11, color: c.ink,
+                  letterSpacing: 1.1, textTransform: 'uppercase',
+                }}>
+                  {cat.short}
+                </Text>
+              </View>
+            )}
+            <Text
+              style={{
+                fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.muted,
+                letterSpacing: 1.0, textTransform: 'uppercase', flexShrink: 1,
+              }}
+              numberOfLines={1}
+            >
+              {sku.series}
+            </Text>
+          </View>
           <Text style={{
             fontFamily: 'Fraunces_700Bold', fontSize: 28, color: theme.text,
             letterSpacing: -0.62, lineHeight: 32,
@@ -398,7 +427,6 @@ export default function SKUDetailScreen() {
             {sku.name}
           </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
-            {cat && <Chip theme={theme} size="sm">{cat.label}</Chip>}
             {fandom && <Chip theme={theme} size="sm">{fandom.label}</Chip>}
             {sku.category === 'tcg' && sku.cardVariant && (
               <Chip theme={theme} size="sm" active>
@@ -407,21 +435,20 @@ export default function SKUDetailScreen() {
                   : `Graded${sku.cardGrader ? ` · ${sku.cardGrader}` : ''}${sku.cardGrade ? ` ${sku.cardGrade}` : ''}`}
               </Chip>
             )}
-            {/* U4 — Exclusive / variant badge */}
             {sku.exclusiveType && (() => {
               const BADGE: Record<string, { label: string; bg: string }> = {
-                chase:       { label: 'Chase',          bg: '#F97316' },
-                grail:       { label: 'Grail',          bg: '#F97316' },
-                gitd:        { label: 'GITD',           bg: '#16A34A' },
-                flocked:     { label: 'Flocked',        bg: '#78350F' },
-                sdcc:        { label: 'SDCC',           bg: '#7C3AED' },
-                convention:  { label: 'Con Exclusive',  bg: '#7C3AED' },
-                limited:     { label: 'LE',             bg: '#D97706' },
-                rare_variant:{ label: 'Rare Variant',   bg: '#4338CA' },
-                vaulted:     { label: 'Vaulted',        bg: '#E11D48' },
-                htf:         { label: 'HTF',            bg: '#E11D48' },
-                retailer:    { label: 'Store Exclusive',bg: '#1D4ED8' },
-                signed:      { label: 'Signed',         bg: '#475569' },
+                chase:        { label: 'Chase',           bg: '#F97316' },
+                grail:        { label: 'Grail',           bg: '#F97316' },
+                gitd:         { label: 'GITD',            bg: '#16A34A' },
+                flocked:      { label: 'Flocked',         bg: '#78350F' },
+                sdcc:         { label: 'SDCC',            bg: '#7C3AED' },
+                convention:   { label: 'Con Exclusive',   bg: '#7C3AED' },
+                limited:      { label: 'LE',              bg: '#D97706' },
+                rare_variant: { label: 'Rare Variant',    bg: '#4338CA' },
+                vaulted:      { label: 'Vaulted',         bg: '#E11D48' },
+                htf:          { label: 'HTF',             bg: '#E11D48' },
+                retailer:     { label: 'Store Exclusive', bg: '#1D4ED8' },
+                signed:       { label: 'Signed',          bg: '#475569' },
               };
               const b = BADGE[sku.exclusiveType];
               if (!b) return null;
@@ -439,8 +466,8 @@ export default function SKUDetailScreen() {
           </View>
         </View>
 
-        {/* ── Score row ── */}
-        <View style={{ marginHorizontal: 20, marginTop: 20, marginBottom: 4 }}>
+        {/* ── Hot Score card ── */}
+        <View style={{ marginHorizontal: 18, marginTop: 20, marginBottom: 4 }}>
           <View style={{
             backgroundColor: theme.surface, borderRadius: theme.radius, padding: 18,
             flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -472,34 +499,27 @@ export default function SKUDetailScreen() {
         </View>
 
         {/* ── Stats grid ── */}
-        {(() => {
-          const totalSoldCount = (sku.priceMintCount ?? 0) + (sku.priceLooseCount ?? 0);
-          const salesLabel = totalSoldCount > 0 ? 'Recent Sales' : 'Listings';
-          const salesValue = totalSoldCount > 0 ? totalSoldCount : sku.listings;
-          return (
-            <View style={{ paddingHorizontal: 20, paddingTop: 12, gap: 8 }}>
-              {/* Row 1: Listings + Days Tracked */}
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <StatBox label={salesLabel}    value={String(salesValue)} theme={theme} />
-                {sku.age >= 1 && (
-                  <StatBox label="Days Tracked" value={`${sku.age}d`}    theme={theme} />
-                )}
-              </View>
-              {/* Row 2: Median + Lowest Recorded + Highest Recorded */}
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <StatBox label="Median"           value={fmtPrice(sku.price.median)} theme={theme} valueColor='#FC792E' />
-                <StatBox label="Lowest Recorded"  value={fmtPrice(sku.price.low)}    theme={theme} />
-                <StatBox label="Highest Recorded" value={fmtPrice(sku.price.high)}   theme={theme} />
-              </View>
-            </View>
-          );
-        })()}
+        <View style={{ paddingHorizontal: 18, paddingTop: 8, gap: 8 }}>
+          {/* Row 1: Median / Lowest / Highest */}
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <StatBox label="Median"           value={fmtPrice(sku.price.median)} theme={theme} valueColor="#FC792E" />
+            <StatBox label="Lowest Recorded"  value={fmtPrice(sku.price.low)}    theme={theme} />
+            <StatBox label="Highest Recorded" value={fmtPrice(sku.price.high)}   theme={theme} />
+          </View>
+          {/* Row 2: Listings / Days Tracked */}
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <StatBox label={salesLabel}    value={String(salesValue)} theme={theme} />
+            {sku.age >= 1 && (
+              <StatBox label="Days Tracked" value={`${sku.age}d`}     theme={theme} />
+            )}
+          </View>
+        </View>
 
-        {/* ── U2: Condition breakdown ── */}
+        {/* ── Condition breakdown ── */}
         {((sku.priceMint != null && (sku.priceMintCount ?? 0) >= 2) ||
           (sku.priceLoose != null && (sku.priceLooseCount ?? 0) >= 2)) && (
           <View style={{
-            marginHorizontal: 20, marginTop: 8,
+            marginHorizontal: 18, marginTop: 8,
             backgroundColor: theme.surface, borderRadius: theme.radius, overflow: 'hidden',
           }}>
             <View style={{
@@ -569,7 +589,7 @@ export default function SKUDetailScreen() {
           const myPLPct        = myTotalCost > 0 ? (myPL / myTotalCost) * 100 : 0;
           const myPLPos        = myPL >= 0;
           return (
-            <View style={{ marginHorizontal: 20, marginTop: 12, backgroundColor: theme.surface, borderRadius: theme.radius, overflow: 'hidden' }}>
+            <View style={{ marginHorizontal: 18, marginTop: 8, backgroundColor: theme.surface, borderRadius: theme.radius, overflow: 'hidden' }}>
               <View style={{
                 paddingHorizontal: 16, paddingVertical: 12,
                 flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -589,7 +609,7 @@ export default function SKUDetailScreen() {
                   </View>
                 )}
               </View>
-              <View style={{ flexDirection: 'row', padding: 14, gap: 0 }}>
+              <View style={{ flexDirection: 'row', padding: 14 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10.5, color: theme.muted, letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6 }}>Qty</Text>
                   <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 17, color: theme.text, fontVariant: ['tabular-nums'] }}>×{myQty}</Text>
@@ -603,8 +623,6 @@ export default function SKUDetailScreen() {
                   <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 17, color: theme.premium, fontVariant: ['tabular-nums'] }}>{fmtPrice(myCurrentValue)}</Text>
                 </View>
               </View>
-
-              {/* Action row */}
               <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 14, paddingBottom: 14 }}>
                 <Pressable
                   onPress={() => updateCollectionItem(collectionItem.skuId, { forSale: !collectionItem.forSale })}
@@ -665,7 +683,7 @@ export default function SKUDetailScreen() {
 
         {/* ── Why it's hot ── */}
         <SectionHeader title="Why it's hot" theme={theme} />
-        <View style={{ marginHorizontal: 20, backgroundColor: theme.surface, borderRadius: theme.radius, padding: 18 }}>
+        <View style={{ marginHorizontal: 18, backgroundColor: theme.surface, borderRadius: theme.radius, padding: 18 }}>
           {(() => {
             const insight = insightData?.insight;
             const showInsight = isPremium && insight && insight.narrationLong;
@@ -693,7 +711,6 @@ export default function SKUDetailScreen() {
             ) : null;
           })()}
 
-          {/* Personalized action line — premium only, when owned or watched */}
           {(() => {
             const action = insightData?.personalizedAction;
             if (!isPremium || !action) return null;
@@ -719,20 +736,20 @@ export default function SKUDetailScreen() {
           <View style={{ borderTopWidth: 0.5, borderTopColor: theme.hairline, paddingTop: 18 }}>
             <Text style={{
               fontFamily: 'Inter_700Bold', fontSize: 11, color: theme.faint,
-              letterSpacing: 1.3, textTransform: 'uppercase', marginBottom: 12,
+              letterSpacing: 1.3, textTransform: 'uppercase', marginBottom: 14,
             }}>
               Score breakdown
             </Text>
-            <ScoreBar label="Velocity"     value={sku.score.velocity}     hint={sku.score.velocity === 0 ? "Listings stable — no new supply detected" : "Listing count is growing"}   theme={theme} />
-            <ScoreBar label="Volume"       value={sku.score.volume}       hint="Active listing count"   theme={theme} />
+            <ScoreBar label="Velocity"     value={sku.score.velocity}     hint={sku.score.velocity === 0 ? 'Listings stable — no new supply detected' : 'Listing count is growing'} theme={theme} />
+            <ScoreBar label="Volume"       value={sku.score.volume}       hint="Active listing count"       theme={theme} />
             <ScoreBar label="Confirmation" value={sku.score.confirmation} hint="Price momentum vs 7-day avg" theme={theme} />
-            <ScoreBar label="Freshness"    value={sku.score.freshness}    hint="Recent appearance"      theme={theme} />
+            <ScoreBar label="Freshness"    value={sku.score.freshness}    hint="Recent appearance"           theme={theme} />
           </View>
         </View>
 
         {/* ── Where to buy ── */}
         <SectionHeader title="Where to buy" theme={theme} />
-        <View style={{ marginHorizontal: 20, gap: 8 }}>
+        <View style={{ marginHorizontal: 18, gap: 8 }}>
           {marketplaces.length === 0 ? (
             <View style={{
               backgroundColor: theme.surface, borderRadius: theme.radius,
@@ -749,12 +766,8 @@ export default function SKUDetailScreen() {
               accessibilityLabel={`Open ${mp.name}`}
               onPress={() => Linking.openURL(mp.url).catch(() => {})}
               style={({ pressed }) => ({
-                backgroundColor: theme.surface,
-                borderRadius: theme.radius,
-                padding: 14,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 12,
+                backgroundColor: theme.surface, borderRadius: theme.radius,
+                padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12,
                 opacity: pressed ? 0.78 : 1,
                 borderWidth: mp.primary ? 1 : 0,
                 borderColor: mp.primary ? theme.accent : 'transparent',
@@ -762,8 +775,7 @@ export default function SKUDetailScreen() {
             >
               <View style={{
                 width: 38, height: 38, borderRadius: 10,
-                backgroundColor: theme.surface2,
-                alignItems: 'center', justifyContent: 'center',
+                backgroundColor: theme.surface2, alignItems: 'center', justifyContent: 'center',
               }}>
                 <Text style={{
                   fontFamily: 'Fraunces_700Bold', fontSize: 14,
@@ -773,10 +785,7 @@ export default function SKUDetailScreen() {
                 </Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{
-                  fontFamily: 'Fraunces_600SemiBold', fontSize: 15,
-                  color: theme.text, letterSpacing: -0.2,
-                }}>
+                <Text style={{ fontFamily: 'Fraunces_600SemiBold', fontSize: 15, color: theme.text, letterSpacing: -0.2 }}>
                   {mp.name}
                 </Text>
                 {mp.listings != null && mp.median != null ? (
@@ -801,7 +810,7 @@ export default function SKUDetailScreen() {
 
         {/* ── History ── */}
         <SectionHeader title="History" theme={theme} />
-        <View style={{ marginHorizontal: 20, backgroundColor: theme.surface, borderRadius: theme.radius, padding: 18 }}>
+        <View style={{ marginHorizontal: 18, backgroundColor: theme.surface, borderRadius: theme.radius, padding: 18 }}>
           <View style={{ flexDirection: 'row', marginBottom: 16 }}>
             <WindowBtn label="30D" active={historyWindow === '30D'} onPress={() => setHistoryWindow('30D')} theme={theme} />
             <WindowBtn label="90D" locked={!isPremium} active={historyWindow === '90D'} onPress={() => { if (isPremium) setHistoryWindow('90D'); }} theme={theme} />
@@ -827,36 +836,31 @@ export default function SKUDetailScreen() {
             </>
           )}
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
 
-      {/* ── Floating top bar with gradient ── */}
+      {/* ── Sticky top bar + collapsing ticker ── */}
       <View
         pointerEvents="box-none"
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: NAV_H }}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 30 }}
       >
-        <LinearGradient
-          colors={[c.tint, c.tint2, 'transparent']}
-          locations={[0, 0.7, 1]}
-          style={StyleSheet.absoluteFillObject}
-          pointerEvents="none"
-        />
-
-        {/* Single row pinned to the bottom 52px of NAV_H — below status bar */}
+        {/* Back / filter-pill / share row */}
         <View style={{
-          position: 'absolute',
-          bottom: 0, left: 16, right: 16,
-          height: 52,
-          flexDirection: 'row',
-          alignItems: 'center',
+          height: NAV_H, flexDirection: 'row', alignItems: 'flex-end',
+          paddingBottom: 6, paddingHorizontal: 16,
         }}>
-          {/* Back button */}
+          <LinearGradient
+            colors={[c.tint, c.tint2, 'transparent']}
+            locations={[0, 0.65, 1]}
+            style={StyleSheet.absoluteFillObject}
+            pointerEvents="none"
+          />
+
           <IconButton theme={theme} onPress={() => router.back()} accessibilityLabel="Go back">
             <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2.2} strokeLinecap="round">
               <Path d="M19 12H5M12 5l-7 7 7 7" />
             </Svg>
           </IconButton>
 
-          {/* Pill — flex: 1 center so text is never squeezed */}
           <View style={{ flex: 1, alignItems: 'center' }} pointerEvents="box-none">
             {filterTotal > 0 && (
               <View style={{
@@ -879,8 +883,7 @@ export default function SKUDetailScreen() {
                   </Svg>
                 </Pressable>
                 <Text style={{
-                  fontFamily: 'Inter_600SemiBold', fontSize: 12, color: theme.text,
-                  letterSpacing: -0.1,
+                  fontFamily: 'Inter_600SemiBold', fontSize: 12, color: theme.text, letterSpacing: -0.1,
                 }} numberOfLines={1}>
                   {filterLabel ?? filterId ?? ''} {filterIdx >= 0 ? filterIdx + 1 : 1}/{filterTotal}
                 </Text>
@@ -902,7 +905,6 @@ export default function SKUDetailScreen() {
             )}
           </View>
 
-          {/* Share button */}
           <IconButton theme={theme} onPress={() => setShareOpen(true)} accessibilityLabel="Share this SKU">
             <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
               <Path d="M12 16V4M8 8l4-4 4 4" />
@@ -910,6 +912,52 @@ export default function SKUDetailScreen() {
             </Svg>
           </IconButton>
         </View>
+
+        {/* Ticker — slides down on scroll */}
+        <Animated.View style={{
+          height: tickerHeight,
+          opacity: tickerOpacity,
+          overflow: 'hidden',
+          backgroundColor: theme.navBg,
+          borderBottomWidth: 0.5,
+          borderBottomColor: theme.hairline,
+        }}>
+          <View style={{
+            flexDirection: 'row', alignItems: 'center',
+            paddingHorizontal: 16, paddingVertical: 10, gap: 10,
+          }}>
+            <View style={{
+              width: 28, height: 36, borderRadius: 5,
+              backgroundColor: c.tint,
+              alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <Text style={{
+                fontFamily: 'Inter_700Bold', fontSize: 9, color: c.ink,
+                textTransform: 'uppercase', letterSpacing: 0.5,
+              }}>
+                {cat?.short?.slice(0, 3) ?? sku.category.slice(0, 3).toUpperCase()}
+              </Text>
+            </View>
+            <Text style={{
+              flex: 1, fontFamily: 'Fraunces_600SemiBold', fontSize: 14,
+              color: theme.text, letterSpacing: -0.2,
+            }} numberOfLines={1}>
+              {sku.short || sku.name}
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <View style={{ width: 7, height: 7, borderRadius: 999, backgroundColor: theme.gold }} />
+              <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 15, color: theme.text }}>
+                {sku.hot}
+              </Text>
+            </View>
+            <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 15, color: '#FC792E' }}>
+              {fmtPrice(sku.price.median)}
+            </Text>
+            <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 13, color: deltaColor }}>
+              {deltaLabel}
+            </Text>
+          </View>
+        </Animated.View>
       </View>
 
       {/* ── Bottom action bar ── */}
@@ -997,6 +1045,7 @@ export default function SKUDetailScreen() {
         </View>
       </View>
 
+      {/* ── Sheets ── */}
       <IOSShareSheet
         open={shareOpen}
         theme={theme}
