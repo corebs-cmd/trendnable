@@ -14,7 +14,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path, Circle, Defs, Pattern, Rect } from 'react-native-svg';
+import Svg, { Path, Circle, Defs, Pattern, Rect, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 
 import { buildTheme, categoryColor, RADIUS } from '@/lib/theme';
 import { catById, fandomById, fmtPrice } from '@/lib/appConfig';
@@ -25,7 +25,6 @@ import { SKU, InsightResponse } from '@/lib/types';
 import { HotScoreBadge } from '@/components/HotScore';
 import { InsightTypePill } from '@/components/signals/DirectionBadge';
 import Chip from '@/components/Chip';
-import LineChart from '@/components/LineChart';
 import IconButton from '@/components/IconButton';
 import PrimaryButton from '@/components/PrimaryButton';
 import IOSShareSheet from '@/components/IOSShareSheet';
@@ -88,8 +87,8 @@ function StatBox({ label, value, theme, valueColor }: {
         {label}
       </Text>
       <Text style={{
-        fontFamily: 'JetBrainsMono_700Bold', fontSize: 17, color: valueColor ?? theme.text,
-        letterSpacing: -0.3, fontVariant: ['tabular-nums'],
+        fontFamily: 'JetBrainsMono_700Bold', fontSize: 22, color: valueColor ?? theme.text,
+        letterSpacing: -0.4, fontVariant: ['tabular-nums'],
       }}>
         {value}
       </Text>
@@ -147,6 +146,144 @@ function WindowBtn({ label, locked, active, onPress, theme }: {
         {label}{locked ? ' ◆' : ''}
       </Text>
     </Pressable>
+  );
+}
+
+function buildChartPath(values: number[], W: number, H: number, pad = 8) {
+  const valid = values.filter((v) => typeof v === 'number' && isFinite(v));
+  if (valid.length < 2) return { d: '', area: '', lastX: 0, lastY: 0 };
+  const min = Math.min(...valid), max = Math.max(...valid);
+  const range = max - min || 1;
+  const n = valid.length;
+  const xs = (i: number) => pad + (i / (n - 1)) * (W - 2 * pad);
+  const ys = (v: number) => H - pad - ((v - min) / range) * (H - 2 * pad);
+  const pts = valid.map((v, i) => [xs(i), ys(v)]);
+  let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i];
+    const p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] ?? p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d += ` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  const last = pts[pts.length - 1];
+  const area = `${d} L${last[0].toFixed(1)},${(H - pad).toFixed(1)} L${pad},${(H - pad).toFixed(1)} Z`;
+  return { d, area, lastX: last[0], lastY: last[1] };
+}
+
+function HistoryCard({ sku, theme, isPremium, window, setWindow, loading, error }: {
+  sku: SKU;
+  theme: ReturnType<typeof buildTheme>;
+  isPremium: boolean;
+  window: HistoryWindow;
+  setWindow: (w: HistoryWindow) => void;
+  loading: boolean;
+  error: string | null;
+}) {
+  const [metric, setMetric] = React.useState<'score' | 'price'>('score');
+  const data = metric === 'score' ? sku.history : sku.priceHist;
+  const color = metric === 'score' ? theme.accent : theme.gold;
+  const curLabel = metric === 'score' ? 'HOT SCORE' : 'MEDIAN PRICE';
+  const curVal = metric === 'score' ? String(sku.hot) : fmtPrice(sku.price.median);
+  const gid = `hg-${metric}`;
+  const W = SCREEN_W - 72;
+  const H = 150;
+  const { d, area, lastX, lastY } = buildChartPath(data, W, H);
+  const windowLabel = window === '1Y' ? '−1y' : window === '90D' ? '−90d' : '−30d';
+
+  return (
+    <View style={{ marginHorizontal: 18, backgroundColor: theme.surface, borderRadius: theme.radius, padding: 18 }}>
+      {/* Tab row: window pills + metric toggle */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+        <View style={{ flex: 1, flexDirection: 'row', gap: 2 }}>
+          <WindowBtn label="30D" active={window === '30D'} onPress={() => setWindow('30D')} theme={theme} />
+          <WindowBtn label="90D" locked={!isPremium} active={window === '90D'} onPress={() => { if (isPremium) setWindow('90D'); }} theme={theme} />
+          <WindowBtn label="1Y"  locked={!isPremium} active={window === '1Y'}  onPress={() => { if (isPremium) setWindow('1Y'); }}  theme={theme} />
+        </View>
+        {/* Score / Price segmented toggle */}
+        <View style={{
+          flexDirection: 'row', borderRadius: 999,
+          borderWidth: 1, borderColor: theme.hairline, overflow: 'hidden',
+        }}>
+          {(['score', 'price'] as const).map((m) => (
+            <Pressable
+              key={m}
+              onPress={() => setMetric(m)}
+              style={{
+                paddingHorizontal: 13, paddingVertical: 7,
+                backgroundColor: metric === m
+                  ? (m === 'score' ? theme.accent : theme.gold)
+                  : 'transparent',
+              }}
+            >
+              <Text style={{
+                fontFamily: 'Inter_600SemiBold', fontSize: 12,
+                color: metric === m ? (theme.dark ? '#08101f' : '#fff') : theme.muted,
+              }}>
+                {m === 'score' ? 'Score' : 'Price'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      {loading ? (
+        <View style={{ alignItems: 'center', paddingVertical: 60 }}>
+          <ActivityIndicator color={theme.accent} />
+        </View>
+      ) : error ? (
+        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.neg, textAlign: 'center', paddingVertical: 30 }}>
+          {error}
+        </Text>
+      ) : (
+        <>
+          {/* Current value */}
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.muted, letterSpacing: 1.1, textTransform: 'uppercase' }}>
+              {curLabel}
+            </Text>
+            <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 18, color, fontVariant: ['tabular-nums'] }}>
+              {curVal}
+            </Text>
+          </View>
+
+          {/* Chart */}
+          <Svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'flex' }}>
+            <Defs>
+              <SvgLinearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0%" stopColor={color} stopOpacity={0.28} />
+                <Stop offset="100%" stopColor={color} stopOpacity={0} />
+              </SvgLinearGradient>
+            </Defs>
+            {[0.25, 0.5, 0.75].map((g) => (
+              <Path
+                key={g}
+                d={`M8,${H * g} L${W - 8},${H * g}`}
+                stroke="rgba(255,255,255,0.05)"
+                strokeWidth={1}
+              />
+            ))}
+            {area ? <Path d={area} fill={`url(#${gid})`} /> : null}
+            {d ? (
+              <Path d={d} fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+            ) : null}
+            {lastX > 0 ? (
+              <Circle cx={lastX} cy={lastY} r={4.5} fill={color} stroke={theme.surface} strokeWidth={2.5} />
+            ) : null}
+          </Svg>
+
+          {/* Axis labels */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
+            <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: theme.faint }}>
+              {windowLabel}
+            </Text>
+            <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: theme.faint }}>
+              today
+            </Text>
+          </View>
+        </>
+      )}
+    </View>
   );
 }
 
@@ -273,13 +410,8 @@ export default function SKUDetailScreen() {
     outputRange: [1, 0],
     extrapolate: 'clamp',
   });
-  const tickerOpacity = scrollY.interpolate({
-    inputRange: [130, 210],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
   const tickerHeight = scrollY.interpolate({
-    inputRange: [130, 210],
+    inputRange: [130, 220],
     outputRange: [0, 56],
     extrapolate: 'clamp',
   });
@@ -502,9 +634,9 @@ export default function SKUDetailScreen() {
         <View style={{ paddingHorizontal: 18, paddingTop: 8, gap: 8 }}>
           {/* Row 1: Median / Lowest / Highest */}
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <StatBox label="Median"           value={fmtPrice(sku.price.median)} theme={theme} valueColor="#FC792E" />
-            <StatBox label="Lowest Recorded"  value={fmtPrice(sku.price.low)}    theme={theme} />
-            <StatBox label="Highest Recorded" value={fmtPrice(sku.price.high)}   theme={theme} />
+            <StatBox label="Median"  value={fmtPrice(sku.price.median)} theme={theme} valueColor="#FC792E" />
+            <StatBox label="Lowest"  value={fmtPrice(sku.price.low)}    theme={theme} />
+            <StatBox label="Highest" value={fmtPrice(sku.price.high)}   theme={theme} />
           </View>
           {/* Row 2: Listings / Days Tracked */}
           <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -810,32 +942,15 @@ export default function SKUDetailScreen() {
 
         {/* ── History ── */}
         <SectionHeader title="History" theme={theme} />
-        <View style={{ marginHorizontal: 18, backgroundColor: theme.surface, borderRadius: theme.radius, padding: 18 }}>
-          <View style={{ flexDirection: 'row', marginBottom: 16 }}>
-            <WindowBtn label="30D" active={historyWindow === '30D'} onPress={() => setHistoryWindow('30D')} theme={theme} />
-            <WindowBtn label="90D" locked={!isPremium} active={historyWindow === '90D'} onPress={() => { if (isPremium) setHistoryWindow('90D'); }} theme={theme} />
-            <WindowBtn label="1Y"  locked={!isPremium} active={historyWindow === '1Y'}  onPress={() => { if (isPremium) setHistoryWindow('1Y'); }}  theme={theme} />
-          </View>
-          {historyLoading ? (
-            <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-              <ActivityIndicator color={theme.accent} />
-            </View>
-          ) : historyError ? (
-            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.neg, textAlign: 'center', paddingVertical: 20 }}>
-              {historyError}
-            </Text>
-          ) : (
-            <>
-              <LineChart data={sku.history}      theme={theme} w={SCREEN_W - 76} h={100} color={theme.accent} label="Hot Score" />
-              <View style={{ marginTop: 14 }}>
-                <LineChart data={sku.priceHist}    theme={theme} w={SCREEN_W - 76} h={80}  color={theme.gold}   label="Median Price" units="$" />
-              </View>
-              <View style={{ marginTop: 14 }}>
-                <LineChart data={sku.listingsHist} theme={theme} w={SCREEN_W - 76} h={70}  color={theme.muted}  label="Listings" />
-              </View>
-            </>
-          )}
-        </View>
+        <HistoryCard
+          sku={sku}
+          theme={theme}
+          isPremium={isPremium}
+          window={historyWindow}
+          setWindow={setHistoryWindow}
+          loading={historyLoading}
+          error={historyError}
+        />
       </Animated.ScrollView>
 
       {/* ── Sticky top bar + collapsing ticker ── */}
@@ -913,18 +1028,18 @@ export default function SKUDetailScreen() {
           </IconButton>
         </View>
 
-        {/* Ticker — slides down on scroll */}
+        {/* Ticker — slides down on scroll, solid background so no bleed-through */}
         <Animated.View style={{
           height: tickerHeight,
-          opacity: tickerOpacity,
           overflow: 'hidden',
           backgroundColor: theme.navBg,
           borderBottomWidth: 0.5,
           borderBottomColor: theme.hairline,
         }}>
           <View style={{
+            height: 56,
             flexDirection: 'row', alignItems: 'center',
-            paddingHorizontal: 16, paddingVertical: 10, gap: 10,
+            paddingHorizontal: 16, gap: 10,
           }}>
             <View style={{
               width: 28, height: 36, borderRadius: 5,
