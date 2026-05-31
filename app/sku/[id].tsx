@@ -27,7 +27,7 @@ import Sparkline from '@/components/Sparkline';
 import Chip from '@/components/Chip';
 import IOSShareSheet from '@/components/IOSShareSheet';
 import AddToCollectionSheet from '@/components/AddToCollectionSheet';
-import ProductPlaceholder from '@/components/ProductPlaceholder';
+import ProductPlaceholder, { ProductThumb } from '@/components/ProductPlaceholder';
 import UpgradeSheet from '@/components/UpgradeSheet';
 import PriceAlertSheet from '@/components/PriceAlertSheet';
 import { UpgradeContext } from '@/lib/types';
@@ -488,6 +488,14 @@ export default function SKUDetailScreen() {
   const tickerHeight = scrollY.interpolate({
     inputRange: [130, 220],
     outputRange: [0, 56],
+    extrapolate: 'clamp',
+  });
+
+  // Solid nav background fades in as user scrolls past hero so content
+  // doesn't bleed through the transparent bottom of the hero gradient.
+  const navBgOpacity = scrollY.interpolate({
+    inputRange: [80, NAV_H],
+    outputRange: [0, 1],
     extrapolate: 'clamp',
   });
 
@@ -1087,6 +1095,14 @@ export default function SKUDetailScreen() {
             style={StyleSheet.absoluteFillObject}
             pointerEvents="none"
           />
+          {/* Solid fill that fades in once scrolled past hero, sealing the gap */}
+          <Animated.View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFillObject, {
+              backgroundColor: isDark ? '#0A0F1E' : theme.navBg,
+              opacity: navBgOpacity,
+            }]}
+          />
 
           {/* Back button — design pill style */}
           <Pressable
@@ -1183,19 +1199,7 @@ export default function SKUDetailScreen() {
             flexDirection: 'row', alignItems: 'center',
             paddingHorizontal: 16, gap: 10,
           }}>
-            <View style={{
-              width: 34, height: 36, borderRadius: 5,
-              backgroundColor: isDark ? 'rgba(128,113,246,0.16)' : c.tint,
-              borderWidth: 1, borderColor: isDark ? 'rgba(128,113,246,0.30)' : 'transparent',
-              alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}>
-              <Text style={{
-                fontFamily: 'Inter_700Bold', fontSize: 9, color: isDark ? C.purple : c.ink,
-                textTransform: 'uppercase', letterSpacing: 0.5,
-              }}>
-                {cat?.short?.slice(0, 3) ?? sku.category.slice(0, 3).toUpperCase()}
-              </Text>
-            </View>
+            <ProductThumb sku={sku} theme={theme} size={34} radius={5} />
             <Text style={{
               flex: 1, fontFamily: 'Fraunces_700Bold', fontSize: 15,
               color: '#efece2', letterSpacing: -0.2,
