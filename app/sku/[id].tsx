@@ -1328,7 +1328,7 @@ export default function SKUDetailScreen() {
                 <Path d="M8 2v12M2 8h12" stroke="#08101f" strokeWidth={2.2} strokeLinecap="round" />
               </Svg>
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15.5, color: '#08101f' }}>
-                Add
+                Add to Collection
               </Text>
             </>
           )}
