@@ -25,6 +25,8 @@ import { SKU, InsightResponse } from '@/lib/types';
 import { InsightTypePill } from '@/components/signals/DirectionBadge';
 import Sparkline from '@/components/Sparkline';
 import Chip from '@/components/Chip';
+import ExclusiveSticker from '@/components/ExclusiveSticker';
+import { resolveStickerKeys } from '@/lib/stickers';
 import IOSShareSheet from '@/components/IOSShareSheet';
 import AddToCollectionSheet from '@/components/AddToCollectionSheet';
 import ProductPlaceholder, { ProductThumb } from '@/components/ProductPlaceholder';
@@ -598,17 +600,77 @@ export default function SKUDetailScreen() {
             position: 'absolute',
             top: NAV_H,
             left: 0, right: 0, bottom: 0,
+            flexDirection: 'row',
             alignItems: 'center', justifyContent: 'center',
             transform: [{ scale: heroImgScale }],
             opacity: heroImgOpacity,
           }}>
-            <ProductPlaceholder
-              sku={sku}
-              theme={theme}
-              size="xl"
-              showTag={false}
-              style={{ backgroundColor: 'transparent' }}
-            />
+            {(() => {
+              const stickers = resolveStickerKeys(sku.stickerKeys);
+              if (stickers.length === 0) {
+                return (
+                  <ProductPlaceholder
+                    sku={sku}
+                    theme={theme}
+                    size="xl"
+                    showTag={false}
+                    style={{ backgroundColor: 'transparent' }}
+                  />
+                );
+              }
+              const heroGlow = stickers[0].glow;
+              return (
+                <>
+                  {/* Glow frame around product image */}
+                  <View style={{ position: 'relative' }}>
+                    {/* Aura */}
+                    <View style={{
+                      position: 'absolute', top: -14, left: -14, right: -14, bottom: -14,
+                      borderRadius: 26,
+                      backgroundColor: heroGlow + '14',
+                      shadowColor: heroGlow,
+                      shadowRadius: 30,
+                      shadowOpacity: 0.55,
+                      shadowOffset: { width: 0, height: 0 },
+                    }} />
+                    {/* Frame */}
+                    <View style={{
+                      borderRadius: 14, padding: 6,
+                      backgroundColor: heroGlow + '22',
+                      borderWidth: 1, borderColor: heroGlow + '55',
+                      shadowColor: heroGlow,
+                      shadowRadius: 16,
+                      shadowOpacity: 0.35,
+                      shadowOffset: { width: 0, height: 0 },
+                    }}>
+                      <View style={{ borderRadius: 10, overflow: 'hidden' }}>
+                        <ProductPlaceholder
+                          sku={sku}
+                          theme={theme}
+                          size="lg"
+                          showTag={false}
+                          style={{ backgroundColor: 'transparent' }}
+                        />
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Sticker tray — docked beside image, never overlapping */}
+                  <View style={{
+                    flexDirection: 'column', alignItems: 'center', gap: 12,
+                    paddingVertical: 12, paddingHorizontal: 9,
+                    marginLeft: 14,
+                    borderRadius: 20,
+                    backgroundColor: 'rgba(255,255,255,0.025)',
+                    borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)',
+                  }}>
+                    {stickers.map((s, i) => (
+                      <ExclusiveSticker key={s.key} sticker={s} size={66} delay={180 + i * 150} animate />
+                    ))}
+                  </View>
+                </>
+              );
+            })()}
           </Animated.View>
         </Animated.View>
 

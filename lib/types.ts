@@ -64,6 +64,8 @@ export interface SKU {
   priceMintCount?: number | null;
   priceLoose?: number | null;
   priceLooseCount?: number | null;
+  // Exclusive stickers (ordered, index 0 = hero/aura source)
+  stickerKeys?: string[] | null;
   // Directional signal (from sku_insights)
   direction?: InsightDirection;
   insight?: SkuInsight | null;

@@ -277,7 +277,7 @@ export async function fetchSkuById(skuId: string): Promise<SKU | null> {
     .from('skus')
     .select(`
       id, name, short, series, category_id, fandom_id,
-      ebay_query, ebay_url, image_url, pop_number, exclusive_type,
+      ebay_query, ebay_url, image_url, pop_number, exclusive_type, sticker_keys,
       card_variant, card_grader, card_grade, created_at,
       hot_index(hot_score, delta_24h, momentum, velocity_score, volume_score, confirmation_score, freshness_score),
       daily_snapshots(price_low, price_median, price_high, listing_count, snapshot_date)
@@ -451,6 +451,7 @@ function rowToSku(row: Record<string, unknown>): SKU {
     priceMintCount: row.price_mint_count != null ? Number(row.price_mint_count) : null,
     priceLoose:     row.price_loose     != null ? Number(row.price_loose)      : null,
     priceLooseCount:row.price_loose_count != null ? Number(row.price_loose_count): null,
+    stickerKeys: Array.isArray(row.sticker_keys) ? (row.sticker_keys as string[]) : null,
     direction: (row.insight_direction as InsightDirection) ?? undefined,
   };
 }
