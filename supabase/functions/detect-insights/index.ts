@@ -102,11 +102,11 @@ function detectInsight(sku: SkuData): DetectionResult {
   // optional. Rules that need it guard with null-checks internally. We only block on
   // insufficient price/listing history which makes score signals unreliable.
   if (
-    sku.snapshots.length < 14 ||
+    sku.snapshots.length < 7 ||
     (today?.listing_count ?? 0) < 5
   ) {
     const reason =
-      sku.snapshots.length < 14 ? 'insufficient_history'
+      sku.snapshots.length < 7 ? 'insufficient_history'
       : 'low_listing_count';
     return {
       type: 'low_data', direction: 'holding', confidence: 'low',
@@ -114,11 +114,16 @@ function detectInsight(sku: SkuData): DetectionResult {
     };
   }
 
-  // Rule 1: supply_shock — listings up ≥25% WoW, price flat (±5% 14d), velocity ≤10
+  // ── Detection rules — calibrated to actual data (price snapshots + listing counts).
+  // Rules requiring Reddit/eBay watcher data are replaced with snapshot-based equivalents
+  // since weekly_signals is not populated. confirmation_score is ~0 on most SKUs so any
+  // rule requiring it high has been replaced. ────────────────────────────────────────────
+
+  // Rule 1: supply_shock — listings up ≥15% WoW, price flat (±8% 14d), velocity ≤15
   if (today && ago7 && ago14 && ago7.listing_count > 0) {
-    const listingChangePct   = ((today.listing_count - ago7.listing_count) / ago7.listing_count) * 100;
-    const priceStabilityPct  = Math.abs(((today.price_median - ago14.price_median) / (ago14.price_median || 1)) * 100);
-    if (listingChangePct >= 25 && priceStabilityPct <= 5 && sku.hot.velocity_score <= 10) {
+    const listingChangePct  = ((today.listing_count - ago7.listing_count) / ago7.listing_count) * 100;
+    const priceStabilityPct = Math.abs(((today.price_median - ago14.price_median) / (ago14.price_median || 1)) * 100);
+    if (listingChangePct >= 15 && priceStabilityPct <= 8 && sku.hot.velocity_score <= 15) {
       return {
         type: 'supply_shock', direction: 'cooling', confidence: 'high',
         payload: {
@@ -133,108 +138,102 @@ function detectInsight(sku: SkuData): DetectionResult {
     }
   }
 
-  // Rule 2: confirmed_breakout — all sub-scores ≥18, price up ≥10% 14d, reddit ≥3
-  if (
-    today && ago14 &&
-    sku.hot.velocity_score >= 18 && sku.hot.volume_score >= 18 &&
-    sku.hot.confirmation_score >= 18 && sku.hot.freshness_score >= 18
-  ) {
-    const priceChange14d  = ((today.price_median - ago14.price_median) / (ago14.price_median || 1)) * 100;
-    const redditMentions  = thisWeek?.reddit_mentions ?? 0;
-    if (priceChange14d >= 10 && redditMentions >= 3) {
+  // Rule 2: confirmed_breakout — price up ≥8% in 7 days.
+  // Replaces the old "all 4 sub-scores ≥18" gate which could never fire because
+  // confirmation_score is 0 on most SKUs.
+  if (today && ago7 && ago7.price_median > 0) {
+    const priceChange7d = ((today.price_median - ago7.price_median) / ago7.price_median) * 100;
+    if (priceChange7d >= 8) {
       return {
-        type: 'confirmed_breakout', direction: 'rising', confidence: 'high',
+        type: 'confirmed_breakout', direction: 'rising',
+        confidence: priceChange7d >= 15 ? 'high' : 'medium',
         payload: {
-          velocity:             sku.hot.velocity_score,
-          volume:               sku.hot.volume_score,
-          confirmation:         sku.hot.confirmation_score,
-          freshness:            sku.hot.freshness_score,
-          price_change_14d_pct: round(priceChange14d),
-          reddit_mentions_week: redditMentions,
+          price_median_now:    today.price_median,
+          price_median_7d_ago: ago7.price_median,
+          price_change_7d_pct: round(priceChange7d),
+          velocity_now:        sku.hot.velocity_score,
+          listing_count_now:   today.listing_count,
         },
       };
     }
   }
 
-  // Rule 3: false_top — price up ≥15% 14d, velocity declining, reddit down ≥30%
-  if (today && ago14 && thisWeek && lastWeek) {
-    const priceChange14d    = ((today.price_median - ago14.price_median) / (ago14.price_median || 1)) * 100;
-    const velocity14dAvg    = sku.snapshots
-      .filter((s) => s.snapshot_date >= ago14.snapshot_date)
-      .reduce((sum, s) => sum + s.hot_score, 0) / Math.max(1, sku.snapshots.filter((s) => s.snapshot_date >= ago14.snapshot_date).length);
-    const redditDrop        = lastWeek.reddit_mentions > 0
-      ? ((lastWeek.reddit_mentions - thisWeek.reddit_mentions) / lastWeek.reddit_mentions) * 100
-      : 0;
-    if (
-      priceChange14d >= 15 &&
-      sku.hot.velocity_score < velocity14dAvg &&
-      redditDrop >= 30
-    ) {
+  // Rule 3: price_drop — price down ≥8% in 7 days.
+  // Replaces catalyst_spike which required Reddit 3x — not tracked.
+  if (today && ago7 && ago7.price_median > 0) {
+    const priceChange7d = ((today.price_median - ago7.price_median) / ago7.price_median) * 100;
+    if (priceChange7d <= -8) {
       return {
-        type: 'false_top', direction: 'cooling', confidence: 'medium',
+        type: 'catalyst_spike', direction: 'cooling',
+        confidence: priceChange7d <= -15 ? 'high' : 'medium',
         payload: {
-          price_change_14d_pct:      round(priceChange14d),
-          velocity_now:              sku.hot.velocity_score,
-          velocity_14d_avg:          round(velocity14dAvg),
-          reddit_mentions_this_week: thisWeek.reddit_mentions,
-          reddit_mentions_last_week: lastWeek.reddit_mentions,
+          price_median_now:    today.price_median,
+          price_median_7d_ago: ago7.price_median,
+          price_change_7d_pct: round(priceChange7d),
+          velocity_now:        sku.hot.velocity_score,
+          listing_count_now:   today.listing_count,
         },
       };
     }
   }
 
-  // Rule 4: quiet_accumulation — watchers up ≥30% WoW, price flat (±5%), listings flat/down
-  if (today && ago7 && ago14 && thisWeek && lastWeek && lastWeek.ebay_watchers > 0) {
-    const watcherChangePct  = ((thisWeek.ebay_watchers - lastWeek.ebay_watchers) / lastWeek.ebay_watchers) * 100;
-    const priceStabilityPct = Math.abs(((today.price_median - ago14.price_median) / (ago14.price_median || 1)) * 100);
-    const listingChangePct  = ago7.listing_count > 0
-      ? ((today.listing_count - ago7.listing_count) / ago7.listing_count) * 100
-      : 0;
-    if (watcherChangePct >= 30 && priceStabilityPct <= 5 && listingChangePct <= 5) {
+  // Rule 4: false_top — price up ≥10% in 14 days but velocity is now below its own
+  // 14-day average (momentum fading after a run). Reddit requirement removed.
+  if (today && ago14 && ago14.price_median > 0) {
+    const priceChange14d = ((today.price_median - ago14.price_median) / ago14.price_median) * 100;
+    if (priceChange14d >= 10) {
+      const snaps14d = sku.snapshots.filter((s) => s.snapshot_date >= ago14.snapshot_date);
+      const velocity14dAvg = snaps14d.length > 0
+        ? snaps14d.reduce((sum, s) => sum + s.hot_score, 0) / snaps14d.length
+        : 0;
+      if (velocity14dAvg > 2 && sku.hot.velocity_score < velocity14dAvg * 0.7) {
+        return {
+          type: 'false_top', direction: 'cooling', confidence: 'medium',
+          payload: {
+            price_change_14d_pct: round(priceChange14d),
+            velocity_now:         sku.hot.velocity_score,
+            velocity_14d_avg:     round(velocity14dAvg),
+            price_median_now:     today.price_median,
+            price_median_14d_ago: ago14.price_median,
+          },
+        };
+      }
+    }
+  }
+
+  // Rule 5: quiet_accumulation — high velocity (≥15) with stable price and flat/falling listings.
+  // Replaces the old watcher-based version (eBay watcher data not tracked).
+  if (today && ago7 && ago14 && ago7.listing_count > 0 && ago14.price_median > 0) {
+    const priceChange14d    = ((today.price_median - ago14.price_median) / ago14.price_median) * 100;
+    const listingChange7d   = ((today.listing_count - ago7.listing_count) / ago7.listing_count) * 100;
+    if (sku.hot.velocity_score >= 15 && priceChange14d >= -3 && priceChange14d <= 8 && listingChange7d <= 5) {
       return {
-        type: 'quiet_accumulation', direction: 'rising', confidence: compositConfidence(sku.hot),
+        type: 'quiet_accumulation', direction: 'rising', confidence: 'medium',
         payload: {
-          watchers_now:         thisWeek.ebay_watchers,
-          watchers_7d_ago:      lastWeek.ebay_watchers,
-          watchers_change_pct:  round(watcherChangePct),
-          price_stability_pct:  round(priceStabilityPct),
-          listing_count_change_pct: round(listingChangePct),
+          velocity_now:               sku.hot.velocity_score,
+          price_change_14d_pct:       round(priceChange14d),
+          listing_count_change_7d_pct: round(listingChange7d),
+          listing_count_now:          today.listing_count,
+          price_median_now:           today.price_median,
         },
       };
     }
   }
 
-  // Rule 5: catalyst_spike — reddit 3x this week vs last, price still flat
-  if (today && ago14 && thisWeek && lastWeek && lastWeek.reddit_mentions >= 1) {
-    const redditRatio       = thisWeek.reddit_mentions / lastWeek.reddit_mentions;
-    const priceChangePct    = Math.abs(((today.price_median - ago14.price_median) / (ago14.price_median || 1)) * 100);
-    if (redditRatio >= 3 && priceChangePct <= 5) {
-      return {
-        type: 'catalyst_spike', direction: 'rising', confidence: 'low',
-        payload: {
-          reddit_mentions_this_week: thisWeek.reddit_mentions,
-          reddit_mentions_last_week: lastWeek.reddit_mentions,
-          reddit_ratio:              round(redditRatio),
-          price_change_14d_pct:      round(priceChangePct),
-        },
-      };
-    }
-  }
-
-  // Rule 6: stagnation_risk — price flat ≥60d (±3%), velocity ≤5, listings up ≥10% 30d
-  if (today && ago30 && ago14) {
-    const priceFlat60 = sku.snapshots.length >= 60;
-    const oldest = sku.snapshots.reduce((min, s) => s.snapshot_date < min.snapshot_date ? s : min, sku.snapshots[0]);
+  // Rule 6: stagnation_risk — price flat ≥45d (±4%), velocity ≤5, listings up ≥8% 30d.
+  // Lowered from 60d to 45d since fewer SKUs have 60+ day history.
+  if (today && ago30) {
+    const oldest     = sku.snapshots.reduce((min, s) => s.snapshot_date < min.snapshot_date ? s : min, sku.snapshots[0]);
     const dayTracked = Math.floor((Date.now() - new Date(oldest.snapshot_date).getTime()) / 86400000);
-    if (dayTracked >= 60) {
-      const priceRange = sku.snapshots.slice(-60).map((s) => s.price_median);
-      const priceMin   = Math.min(...priceRange);
-      const priceMax   = Math.max(...priceRange);
-      const priceDrift = priceMin > 0 ? ((priceMax - priceMin) / priceMin) * 100 : 0;
+    if (dayTracked >= 45) {
+      const recentSnaps = sku.snapshots.slice(-45);
+      const priceMin    = Math.min(...recentSnaps.map((s) => s.price_median));
+      const priceMax    = Math.max(...recentSnaps.map((s) => s.price_median));
+      const priceDrift  = priceMin > 0 ? ((priceMax - priceMin) / priceMin) * 100 : 0;
       const listingChange30d = ago30.listing_count > 0
         ? ((today.listing_count - ago30.listing_count) / ago30.listing_count) * 100
         : 0;
-      if (priceDrift <= 3 && sku.hot.velocity_score <= 5 && listingChange30d >= 10) {
+      if (priceDrift <= 4 && sku.hot.velocity_score <= 5 && listingChange30d >= 8) {
         return {
           type: 'stagnation_risk', direction: 'falling', confidence: 'medium',
           payload: {
@@ -286,23 +285,23 @@ function fallbackNarration(type: InsightType, payload: Record<string, unknown>):
       };
     case 'confirmed_breakout':
       return {
-        short: `All four signal scores above 18 — price up ${p.price_change_14d_pct}% in 14 days.`,
-        long:  `Velocity (${p.velocity}), volume (${p.volume}), confirmation (${p.confirmation}), and freshness (${p.freshness}) are all running above 18/30. The median price has moved up ${p.price_change_14d_pct}% over 14 days and Reddit has recorded ${p.reddit_mentions_week} mentions this week. Multi-signal breakouts with Reddit confirmation tend to have more staying power than single-signal moves.`,
+        short: `Price up ${p.price_change_7d_pct}% in 7 days — momentum building.`,
+        long:  `The median price moved from $${p.price_median_7d_ago} to $${p.price_median_now} (+${p.price_change_7d_pct}%) over the past 7 days. Velocity is currently ${p.velocity_now}/30 with ${p.listing_count_now} active listings. Sustained price moves of this magnitude tend to reflect genuine demand rather than noise, though confirmation over the next week will help distinguish a durable breakout from a brief spike.`,
       };
     case 'false_top':
       return {
-        short: `Price up ${p.price_change_14d_pct}% but velocity and Reddit mentions are declining.`,
-        long:  `The median price has risen ${p.price_change_14d_pct}% over 14 days, but velocity has dropped from an average of ${p.velocity_14d_avg} to ${p.velocity_now}, and Reddit mentions fell from ${p.reddit_mentions_last_week} to ${p.reddit_mentions_this_week}. Price gains without continued demand signal support may be fragile. The setup suggests the recent run could be approaching exhaustion.`,
+        short: `Price up ${p.price_change_14d_pct}% in 14 days but momentum is fading.`,
+        long:  `The median price has risen ${p.price_change_14d_pct}% over 14 days (now $${p.price_median_now}), but velocity has dropped from a 14-day average of ${p.velocity_14d_avg} to ${p.velocity_now}/30. Price gains without continued velocity support may be fragile. This pattern — a price run accompanied by fading momentum — tends to precede consolidation or reversal.`,
       };
     case 'quiet_accumulation':
       return {
-        short: `eBay watchers up ${p.watchers_change_pct}% while price holds flat — demand building quietly.`,
-        long:  `Watcher count moved from ${p.watchers_7d_ago} to ${p.watchers_now} (${p.watchers_change_pct}%) over the past week. Price has remained within ${p.price_stability_pct}% of recent levels, and listings are flat or slightly lower. Rising watcher counts with stable prices can indicate accumulation before a price move — though the timeline is uncertain.`,
+        short: `Velocity at ${p.velocity_now}/30 with price flat — demand building quietly.`,
+        long:  `Velocity is running at ${p.velocity_now}/30 while the median price has moved only ${p.price_change_14d_pct}% over 14 days (currently $${p.price_median_now}). Listings changed ${p.listing_count_change_7d_pct}% over the past 7 days with ${p.listing_count_now} currently active. High velocity alongside stable price and flat supply can indicate accumulation before a price move — though the timeline is uncertain.`,
       };
     case 'catalyst_spike':
       return {
-        short: `Reddit mentions up ${p.reddit_ratio}x this week — price hasn't moved yet.`,
-        long:  `Reddit activity jumped from ${p.reddit_mentions_last_week} to ${p.reddit_mentions_this_week} mentions (${p.reddit_ratio}x). The median price has so far moved only ${p.price_change_14d_pct}% over 14 days, suggesting the market hasn't fully priced in the social interest yet. Reddit-driven signals tend to be noisy — watch for secondary confirmation from listing or price movement.`,
+        short: `Price down ${Math.abs(Number(p.price_change_7d_pct))}% in 7 days — market cooling.`,
+        long:  `The median price dropped from $${p.price_median_7d_ago} to $${p.price_median_now} (${p.price_change_7d_pct}%) over the past 7 days. Velocity is currently ${p.velocity_now}/30 with ${p.listing_count_now} active listings. Price declines of this magnitude may reflect genuine softening in demand. Watch for whether listings continue to build or whether prices stabilise at this level.`,
       };
     case 'stagnation_risk':
       return {
@@ -332,14 +331,14 @@ async function generateNarration(
   priceMedian: number,
 ): Promise<{ short: string; long: string; inputTokens: number; outputTokens: number }> {
   const typeDescriptions: Record<InsightType, string> = {
-    supply_shock:       'inventory building while price holds (bearish signal)',
-    confirmed_breakout: 'all signals rising with price and social confirmation (bullish signal)',
-    false_top:          'price rose but demand signals are retreating (reversal warning)',
-    quiet_accumulation: 'watchers rising while price and listings are flat (bullish setup)',
-    catalyst_spike:     'social interest spiked before price responded (early signal)',
-    stagnation_risk:    'prolonged price stagnation with rising supply (bearish risk)',
-    low_data:           'insufficient data to make a confident assessment',
-    steady_state:       'no significant market movement detected (holding pattern)',
+    supply_shock:       'listings spiked ≥15% week-over-week while price held flat (bearish supply signal)',
+    confirmed_breakout: 'price surged ≥8% in 7 days — sustained upward momentum (bullish breakout)',
+    false_top:          'price up ≥10% in 14 days but velocity is now fading below its own average (reversal warning)',
+    quiet_accumulation: 'high velocity (≥15) with stable price and flat supply — demand absorbing inventory (bullish setup)',
+    catalyst_spike:     'price dropped ≥8% in 7 days — market cooling (bearish signal)',
+    stagnation_risk:    'price flat ≥45 days with rising supply and low velocity (bearish drift risk)',
+    low_data:           'insufficient price or listing history to make a confident assessment',
+    steady_state:       'no significant price or listing movement detected (holding pattern)',
   };
 
   const prompt = `You are Trendnable's market analyst voice — editorial, calm, specific, never hype-y.

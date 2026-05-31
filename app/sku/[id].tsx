@@ -99,27 +99,41 @@ function SectionHeader({ title }: { title: string }) {
   );
 }
 
-/* Gold tier pill — gold dot + tier label + score number */
-function TierPill({ score }: { score: number }) {
-  const tier = score >= 80 ? 'HOT' : score >= 65 ? 'STRONG' : score >= 40 ? 'HOLDING' : 'WATCH';
+/* Tier/direction pill — matches list badge colors when direction is available */
+const DIRECTION_PILL: Record<string, { dot: string; bg: string; border: string; label: string }> = {
+  rising:  { dot: '#34d399', bg: 'rgba(16,185,129,0.12)',  border: 'rgba(52,211,153,0.32)',  label: 'RISING'  },
+  cooling: { dot: '#fb923c', bg: 'rgba(249,115,22,0.12)',  border: 'rgba(251,146,60,0.32)',  label: 'COOLING' },
+  falling: { dot: '#fb7185', bg: 'rgba(244,63,94,0.12)',   border: 'rgba(251,113,133,0.32)', label: 'FALLING' },
+  holding: { dot: C.gold,   bg: 'rgba(241,194,76,0.12)',  border: 'rgba(241,194,76,0.32)',  label: 'HOLDING' },
+};
+
+function TierPill({ score, direction }: { score: number; direction?: string | null }) {
+  const scoreTier = score >= 80 ? 'HOT' : score >= 65 ? 'STRONG' : score >= 40 ? 'HOLDING' : 'WATCH';
+  const cfg = direction ? DIRECTION_PILL[direction] ?? DIRECTION_PILL.holding : null;
+  const dotColor  = cfg ? cfg.dot    : C.gold;
+  const bgColor   = cfg ? cfg.bg     : 'rgba(241,194,76,0.12)';
+  const bdColor   = cfg ? cfg.border : 'rgba(241,194,76,0.32)';
+  const label     = cfg ? cfg.label  : scoreTier;
+  const labelColor = cfg ? cfg.dot   : C.gold;
+
   return (
     <View style={{
       flexDirection: 'row', alignItems: 'center', gap: 11,
-      backgroundColor: 'rgba(241,194,76,0.12)',
-      borderWidth: 1, borderColor: 'rgba(241,194,76,0.32)',
+      backgroundColor: bgColor,
+      borderWidth: 1, borderColor: bdColor,
       borderRadius: 999,
       paddingVertical: 9, paddingLeft: 13, paddingRight: 16,
     }}>
       <View style={{
         width: 13, height: 13, borderRadius: 999,
-        backgroundColor: C.gold,
-        shadowColor: C.gold, shadowOpacity: 0.7, shadowRadius: 6, shadowOffset: { width: 0, height: 0 },
+        backgroundColor: dotColor,
+        shadowColor: dotColor, shadowOpacity: 0.7, shadowRadius: 6, shadowOffset: { width: 0, height: 0 },
       }} />
       <Text style={{
         fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 1,
-        color: C.gold, textTransform: 'uppercase',
+        color: labelColor, textTransform: 'uppercase',
       }}>
-        {tier}
+        {label}
       </Text>
       <Text style={{
         fontFamily: 'JetBrainsMono_700Bold', fontSize: 22, color: '#efece2',
@@ -704,7 +718,7 @@ export default function SKUDetailScreen() {
                 h={34}
                 color={theme.accent}
               />
-              <TierPill score={sku.hot} />
+              <TierPill score={sku.hot} direction={sku.direction} />
               <View style={{ flex: 1 }} />
               <Text style={{
                 fontFamily: 'JetBrainsMono_700Bold', fontSize: 28, color: deltaColor,

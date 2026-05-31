@@ -729,6 +729,17 @@ export async function deleteCatalogCollectionItem(userId: string, catalogId: str
   if (error) console.error('deleteCatalogCollectionItem:', error.message);
 }
 
+// Atomically clears catalog_id from a row that already has sku_id set.
+// Safer than delete + re-insert — the sku_id row is preserved throughout.
+export async function clearCatalogLink(userId: string, catalogId: string): Promise<void> {
+  const { error } = await supabase
+    .from('user_collections')
+    .update({ catalog_id: null })
+    .eq('user_id', userId)
+    .eq('catalog_id', catalogId);
+  if (error) console.error('clearCatalogLink:', error.message);
+}
+
 // ── Push notifications ────────────────────────────────────────────────────────
 
 export async function savePushToken(userId: string, token: string): Promise<void> {

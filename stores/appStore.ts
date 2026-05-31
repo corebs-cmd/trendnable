@@ -79,6 +79,9 @@ interface AppState {
   addCatalogToCollection: (item: CatalogCollectionItem) => void;
   removeCatalogFromCollection: (catalogId: string) => void;
   isCatalogInCollection: (catalogId: string) => boolean;
+  // Atomically completes the catalog→SKU migration: clears catalog_id from the DB row
+  // (keeps sku_id) and updates local state. Call this instead of removeCatalog+addToCollection.
+  completeCatalogMigration: (catalogId: string, skuId: string, item: Pick<CollectionItem, 'qty' | 'purchased' | 'purchaseDate' | 'condition'>) => void;
 
   // Price alerts
   loadPriceAlerts: (userId: string) => Promise<void>;
@@ -286,6 +289,41 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   isCatalogInCollection: (catalogId) => get().catalogCollection.some((c) => c.catalogId === catalogId),
+
+  completeCatalogMigration: (catalogId, skuId, item) => {
+    const { user, collection } = get();
+    const userId = user?.id;
+
+    // Remove from catalogCollection local state
+    set((state) => ({
+      catalogCollection: state.catalogCollection.filter((c) => c.catalogId !== catalogId),
+    }));
+
+    // Add to collection local state only if not already present
+    const alreadyOwned = collection.some((c) => c.skuId === skuId);
+    if (!alreadyOwned) {
+      const newItem: CollectionItem = {
+        skuId,
+        qty: item.qty,
+        purchased: item.purchased,
+        purchaseDate: item.purchaseDate,
+        condition: item.condition,
+        forSale: false,
+      };
+      set((state) => ({ collection: [newItem, ...state.collection] }));
+    }
+
+    if (userId) {
+      // Atomic DB update: clear catalog_id from the row (keeps sku_id intact)
+      api.clearCatalogLink(userId, catalogId).catch(console.error);
+      // Ensure the sku_id row has the correct qty/price data
+      const fullItem: CollectionItem = {
+        skuId, qty: item.qty, purchased: item.purchased,
+        purchaseDate: item.purchaseDate, condition: item.condition, forSale: false,
+      };
+      api.upsertCollectionItem(userId, fullItem).catch(console.error);
+    }
+  },
 
   loadPriceAlerts: async (userId) => {
     const priceAlerts = await api.fetchPriceAlerts(userId);

@@ -45,7 +45,7 @@ export default function CollectionScreen() {
   const hotSkus = useAppStore((s) => s.hotSkus);
   const catalogCollection = useAppStore((s) => s.catalogCollection);
   const removeCatalogFromCollection = useAppStore((s) => s.removeCatalogFromCollection);
-  const addToCollection = useAppStore((s) => s.addToCollection);
+  const completeCatalogMigration = useAppStore((s) => s.completeCatalogMigration);
   const loadUserData = useAppStore((s) => s.loadUserData);
   const userId = useAppStore((s) => s.user?.id);
   const theme = buildTheme(isDark);
@@ -56,22 +56,29 @@ export default function CollectionScreen() {
     const run = async () => {
       await loadUserData(userId);
       if (!active) return;
-      const stuck = useAppStore.getState().catalogCollection.filter((i) => !i.skuId);
-      if (stuck.length === 0) return;
+      const all = useAppStore.getState().catalogCollection;
+
+      // Syncing: sku_id already known in DB — just clear the catalog link
+      const syncing = all.filter((i) => !!i.skuId);
+      for (const item of syncing) {
+        completeCatalogMigration(item.catalogId, item.skuId!, {
+          qty: item.qty, purchased: item.purchased,
+          purchaseDate: item.purchaseDate, condition: item.condition,
+        });
+      }
+
+      // Pending: sku_id not yet assigned — promote first
+      const pending = all.filter((i) => !i.skuId);
+      if (pending.length === 0) return;
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token || !active) return;
-      for (const item of stuck) {
+      for (const item of pending) {
         const promotion = await promoteCatalogToSku(item.catalogId, session.access_token);
         if (!active) return;
         if (promotion?.skuId) {
-          removeCatalogFromCollection(item.catalogId);
-          addToCollection({
-            skuId: promotion.skuId,
-            qty: item.qty,
-            purchased: item.purchased,
-            purchaseDate: item.purchaseDate,
-            condition: item.condition,
-            forSale: false,
+          completeCatalogMigration(item.catalogId, promotion.skuId, {
+            qty: item.qty, purchased: item.purchased,
+            purchaseDate: item.purchaseDate, condition: item.condition,
           });
         }
       }

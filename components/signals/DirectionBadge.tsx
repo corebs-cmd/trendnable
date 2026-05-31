@@ -64,7 +64,10 @@ export function DirectionBadge({
 }: DirectionBadgeProps) {
   const cfg  = DIRECTION_CONFIG[direction];
   const dims = DIMS[size];
-  const arrow = delta24h > 0 ? '↑' : delta24h < 0 ? '↓' : '·';
+  const arrow = direction === 'rising' ? '↑'
+              : direction === 'falling' ? '↓'
+              : direction === 'cooling' ? '↓'
+              : delta24h > 0 ? '↑' : delta24h < 0 ? '↓' : '·';
 
   return (
     <View style={[styles.pill, { height: dims.h, paddingHorizontal: dims.padX, backgroundColor: cfg.bg }]}>
