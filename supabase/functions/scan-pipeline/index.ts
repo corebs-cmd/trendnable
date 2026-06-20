@@ -23,6 +23,19 @@ const ANTHROPIC_API_KEY         = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
 const HAIKU_INPUT_RATE  = 0.80 / 1_000_000;
 const HAIKU_OUTPUT_RATE = 4.00 / 1_000_000;
 
+// Free-tier scan quota. Premium users bypass entirely.
+const SCAN_DAILY_LIMIT = 1;
+
+function todayUtc(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function nextUtcMidnightIso(): string {
+  const d = new Date();
+  d.setUTCHours(24, 0, 0, 0);
+  return d.toISOString();
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface ScanResult {
@@ -53,6 +66,10 @@ interface ScanError {
   ok: false;
   error: string;
   message?: string;
+  // Only set when error === 'quota_exceeded'
+  used?: number;
+  limit?: number;
+  resetsAt?: string;
 }
 
 type ScanResponse = ScanResult | ScanError;
@@ -477,6 +494,30 @@ serve(async (req) => {
     return json({ ok: false, error: 'barcode must be 6-14 digits' }, 400);
   }
 
+  // ── Step 2.5: Free-tier daily scan quota ─────────────────────────────────────
+  const { data: userRow } = await svc
+    .from('users')
+    .select('is_premium, scan_count_day, scan_count_used')
+    .eq('id', userId)
+    .single();
+
+  const isPremium = userRow?.is_premium ?? false;
+  const today     = todayUtc();
+  const usedToday = userRow?.scan_count_day === today
+    ? (userRow?.scan_count_used ?? 0)
+    : 0;
+
+  if (!isPremium && usedToday >= SCAN_DAILY_LIMIT) {
+    return json({
+      ok: false,
+      error: 'quota_exceeded',
+      message: `You've used all ${SCAN_DAILY_LIMIT} free scans for today. Upgrade for unlimited scanning.`,
+      used: usedToday,
+      limit: SCAN_DAILY_LIMIT,
+      resetsAt: nextUtcMidnightIso(),
+    }, 429);
+  }
+
   let inputTokens  = 0;
   let outputTokens = 0;
 
@@ -496,6 +537,18 @@ serve(async (req) => {
         error: 'not_found',
         message: 'No product found for this barcode.',
       });
+    }
+
+    // Burn a scan slot now that we know the barcode is real. Bad barcodes that
+    // no DB recognizes are free; everything past this point counts.
+    if (!isPremium) {
+      await svc
+        .from('users')
+        .update({
+          scan_count_day:  today,
+          scan_count_used: usedToday + 1,
+        })
+        .eq('id', userId);
     }
 
     // ── Step 6: eBay Browse API search ────────────────────────────────────────

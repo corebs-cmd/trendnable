@@ -194,17 +194,19 @@ serve(async (req) => {
     const [{ data: existingSkus }, { data: existingCandidates }, { data: deletedSkus }] = await Promise.all([
       supabase.from('skus').select('name'),
       supabase.from('discovery_candidates').select('name').in('status', ['new', 'approved', 'rejected']),
-      supabase.from('deleted_skus').select('name'),
+      supabase.from('deleted_skus').select('normalized_name, name'),
     ]);
     const existingNames: string[] = [
       ...(existingSkus ?? []).map((s: any) => s.name as string),
       ...(existingCandidates ?? []).map((c: any) => c.name as string),
     ];
-    // Blocklist for post-Claude name filter (normalized: lowercase, punctuation stripped)
+    // Must match normalize_sku_name() in migration 044 exactly
     const normalizeName = (s: string) =>
-      s.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+      s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
     const deletedNameSet = new Set<string>(
-      (deletedSkus ?? []).map((d: any) => normalizeName(d.name as string))
+      (deletedSkus ?? []).map((d: any) =>
+        (d.normalized_name as string | null) ?? normalizeName(d.name as string)
+      )
     );
     // Pass deleted names to Claude so it can skip them during classification
     const allKnownNames = [

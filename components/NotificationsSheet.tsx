@@ -26,7 +26,7 @@ export default function NotificationsSheet({ open, theme, onClose, onNavigate }:
   };
 
   return (
-    <Sheet open={open} onClose={onClose} theme={theme} title="Price Alerts">
+    <Sheet open={open} onClose={onClose} theme={theme} title="Notifications">
       {notifications.length === 0 ? (
         <View style={{ alignItems: 'center', paddingVertical: 36, gap: 10 }}>
           <Svg width={40} height={40} viewBox="0 0 24 24" fill="none" stroke={theme.faint} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
@@ -37,7 +37,7 @@ export default function NotificationsSheet({ open, theme, onClose, onNavigate }:
             All caught up
           </Text>
           <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.muted, textAlign: 'center' }}>
-            No new price alerts.
+            You're all caught up.
           </Text>
         </View>
       ) : (
@@ -46,72 +46,80 @@ export default function NotificationsSheet({ open, theme, onClose, onNavigate }:
             {notifications.length} unread · tap an item to view the SKU
           </Text>
 
-          {notifications.map((n) => (
-            <View key={n.id} style={{
-              backgroundColor: theme.surface2,
-              borderRadius: theme.radius,
-              overflow: 'hidden',
-              borderWidth: 1,
-              borderColor: `${theme.premium}30`,
-            }}>
-              {/* Body */}
-              <Pressable
-                onPress={() => {
-                  if (n.skuId && onNavigate) {
-                    onNavigate(n.skuId);
-                    onClose();
-                  }
-                }}
-                style={({ pressed }) => ({
-                  padding: 14,
-                  opacity: pressed && n.skuId ? 0.72 : 1,
-                })}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <View style={{
-                    width: 8, height: 8, borderRadius: 999,
-                    backgroundColor: theme.premium, flexShrink: 0,
-                  }} />
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13.5, color: theme.text, flex: 1 }}>
-                    {n.title}
+          {notifications.map((n) => {
+            const isPriceAlert = n.type === 'price_alert';
+            return (
+              <View key={n.id} style={{
+                backgroundColor: theme.surface2,
+                borderRadius: theme.radius,
+                overflow: 'hidden',
+                borderWidth: 1,
+                borderColor: `${theme.premium}30`,
+              }}>
+                {/* Body */}
+                <Pressable
+                  onPress={() => {
+                    if (n.skuId && onNavigate) {
+                      markRead(n.id);
+                      onNavigate(n.skuId);
+                      onClose();
+                    }
+                  }}
+                  style={({ pressed }) => ({
+                    padding: 14,
+                    opacity: pressed && n.skuId ? 0.72 : 1,
+                  })}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <View style={{
+                      width: 8, height: 8, borderRadius: 999,
+                      backgroundColor: theme.premium, flexShrink: 0,
+                    }} />
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 13.5, color: theme.text, flex: 1 }}>
+                      {n.title}
+                    </Text>
+                  </View>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.muted, lineHeight: 18 }}>
+                    {n.body}
                   </Text>
-                </View>
-                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.muted, lineHeight: 18 }}>
-                  {n.body}
-                </Text>
-                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.faint, marginTop: 6 }}>
-                  {new Date(n.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                </Text>
-              </Pressable>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.faint, marginTop: 6 }}>
+                    {new Date(n.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </Text>
+                </Pressable>
 
-              {/* Actions */}
-              <View style={{ flexDirection: 'row', borderTopWidth: 0.5, borderTopColor: theme.hairline }}>
-                <Pressable
-                  onPress={() => handleKeepActive(n)}
-                  style={({ pressed }) => ({
-                    flex: 1, paddingVertical: 13, alignItems: 'center',
-                    opacity: pressed ? 0.7 : 1,
-                  })}
-                >
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: theme.gold }}>
-                    Keep active
-                  </Text>
-                </Pressable>
-                <View style={{ width: 0.5, backgroundColor: theme.hairline }} />
-                <Pressable
-                  onPress={() => markRead(n.id)}
-                  style={({ pressed }) => ({
-                    flex: 1, paddingVertical: 13, alignItems: 'center',
-                    opacity: pressed ? 0.7 : 1,
-                  })}
-                >
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: theme.muted }}>
-                    Dismiss
-                  </Text>
-                </Pressable>
+                {/* Actions — "Keep active" only makes sense for price alerts; everything else gets a single dismiss */}
+                <View style={{ flexDirection: 'row', borderTopWidth: 0.5, borderTopColor: theme.hairline }}>
+                  {isPriceAlert && (
+                    <>
+                      <Pressable
+                        onPress={() => handleKeepActive(n)}
+                        style={({ pressed }) => ({
+                          flex: 1, paddingVertical: 13, alignItems: 'center',
+                          opacity: pressed ? 0.7 : 1,
+                        })}
+                      >
+                        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: theme.gold }}>
+                          Keep active
+                        </Text>
+                      </Pressable>
+                      <View style={{ width: 0.5, backgroundColor: theme.hairline }} />
+                    </>
+                  )}
+                  <Pressable
+                    onPress={() => markRead(n.id)}
+                    style={({ pressed }) => ({
+                      flex: 1, paddingVertical: 13, alignItems: 'center',
+                      opacity: pressed ? 0.7 : 1,
+                    })}
+                  >
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: theme.muted }}>
+                      Dismiss
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       )}
     </Sheet>

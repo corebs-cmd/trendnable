@@ -18,7 +18,7 @@ const SIZE_MAP: Record<SizeKey, { w: number; h: number; tagFs: number; pad: numb
 
 // ── Figure glyph (Funko/Hot Toys/NECA) ───────────────────────────────────────
 function FigureGlyph({ ink, variant, dark }: { ink: string; variant: number; dark: boolean }) {
-  const eyeFill = dark ? '#0F1A2E' : '#FFFFFF';
+  const eyeFill = dark ? '#181818' : '#FFFFFF';
   return (
     <Svg viewBox="0 0 120 150" width="60%" height="64%">
       <G fill={ink} opacity={0.92}>
@@ -73,7 +73,7 @@ function CardGlyph({ ink, variant, dark }: { ink: string; variant: number; dark:
 
 // ── Blind box glyph (Pop Mart) ────────────────────────────────────────────────
 function BlindBoxGlyph({ ink, dark }: { ink: string; dark: boolean }) {
-  const qFill = dark ? '#0F1A2E' : '#FFFFFF';
+  const qFill = dark ? '#181818' : '#FFFFFF';
   return (
     <Svg viewBox="0 0 140 140" width="66%" height="68%">
       <Path d="M70 18 L120 42 L70 66 L20 42 Z" fill={ink} opacity={0.78} />
@@ -97,7 +97,7 @@ function BlindBoxGlyph({ ink, dark }: { ink: string; dark: boolean }) {
 
 // ── Car glyph (Hot Wheels) ────────────────────────────────────────────────────
 function CarGlyph({ ink, dark }: { ink: string; dark: boolean }) {
-  const glassFill = dark ? '#0F1A2E' : '#FFFFFF';
+  const glassFill = dark ? '#181818' : '#FFFFFF';
   return (
     <Svg viewBox="0 0 160 90" width="78%" height="58%">
       <G fill={ink}>
@@ -134,7 +134,7 @@ function SignedGlyph({ ink, dark }: { ink: string; dark: boolean }) {
         opacity={0.92}
       />
       {/* centre pip */}
-      <Circle cx={50} cy={50} r={5.5} fill={dark ? '#0F1A2E' : '#FFFFFF'} opacity={0.7} />
+      <Circle cx={50} cy={50} r={5.5} fill={dark ? '#181818' : '#FFFFFF'} opacity={0.7} />
     </Svg>
   );
 }

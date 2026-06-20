@@ -32,23 +32,21 @@ function HeroCard({ sku, theme, onPress, onLongPress, narrativeOverride }: SKUCa
       onPress={onPress}
       onLongPress={onLongPress}
       style={({ pressed }) => ({
-        backgroundColor: theme.surface,
+        backgroundColor: '#252525',
         borderRadius: theme.radiusLg,
         overflow: 'hidden',
         opacity: pressed ? 0.85 : 1,
       })}
     >
-      {/* Category colour wash — ink at ~18% so text stays readable */}
-      <View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: c.ink + '59' }} pointerEvents="none" />
       {/* Eyebrow row */}
       <View style={styles.eyebrowRow}>
-        <View style={[styles.topFindPill, { backgroundColor: '#FF0025' }]}>
+        <View style={[styles.topFindPill, { backgroundColor: '#0D0D0D' }]}>
           <Svg width={9} height={9} viewBox="0 0 16 16">
-            <Path d="M8 16c3.314 0 6-2 6-5.5 0-1.5-.5-4-2.5-6 .25 1.5-1.25 2-1.25 2C11 4 9 .5 6 0c.357 2 .5 4-2 6-1.25 1-2 2.729-2 4.5C2 14 4.686 16 8 16z" fill="#FFFFFF" />
+            <Path d="M8 16c3.314 0 6-2 6-5.5 0-1.5-.5-4-2.5-6 .25 1.5-1.25 2-1.25 2C11 4 9 .5 6 0c.357 2 .5 4-2 6-1.25 1-2 2.729-2 4.5C2 14 4.686 16 8 16z" fill="#FF5500" />
           </Svg>
-          <Text style={[styles.topFindText, { color: '#FFFFFF' }]}>TOP FIND</Text>
+          <Text style={[styles.topFindText, { color: '#E1E4E6' }]}>TOP FIND</Text>
         </View>
-        <Text style={[styles.rankLabel, { color: theme.faint, fontFamily: theme.fontMonoBold }]}>
+        <Text style={[styles.rankLabel, { color: 'rgba(225,228,230,0.55)', fontFamily: theme.fontMonoBold }]}>
           NO. 01
         </Text>
       </View>
@@ -59,13 +57,13 @@ function HeroCard({ sku, theme, onPress, onLongPress, narrativeOverride }: SKUCa
 
         <View style={styles.heroInfo}>
           <Text
-            style={[styles.heroName, { color: theme.text, fontFamily: theme.fontDispBold }]}
+            style={[styles.heroName, { color: '#E1E4E6', fontFamily: theme.fontDispBold }]}
             numberOfLines={3}
           >
             {sku.name}
           </Text>
           <Text
-            style={[styles.heroSeries, { color: theme.muted }]}
+            style={[styles.heroSeries, { color: 'rgba(225,228,230,0.70)' }]}
             numberOfLines={2}
           >
             {sku.series}
@@ -86,20 +84,20 @@ function HeroCard({ sku, theme, onPress, onLongPress, narrativeOverride }: SKUCa
 
       {/* Narrative — italic Fraunces with gold left border */}
       {(narrativeOverride ?? sku.narrative) ? (
-        <View style={[styles.narrativeBlock, { borderLeftColor: c.ink }]}>
-          <Text numberOfLines={2} ellipsizeMode="tail" style={[styles.narrativeText, { color: theme.text, fontFamily: theme.fontDispItalic }]}>
+        <View style={[styles.narrativeBlock, { borderLeftColor: 'rgba(225,228,230,0.50)' }]}>
+          <Text numberOfLines={2} ellipsizeMode="tail" style={[styles.narrativeText, { color: '#E1E4E6', fontFamily: theme.fontDispItalic }]}>
             "{narrativeOverride ?? sku.narrative}"
           </Text>
         </View>
       ) : null}
 
       {/* Footer: price + listings | score badge + delta */}
-      <View style={[styles.heroFooter, { borderTopColor: theme.hairline }]}>
+      <View style={[styles.heroFooter, { borderTopColor: 'rgba(225,228,230,0.15)' }]}>
         <View>
-          <Text style={[styles.heroPrice, { color: '#FC792E', fontFamily: theme.fontMonoBold }]}>
+          <Text style={[styles.heroPrice, { color: '#FF5500', fontFamily: theme.fontMonoBold }]}>
             {fmtPrice(sku.price.median)}
           </Text>
-          <Text style={[styles.heroListings, { color: theme.muted, fontFamily: 'Inter_400Regular' }]}>
+          <Text style={[styles.heroListings, { color: 'rgba(225,228,230,0.65)', fontFamily: 'Inter_400Regular' }]}>
             {(() => {
               const sold = (sku.priceMintCount ?? 0) + (sku.priceLooseCount ?? 0);
               return sold > 0 ? `${sold} recent sales` : `${sku.listings} listed`;
@@ -181,7 +179,7 @@ function StandardCard({ sku, theme, rank, onPress, onLongPress }: SKUCardProps) 
 
         {/* Footer: price + delta */}
         <View style={[styles.standardFooter, { borderTopColor: theme.hairline }]}>
-          <Text style={[styles.standardPrice, { color: '#FC792E', fontFamily: theme.fontMonoBold }]}>
+          <Text style={[styles.standardPrice, { color: '#FF5500', fontFamily: theme.fontMonoBold }]}>
             {fmtPrice(sku.price.median)}
           </Text>
           <View style={styles.footerRight}>

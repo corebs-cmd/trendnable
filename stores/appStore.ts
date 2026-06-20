@@ -1,13 +1,17 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CollectionItem, DBUser, SKU, PriceAlert, AppNotification, CatalogWatchlistItem, CatalogCollectionItem } from '../lib/types';
+import type { StickerDef } from '../lib/stickers';
+import type { ScanQuota } from '../lib/api';
 import * as api from '../lib/api';
+import { supabase } from '../lib/supabase';
 
 interface AppState {
   // Auth
   user: DBUser | null;
   isPremium: boolean;
   isAuthReady: boolean;
+  rewardUnits: number;
 
   // UI
   isDark: boolean;
@@ -19,6 +23,10 @@ interface AppState {
   hotSkus: SKU[];
   skusLoading: boolean;
   skusError: string | null;
+
+  // Sticker catalog (loaded from DB, keyed by sticker key)
+  stickerCatalog: Record<string, StickerDef>;
+  setStickerCatalog: (rows: StickerDef[]) => void;
 
   // Collection
   collection: CollectionItem[];
@@ -35,6 +43,9 @@ interface AppState {
   notifications: AppNotification[];
   unreadCount: number;
 
+  // Free-tier scan quota (null until loaded)
+  scanQuota: ScanQuota | null;
+
   // Preferences
   followedFandoms: string[];
   followedCategories: string[];
@@ -43,6 +54,7 @@ interface AppState {
   setUser: (user: DBUser | null) => void;
   setIsPremium: (premium: boolean) => void;
   setIsAuthReady: (ready: boolean) => void;
+  addRewardUnits: (amount: number) => void;
   setIsDark: (dark: boolean) => void;
   setHasOnboarded: (v: boolean) => void;
   setFollowedFandoms: (fandoms: string[]) => void;
@@ -54,6 +66,7 @@ interface AppState {
   // Loads hot SKU catalog from Supabase (no auth required)
   loadHotSkus: () => Promise<void>;
   retryLoadHotSkus: () => Promise<void>;
+  mergeSkuIntoHot: (sku: SKU) => void;
 
   // Loads user collection + watchlist from Supabase
   loadUserData: (userId: string) => Promise<void>;
@@ -93,17 +106,28 @@ interface AppState {
   loadNotifications: (userId: string) => Promise<void>;
   markNotificationRead: (notificationId: string) => void;
   reactivatePriceAlert: (alertId: string, notificationId: string) => void;
+
+  // Scan quota
+  loadScanQuota: (userId: string) => Promise<void>;
+  incrementScanLocal: () => void;
+
+  // Notification preferences (mirrored from user row for optimistic toggles)
+  setNotifyMovers:   (value: boolean) => void;
+  setNotifyInsights: (value: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
   user: null,
   isPremium: false,
   isAuthReady: false,
+  rewardUnits: 0,
   isDark: true,
   hasOnboarded: false,
   hotSkus: [],
   skusLoading: false,
   skusError: null,
+  stickerCatalog: {},
+  setStickerCatalog: (rows) => set({ stickerCatalog: Object.fromEntries(rows.map((s) => [s.key, s])) }),
   collection: [],
   watchlist: [],
   catalogWatchlist: [],
@@ -111,12 +135,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   priceAlerts: [],
   notifications: [],
   unreadCount: 0,
+  scanQuota: null,
   followedFandoms: [],
   followedCategories: [],
 
   setUser: (user) => set({ user }),
   setIsPremium: (isPremium) => set({ isPremium }),
   setIsAuthReady: (isAuthReady) => set({ isAuthReady }),
+  addRewardUnits: (amount) => set((s) => ({ rewardUnits: s.rewardUnits + amount })),
 
   setIsDark: (isDark) => {
     set({ isDark });
@@ -151,15 +177,28 @@ export const useAppStore = create<AppState>((set, get) => ({
     await (useAppStore.getState() as AppState).loadHotSkus();
   },
 
+  mergeSkuIntoHot: (sku) => {
+    set((state) => ({
+      hotSkus: state.hotSkus.some((s) => s.id === sku.id)
+        ? state.hotSkus.map((s) => s.id === sku.id ? sku : s)
+        : [sku, ...state.hotSkus],
+    }));
+  },
+
   loadUserData: async (userId) => {
-    const [collection, watchlist, priceAlerts, notifications, catalogWatchlist, catalogCollection] = await Promise.all([
+    const [collection, watchlist, priceAlerts, notifications, catalogWatchlist, catalogCollection, scanQuota, rewardData] = await Promise.all([
       api.fetchCollection(userId),
       api.fetchWatchlist(userId),
       api.fetchPriceAlerts(userId),
       api.fetchNotifications(userId),
       api.fetchCatalogWatchlist(userId),
       api.fetchCatalogCollection(userId),
+      api.fetchScanQuota(userId),
+      supabase.from('users').select('reward_units, premium_reward_expires_at').eq('id', userId).single(),
     ]);
+    const rewardRow = (rewardData as any)?.data;
+    const rewardUnits = rewardRow?.reward_units ?? 0;
+    const premiumRewardExpiresAt: string | null = rewardRow?.premium_reward_expires_at ?? null;
     set({
       collection,
       watchlist,
@@ -168,7 +207,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       unreadCount: notifications.filter((n) => !n.isRead).length,
       catalogWatchlist,
       catalogCollection,
+      scanQuota,
+      rewardUnits,
     });
+    // If reward-based premium is active but isPremium is false, activate it
+    if (premiumRewardExpiresAt && new Date(premiumRewardExpiresAt) > new Date()) {
+      const { isPremium } = useAppStore.getState();
+      if (!isPremium) {
+        useAppStore.getState().setIsPremium(true);
+      }
+    }
   },
 
   addToCollection: (item) => {
@@ -377,5 +425,29 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
     api.reactivatePriceAlert(alertId).catch(console.error);
     api.markNotificationRead(notificationId).catch(console.error);
+  },
+
+  loadScanQuota: async (userId) => {
+    const scanQuota = await api.fetchScanQuota(userId);
+    set({ scanQuota });
+  },
+
+  incrementScanLocal: () => {
+    set((state) => state.scanQuota
+      ? { scanQuota: { ...state.scanQuota, used: state.scanQuota.used + 1 } }
+      : {}
+    );
+  },
+
+  setNotifyMovers: (value) => {
+    const userId = get().user?.id;
+    set((state) => state.user ? { user: { ...state.user, notify_movers: value } } : {});
+    if (userId) api.updateNotificationPrefs(userId, { notifyMovers: value }).catch(console.error);
+  },
+
+  setNotifyInsights: (value) => {
+    const userId = get().user?.id;
+    set((state) => state.user ? { user: { ...state.user, notify_insights: value } } : {});
+    if (userId) api.updateNotificationPrefs(userId, { notifyInsights: value }).catch(console.error);
   },
 }));

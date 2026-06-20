@@ -21,22 +21,21 @@ const CONTEXT_MAP: Record<UpgradeContext, ContextData> = {
   history:       { title: 'Go deeper in history',   sub: 'See 90-day and 1-year trends, not just the last week.' },
   breakdown:     { title: 'Break down by category', sub: 'See where the value in your collection lives.' },
   watchlist:     { title: 'Watch unlimited SKUs',   sub: 'Free is capped at 20 — track everything that matters.' },
-  digest:        { title: 'Customize your digest',  sub: 'A daily note tuned to the fandoms and SKUs you care about.' },
   share:         { title: 'Share your collection',  sub: 'Generate a beautiful card to show off what you collect.' },
-  publicProfile: { title: 'Go public',              sub: 'Let other collectors see (and buy from) your collection.' },
-  forSale:       { title: 'Mark items for sale',    sub: 'Get reach from collectors browsing public profiles.' },
   feature:       { title: 'Trendnable Premium',     sub: 'The full picture of your collection.' },
   priceAlerts:   { title: 'Set price alerts',       sub: 'Get notified the moment a watched item hits your target price.' },
   sellability:   { title: 'Unlock Sellability Score', sub: 'See sell-through rate, demand tier, and how quickly an item is likely to sell.' },
+  scanQuota:     { title: 'Scan without limits',    sub: 'Free scans reset daily. Unlock unlimited scanning with Premium.' },
+  visionScan:    { title: 'Visual Scan is Premium', sub: 'Point your camera at any collectable and we\'ll identify it — price, trends, and all. Premium only.' },
 };
 
 const FEATURES = [
   'Collection P&L · per-item and total',
-  '30 / 90 / 365-day history charts',
-  'Category & fandom breakdowns',
-  'Unlimited watchlist',
-  'Public profile + for-sale labels',
-  'Customized daily digest',
+  '90-day and 1-year history charts',
+  'Category breakdown of your portfolio',
+  'Unlimited watchlist (free is capped at 20)',
+  'Unlimited scans (free is capped at 5/day)',
+  'Price alerts with instant notifications',
 ];
 
 type Plan = 'monthly' | 'annual';

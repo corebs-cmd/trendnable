@@ -16,7 +16,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
       name: 'Trendnable',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#2563EB',
+      lightColor: '#CC220B',
     });
   }
 

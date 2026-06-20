@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   Pressable,
   Image,
   StyleSheet,
+  TextInput,
+  Alert,
 } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { BlurView } from 'expo-blur';
@@ -77,7 +79,7 @@ function scoreColor(score: number): string {
   if (score >= 80) return '#22C55E';
   if (score >= 65) return '#84CC16';
   if (score >= 45) return '#EAB308';
-  if (score >= 25) return '#F97316';
+  if (score >= 25) return '#FF5500';
   return '#EF4444';
 }
 
@@ -292,13 +294,41 @@ interface ScanResultSheetProps {
   onWatch: () => void;
   onCollect: () => void;
   onDiscard: () => void;
+  onCommunityData?: (data: { ppgPrice: number | null; retailPrice: number | null }) => void;
+  scanMode?: 'barcode' | 'visual';
+  onRetry?: () => void;
+  onTryVisual?: () => void;
 }
 
 export default function ScanResultSheet({
   open, onClose, theme, result, isPremium, onUnlockSellability,
-  onWatch, onCollect, onDiscard,
+  onWatch, onCollect, onDiscard, onCommunityData,
+  scanMode, onRetry, onTryVisual,
 }: ScanResultSheetProps) {
   const router = useRouter();
+
+  // ── Community Data local state ────────────────────────────────────────────
+  const [ppgPriceText, setPpgPriceText]           = useState('');
+  const [retailPriceEnabled, setRetailPriceEnabled] = useState(false);
+  const [retailPriceText, setRetailPriceText]       = useState('');
+
+  // Reset community fields whenever a new result appears
+  useEffect(() => {
+    setPpgPriceText('');
+    setRetailPriceEnabled(false);
+    setRetailPriceText('');
+  }, [result?.skuId]);
+
+  // Notify parent whenever either field changes
+  useEffect(() => {
+    if (!onCommunityData) return;
+    const ppgNum    = ppgPriceText    ? parseFloat(ppgPriceText)    : null;
+    const retailNum = retailPriceEnabled && retailPriceText ? parseFloat(retailPriceText) : null;
+    onCommunityData({
+      ppgPrice:    ppgNum    != null && !isNaN(ppgNum)    ? ppgNum    : null,
+      retailPrice: retailNum != null && !isNaN(retailNum) ? retailNum : null,
+    });
+  }, [ppgPriceText, retailPriceEnabled, retailPriceText]);
 
   if (!result) return null;
 
@@ -383,7 +413,7 @@ export default function ScanResultSheet({
               { label: 'High',   value: result.price.high   },
             ] as { label: string; value: number }[]).map((p) => (
               <View key={p.label} style={{ flex: 1, alignItems: 'center', gap: 2 }}>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: '#FC792E' }}>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: '#FF5500' }}>
                   {fmtPrice(p.value)}
                 </Text>
                 <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.muted }}>
@@ -396,6 +426,168 @@ export default function ScanResultSheet({
             {result.listings} active listing{result.listings !== 1 ? 's' : ''}
           </Text>
         </View>
+
+        {/* ── Community Data ─────────────────────────────────────────── */}
+        {(() => {
+          const isFunko = result.categoryId === 'funko';
+          const showSection = true; // retail price row always visible
+          if (!showSection) return null;
+
+          return (
+            <View style={{
+              marginTop: 16,
+              marginBottom: 4,
+              borderTopWidth: StyleSheet.hairlineWidth,
+              borderTopColor: theme.hairline,
+              paddingTop: 16,
+              gap: 12,
+            }}>
+              {/* Section label */}
+              <Text style={{
+                fontFamily: 'Inter_600SemiBold',
+                fontSize: 11,
+                color: theme.faint,
+                letterSpacing: 1.1,
+                textTransform: 'uppercase',
+              }}>
+                Community Data
+              </Text>
+
+              {/* PPG Price — Funko only */}
+              {isFunko && (
+                <View style={{ gap: 6 }}>
+                  <Text style={{
+                    fontFamily: 'Inter_600SemiBold',
+                    fontSize: 11,
+                    color: theme.faint,
+                    letterSpacing: 1.1,
+                    textTransform: 'uppercase',
+                  }}>
+                    PPG Price
+                  </Text>
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: theme.surface2,
+                    borderRadius: theme.radius,
+                    paddingHorizontal: 14,
+                    height: 48,
+                  }}>
+                    <Text style={{
+                      fontFamily: 'Inter_600SemiBold',
+                      fontSize: 15,
+                      color: theme.muted,
+                      marginRight: 4,
+                    }}>
+                      $
+                    </Text>
+                    <TextInput
+                      value={ppgPriceText}
+                      onChangeText={setPpgPriceText}
+                      keyboardType="decimal-pad"
+                      placeholder="0.00"
+                      placeholderTextColor={theme.faint}
+                      style={{
+                        flex: 1,
+                        fontFamily: 'Inter_400Regular',
+                        fontSize: 15,
+                        color: theme.text,
+                        paddingVertical: 0,
+                      }}
+                    />
+                  </View>
+                </View>
+              )}
+
+              {/* Retail Price — all items */}
+              <View style={{ gap: 6 }}>
+                {/* Toggle row */}
+                <Pressable
+                  onPress={() => setRetailPriceEnabled(prev => !prev)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                >
+                  {/* Checkbox icon */}
+                  <Svg width={20} height={20} viewBox="0 0 20 20" fill="none">
+                    <Rect
+                      x={1} y={1} width={18} height={18} rx={4}
+                      stroke={retailPriceEnabled ? theme.accent : theme.muted}
+                      strokeWidth={1.8}
+                      fill={retailPriceEnabled ? theme.accent : 'none'}
+                    />
+                    {retailPriceEnabled && (
+                      <Path
+                        d="M5 10l3.5 3.5L15 7"
+                        stroke={theme.accentInk}
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    )}
+                  </Svg>
+                  <Text style={{
+                    fontFamily: 'Inter_400Regular',
+                    fontSize: 14,
+                    color: theme.text,
+                  }}>
+                    I know the retail price
+                  </Text>
+                </Pressable>
+
+                {/* Revealed price input */}
+                {retailPriceEnabled && (
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: theme.surface2,
+                    borderRadius: theme.radius,
+                    paddingHorizontal: 14,
+                    height: 48,
+                    marginTop: 2,
+                  }}>
+                    <Text style={{
+                      fontFamily: 'Inter_600SemiBold',
+                      fontSize: 15,
+                      color: theme.muted,
+                      marginRight: 4,
+                    }}>
+                      $
+                    </Text>
+                    <TextInput
+                      value={retailPriceText}
+                      onChangeText={setRetailPriceText}
+                      keyboardType="decimal-pad"
+                      placeholder="0.00"
+                      placeholderTextColor={theme.faint}
+                      style={{
+                        flex: 1,
+                        fontFamily: 'Inter_400Regular',
+                        fontSize: 15,
+                        color: theme.text,
+                        paddingVertical: 0,
+                      }}
+                    />
+                  </View>
+                )}
+              </View>
+
+              {/* Reward notice — shown when at least one field is visible (always true here) */}
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 7 }}>
+                <Svg width={14} height={14} viewBox="0 0 24 24" fill="#E8A33D" style={{ marginTop: 1 }}>
+                  <Path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                </Svg>
+                <Text style={{
+                  flex: 1,
+                  fontFamily: 'Inter_400Regular',
+                  fontSize: 12,
+                  color: '#E8A33D',
+                  lineHeight: 17,
+                }}>
+                  Earn +2 Sparks for each price you share — help the community grow the catalog
+                </Text>
+              </View>
+            </View>
+          );
+        })()}
 
         {/* ── Actions ───────────────────────────────────────────────────── */}
         <View style={{ gap: 10 }}>
@@ -449,11 +641,24 @@ export default function ScanResultSheet({
           </Pressable>
 
           <Pressable
-            onPress={onDiscard}
+            onPress={() => {
+              Alert.alert(
+                'Not the right product?',
+                'How would you like to proceed?',
+                [
+                  ...(scanMode === 'barcode' && onTryVisual
+                    ? [{ text: 'Try Visual Scan', onPress: onTryVisual }]
+                    : []),
+                  { text: 'Retry Scan', onPress: onRetry ?? onDiscard },
+                  { text: 'Dismiss', style: 'destructive' as const, onPress: onDiscard },
+                  { text: 'Cancel', style: 'cancel' as const },
+                ],
+              );
+            }}
             style={({ pressed }) => ({ alignItems: 'center', paddingVertical: 10, opacity: pressed ? 0.5 : 1 })}
           >
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.muted }}>
-              Not the right product? Discard
+              Not the right product?
             </Text>
           </Pressable>
         </View>

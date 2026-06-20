@@ -367,6 +367,117 @@ serve(async (req) => {
       }
     }
 
+    // ── Activate user-owned scan SKUs ─────────────────────────────────────────
+    // Find is_active:false SKUs that users have in their collection or watchlist.
+    // These are scan-created SKUs that were never processed by the pipeline.
+    // Process them normally and activate them so they appear in the hot feed.
+    let userSkusActivated = 0;
+    try {
+      const [{ data: collectionSkus }, { data: watchlistSkus }] = await Promise.all([
+        supabase.from('user_collections').select('sku_id').not('sku_id', 'is', null),
+        supabase.from('user_watchlists').select('sku_id').not('sku_id', 'is', null),
+      ]);
+
+      const userSkuIds = new Set<string>([
+        ...(collectionSkus ?? []).map((r: any) => r.sku_id as string),
+        ...(watchlistSkus  ?? []).map((r: any) => r.sku_id as string),
+      ]);
+
+      // Only unprocessed inactive ones
+      const unprocessedUserIds = Array.from(userSkuIds).filter(
+        (id) => !processed.includes(id) && !zeroPriceSkuIds.includes(id)
+      );
+
+      if (unprocessedUserIds.length > 0) {
+        const { data: inactiveUserSkus } = await supabase
+          .from('skus')
+          .select('id, name, category_id, fandom_id, ebay_query, card_variant, card_grader, card_grade, created_at')
+          .eq('is_active', false)
+          .in('id', unprocessedUserIds);
+
+        for (const sku of inactiveUserSkus ?? []) {
+          try {
+            let query = sku.ebay_query || sku.name;
+            if (sku.category_id === 'tcg' && sku.card_variant) {
+              if (sku.card_variant === 'graded' && sku.card_grader) {
+                query += sku.card_grade ? ` ${sku.card_grader} ${sku.card_grade}` : ` ${sku.card_grader}`;
+              } else if (sku.card_variant === 'raw') {
+                query += ' -PSA -BGS -CGC -SGC';
+              }
+            }
+
+            const listings = await fetchEbayListings(query, token);
+            if (!listings) continue;
+
+            const listingCount = listings.length;
+            const rawPrices: number[] = [];
+            for (const l of listings) {
+              if (!titlePassesTier1(l.title ?? '')) continue;
+              const itemPrice = parseFloat(l.price?.value ?? '0');
+              if (itemPrice <= 0) continue;
+              const shippingOpt = l.shippingOptions?.[0];
+              const shippingCost = shippingOpt?.shippingCost?.value != null
+                ? parseFloat(shippingOpt.shippingCost.value) : null;
+              const shippingType: string | null = shippingOpt?.shippingCostType ?? null;
+              rawPrices.push(effectivePrice(itemPrice, shippingCost, shippingType, sku.category_id));
+            }
+
+            const { median: priceMedian, low: priceLow, high: priceHigh } = iqrMedian(rawPrices);
+            const ageDays = Math.floor((Date.now() - new Date(sku.created_at).getTime()) / 86400000);
+
+            const scores = computeHotScore({
+              listings: listingCount,
+              prevListings: null,
+              age: ageDays,
+              confirmationScore: 0,
+            });
+
+            await supabase.from('daily_snapshots').upsert({
+              sku_id:            sku.id,
+              snapshot_date:     today,
+              listing_count:     listingCount,
+              price_low:         priceLow,
+              price_median:      priceMedian,
+              price_high:        priceHigh,
+              velocity_score:    scores.velocity,
+              hot_score:         scores.hot,
+              price_mint:        null,
+              price_mint_count:  null,
+              price_loose:       null,
+              price_loose_count: null,
+            });
+
+            await supabase.from('hot_index').upsert({
+              sku_id:             sku.id,
+              hot_score:          scores.hot,
+              delta_24h:          0,
+              momentum:           'flat',
+              velocity_score:     scores.velocity,
+              volume_score:       scores.volume,
+              confirmation_score: scores.confirmation,
+              freshness_score:    scores.freshness,
+              updated_at:         new Date().toISOString(),
+            });
+
+            // Only activate if eBay actually has listings — avoids polluting the
+            // global hot feed with SKUs that have bad queries or no market data.
+            if (listingCount > 0) {
+              await supabase.from('skus').update({ is_active: true }).eq('id', sku.id);
+              userSkusActivated++;
+              console.log(`Activated user SKU: ${sku.id} (${sku.name}) — ${listingCount} listings`);
+            }
+
+            processed.push(sku.id);
+            await new Promise((r) => setTimeout(r, 500));
+          } catch (skuErr) {
+            console.error(`Failed user SKU ${sku.id}:`, skuErr);
+          }
+        }
+      }
+    } catch (userSkuErr) {
+      console.error('User SKU activation pass error:', userSkuErr);
+    }
+
     // Generate narratives and track token usage
     let narrativesGenerated = 0;
     let totalInputTokens = 0;
@@ -399,6 +510,7 @@ serve(async (req) => {
         processed: processed.length,
         narratives_generated: narrativesGenerated,
         auto_deactivated: autoDeactivated,
+        user_skus_activated: userSkusActivated,
         date: today,
       },
     }).then(({ error: logErr }) => {
@@ -411,6 +523,7 @@ serve(async (req) => {
         processed: processed.length,
         narratives_generated: narrativesGenerated,
         auto_deactivated: autoDeactivated,
+        user_skus_activated: userSkusActivated,
         input_tokens: totalInputTokens,
         output_tokens: totalOutputTokens,
         cost_usd: Number(costUsd.toFixed(8)),

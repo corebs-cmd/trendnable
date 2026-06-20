@@ -55,7 +55,7 @@ export default function ExclusiveSticker({ sticker, size = 66, delay = 0, animat
   // Halo behind the sticker — animated opacity
   const haloOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0.48] });
 
-  const src = STICKER_IMAGES[sticker.key];
+  const src: any = sticker.imageUrl ? { uri: sticker.imageUrl } : STICKER_IMAGES[sticker.key];
 
   return (
     <Animated.View style={[styles.wrapper, { width: w, height: h, transform: [{ scale }, { translateY }], opacity }]}>

@@ -9,9 +9,10 @@ import { buildTheme } from '../../lib/theme';
 import { CATEGORIES, FANDOMS } from '../../lib/appConfig';
 import * as api from '../../lib/api';
 import BrowseLogo from '../../components/BrowseLogo';
+import FeatureGuide from '../../components/FeatureGuide';
 
-type Step = 'welcome' | 'categories' | 'fandoms' | 'ready';
-const STEPS: Step[] = ['welcome', 'categories', 'fandoms', 'ready'];
+type Step = 'welcome' | 'categories' | 'fandoms' | 'guide';
+const STEPS: Step[] = ['welcome', 'categories', 'fandoms', 'guide'];
 
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
@@ -64,7 +65,7 @@ export default function OnboardingScreen() {
 
   const nextLabel =
     step === 'welcome' ? 'Get started' :
-    step === 'ready' ? 'Open Trendnable' : 'Continue';
+    step === 'guide'   ? 'Open Trendnable' : 'Continue';
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
@@ -82,7 +83,7 @@ export default function OnboardingScreen() {
       </View>
 
       {/* Skip button */}
-      {step !== 'ready' && (
+      {step !== 'guide' && (
         <Pressable
           onPress={handleSkip}
           style={[styles.skipBtn, { top: insets.top + 14 }]}
@@ -104,8 +105,8 @@ export default function OnboardingScreen() {
         {step === 'fandoms' && (
           <FandomsStep theme={theme} selected={selectedFandoms} onToggle={toggleFandom} />
         )}
-        {step === 'ready' && (
-          <ReadyStep theme={theme} cats={selectedCats} fandoms={selectedFandoms} />
+        {step === 'guide' && (
+          <GuideStep theme={theme} isDark={isDark} cats={selectedCats} fandoms={selectedFandoms} />
         )}
       </ScrollView>
 
@@ -259,42 +260,28 @@ function FandomsStep({ theme, selected, onToggle }: { theme: any; selected: stri
   );
 }
 
-function ReadyStep({ theme, cats, fandoms }: { theme: any; cats: string[]; fandoms: string[] }) {
+
+function GuideStep({
+  theme, isDark, cats, fandoms,
+}: {
+  theme: any; isDark: boolean; cats: string[]; fandoms: string[];
+}) {
+  const catLine = cats.length > 0
+    ? `${cats.length} ${cats.length === 1 ? 'category' : 'categories'}`
+    : 'all categories';
+  const fanLine = fandoms.length > 0
+    ? `${fandoms.length} ${fandoms.length === 1 ? 'fandom' : 'fandoms'}`
+    : 'all fandoms';
+
   return (
     <View>
-      <Text style={[styles.readyTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>You're ready.</Text>
-      <Text style={[styles.readySub, { color: theme.muted, fontFamily: 'Inter_400Regular' }]}>
-        We'll show you what's moving in {cats.length || 6} categories and {fandoms.length || 'all'} fandoms — refreshed every morning.
+      <Text style={[styles.readyTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
+        You're ready.
       </Text>
-      <View style={[styles.readyPreview, { backgroundColor: theme.surface }]}>
-        <Text style={[styles.readyPreviewLabel, { color: theme.faint, fontFamily: 'JetBrainsMono_400Regular' }]}>
-          PREVIEW · HOT TODAY
-        </Text>
-        {[
-          { name: 'Luffy Gear 5 — Awakening', hot: 91, delta: 7 },
-          { name: 'Charizard ex — 151 Special', hot: 87, delta: 12 },
-        ].map((item) => (
-          <View key={item.name} style={styles.readyPreviewRow}>
-            <View style={[styles.readyThumb, { backgroundColor: theme.surface2 }]}>
-              <Text style={{ color: theme.faint, fontSize: 16 }}>◎</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text
-                style={[styles.readyItemName, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}
-                numberOfLines={1}
-              >
-                {item.name}
-              </Text>
-              <Text style={[styles.readyItemMeta, { color: theme.muted, fontFamily: 'JetBrainsMono_400Regular' }]}>
-                Hot {item.hot}
-              </Text>
-            </View>
-            <Text style={[styles.readyDelta, { color: theme.pos, fontFamily: 'JetBrainsMono_700Bold' }]}>
-              ↑{item.delta}
-            </Text>
-          </View>
-        ))}
-      </View>
+      <Text style={[styles.readySub, { color: theme.muted, fontFamily: 'Inter_400Regular' }]}>
+        Tuned for {catLine} · {fanLine}. Here's everything you can do and exactly where to find it.
+      </Text>
+      <FeatureGuide theme={theme} isDark={isDark} />
     </View>
   );
 }
@@ -380,14 +367,7 @@ const styles = StyleSheet.create({
   fandomChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 24 },
   fandomChip: { alignItems: 'center', justifyContent: 'center' },
   fandomChipText: {},
-  // Ready
-  readyTitle: { fontSize: 32, letterSpacing: -0.02, marginTop: 30, marginBottom: 10 },
-  readySub: { fontSize: 15, lineHeight: 22, marginBottom: 24 },
-  readyPreview: { borderRadius: 6, padding: 18, gap: 12 },
-  readyPreviewLabel: { fontSize: 10.5, letterSpacing: 0.1, marginBottom: 8 },
-  readyPreviewRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  readyThumb: { width: 40, height: 40, borderRadius: 4, alignItems: 'center', justifyContent: 'center' },
-  readyItemName: { fontSize: 13.5 },
-  readyItemMeta: { fontSize: 11, marginTop: 2 },
-  readyDelta: { fontSize: 13 },
+  // Guide (last step — combined ready + feature walkthrough)
+  readyTitle: { fontSize: 32, letterSpacing: -0.02, marginTop: 20, marginBottom: 10 },
+  readySub: { fontSize: 14.5, lineHeight: 21, marginBottom: 20 },
 });

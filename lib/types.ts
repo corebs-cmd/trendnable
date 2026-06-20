@@ -66,6 +66,9 @@ export interface SKU {
   priceLooseCount?: number | null;
   // Exclusive stickers (ordered, index 0 = hero/aura source)
   stickerKeys?: string[] | null;
+  // Community-contributed prices
+  ppgPrice?: number | null;
+  retailPrice?: number | null;
   // Directional signal (from sku_insights)
   direction?: InsightDirection;
   insight?: SkuInsight | null;
@@ -80,6 +83,27 @@ export interface CollectionItem {
   notes?: string;
   forSale: boolean;
   // Trading Cards only
+  cardVariant?: 'raw' | 'graded';
+  cardGrader?: string;
+  cardGrade?: string;
+}
+
+export interface RewardSummary {
+  units: number;
+  stars: number;
+  canClaimFreeMonth: boolean;
+  claimedAt: string | null;
+  expiresAt: string | null;
+}
+
+export interface CollectionFormData {
+  skuId?: string;
+  qty: number;
+  purchased: number;
+  purchaseDate: string;
+  condition: string;
+  notes?: string;
+  forSale: boolean;
   cardVariant?: 'raw' | 'graded';
   cardGrader?: string;
   cardGrade?: string;
@@ -103,6 +127,8 @@ export interface DBUser {
   followed_categories: string[];
   notification_digest_enabled: boolean;
   notification_digest_time: string;
+  notify_movers: boolean;
+  notify_insights: boolean;
   created_at: string;
 }
 
@@ -147,13 +173,12 @@ export type UpgradeContext =
   | 'history'
   | 'breakdown'
   | 'watchlist'
-  | 'digest'
   | 'share'
-  | 'publicProfile'
-  | 'forSale'
   | 'feature'
   | 'priceAlerts'
-  | 'sellability';
+  | 'sellability'
+  | 'scanQuota'
+  | 'visionScan';
 
 export interface PriceAlert {
   id: string;

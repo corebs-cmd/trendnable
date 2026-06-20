@@ -28,14 +28,14 @@ serve(async (req) => {
       subject: `${from_name} thinks you'd love Trendnable`,
       html: `
         <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-          <h1 style="font-size: 28px; font-weight: 700; color: #0A1426; margin-bottom: 8px;">Trendnable</h1>
+          <h1 style="font-size: 28px; font-weight: 700; color: #0D0D0D; margin-bottom: 8px;">Trendnable</h1>
           <p style="font-size: 16px; color: #4A5568; margin-bottom: 24px;">
             ${from_name} invited you to join Trendnable — the daily trend intelligence app for collectors.
           </p>
           <p style="font-size: 15px; color: #4A5568; margin-bottom: 32px;">
             Track what's hot in Funko Pops, Trading Cards, Pop Mart, Hot Toys, and more — all in one app.
           </p>
-          <a href="https://trendnable.app" style="display: inline-block; background: #2563EB; color: white; padding: 14px 28px; border-radius: 8px; font-weight: 600; text-decoration: none; font-size: 15px;">
+          <a href="https://trendnable.app" style="display: inline-block; background: #FF5500; color: white; padding: 14px 28px; border-radius: 8px; font-weight: 600; text-decoration: none; font-size: 15px;">
             Download Trendnable
           </a>
           <p style="font-size: 12px; color: #9CA3AF; margin-top: 32px;">

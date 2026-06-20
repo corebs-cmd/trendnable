@@ -24,25 +24,25 @@ export function categoryColor(catId: string, dark: boolean) {
 }
 
 // Brand constants
-export const ACCENT = '#2563EB';
+export const ACCENT = '#FF5500';
 
 const DARK = {
-  bg:            '#0A1426',
-  surface:       '#0F1A2E',
-  surface2:      '#162640',
-  border:        'rgba(245,240,228,0.10)',
-  text:          '#F5F0E4',
-  muted:         'rgba(245,240,228,0.62)',
-  faint:         'rgba(245,240,228,0.38)',
+  bg:            '#0D0D0D',
+  surface:       '#181818',
+  surface2:      '#252525',
+  border:        'rgba(225,228,230,0.10)',
+  text:          '#E1E4E6',
+  muted:         'rgba(225,228,230,0.65)',
+  faint:         'rgba(225,228,230,0.40)',
   accentInk:     '#FFFFFF',
   pos:           '#3DD68C',
   neg:           '#FF7A6B',
-  hairline:      'rgba(245,240,228,0.10)',
-  navBg:         'rgba(15,26,46,0.85)',
+  hairline:      'rgba(225,228,230,0.10)',
+  navBg:         'rgba(13,13,13,0.90)',
   // Legacy tokens kept for backward compat
-  hotBarTrack:   'rgba(245,240,228,0.10)',
-  imagePlinth:   '#162640',
-  imageStripe:   'rgba(245,240,228,0.04)',
+  hotBarTrack:   'rgba(225,228,230,0.10)',
+  imagePlinth:   '#252525',
+  imageStripe:   'rgba(225,228,230,0.04)',
 } as const;
 
 const LIGHT = {
@@ -113,7 +113,7 @@ export function buildTheme(dark: boolean): Theme {
     ...base,
     dark,
     accent: ACCENT,
-    gold:    '#F43F5E',
+    gold:    '#FF5500',
     goldInk: '#FFFFFF',
     premium:    '#E8A33D',
     premiumInk: '#1A1206',

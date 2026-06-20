@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,13 +8,15 @@ import {
   Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import Svg, { Path, Circle } from 'react-native-svg';
 
 import { buildTheme, categoryColor } from '@/lib/theme';
 import { useAppStore } from '@/stores/appStore';
 import { SKU, UpgradeContext, CatalogWatchlistItem } from '@/lib/types';
 import { catById, fmtPrice } from '@/lib/appConfig';
+import { promoteCatalogToSku, fetchSkuById } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import AppHeader from '@/components/AppHeader';
 import UpgradeSheet from '@/components/UpgradeSheet';
 import SKUCard from '@/components/SKUCard';
@@ -35,7 +37,45 @@ export default function WatchlistScreen() {
   const priceAlerts              = useAppStore((s) => s.priceAlerts);
   const catalogWatchlist         = useAppStore((s) => s.catalogWatchlist);
   const removeCatalogFromWatchlist = useAppStore((s) => s.removeCatalogFromWatchlist);
+  const addToWatchlist           = useAppStore((s) => s.addToWatchlist);
+  const mergeSkuIntoHot          = useAppStore((s) => s.mergeSkuIntoHot);
+  const loadUserData             = useAppStore((s) => s.loadUserData);
+  const userId                   = useAppStore((s) => s.user?.id);
   const theme                    = buildTheme(isDark);
+
+  // Auto-promote any pending catalog watchlist items on tab focus
+  useFocusEffect(useCallback(() => {
+    if (!userId) return;
+    let active = true;
+    const run = async () => {
+      await loadUserData(userId);
+      if (!active) return;
+
+      // Recover watchlist SKUs not in hotSkus (scan-created is_active:false SKUs)
+      const currentHotIds = new Set(useAppStore.getState().hotSkus.map((s) => s.id));
+      for (const skuId of useAppStore.getState().watchlist) {
+        if (!currentHotIds.has(skuId)) {
+          fetchSkuById(skuId).then((sku) => { if (sku && active) mergeSkuIntoHot(sku); }).catch(() => {});
+        }
+      }
+
+      const pending = useAppStore.getState().catalogWatchlist;
+      if (pending.length === 0) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token || !active) return;
+      for (const item of pending) {
+        const promotion = await promoteCatalogToSku(item.catalogId, session.access_token);
+        if (!active) return;
+        if (promotion?.skuId) {
+          removeCatalogFromWatchlist(item.catalogId);
+          addToWatchlist(promotion.skuId);
+          fetchSkuById(promotion.skuId).then((sku) => { if (sku) mergeSkuIntoHot(sku); }).catch(() => {});
+        }
+      }
+    };
+    run();
+    return () => { active = false; };
+  }, [userId]));
 
   const [scrolled, setScrolled]           = useState(false);
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
@@ -203,7 +243,8 @@ export default function WatchlistScreen() {
 
                 <View style={{ gap: 10 }}>
                   {watched.map((sku) => {
-                    const skuAlerts = priceAlerts.filter((a) => a.skuId === sku.id && a.isActive);
+                    const activeAlerts    = priceAlerts.filter((a) => a.skuId === sku.id && a.isActive);
+                    const triggeredAlerts = priceAlerts.filter((a) => a.skuId === sku.id && !a.isActive && a.triggeredAt !== null);
                     return (
                       <View key={sku.id}>
                         <SKUCard
@@ -215,17 +256,44 @@ export default function WatchlistScreen() {
                         />
                         {/* Alert chips row */}
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 2, marginTop: 6 }}>
-                          {skuAlerts.map((alert) => (
-                            <View key={alert.id} style={{
-                              flexDirection: 'row', alignItems: 'center',
-                              backgroundColor: `${theme.premium}15`,
-                              borderWidth: 0.5, borderColor: `${theme.premium}40`,
-                              borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5,
-                            }}>
+                          {/* Triggered alerts — orange/accent, bold, ⚡ prefix */}
+                          {triggeredAlerts.map((alert) => (
+                            <Pressable
+                              key={alert.id}
+                              onPress={() => setAlertSkuId(sku.id)}
+                              style={({ pressed }) => ({
+                                flexDirection: 'row', alignItems: 'center', gap: 5,
+                                backgroundColor: `${theme.accent}22`,
+                                borderWidth: 1, borderColor: theme.accent,
+                                borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5,
+                                opacity: pressed ? 0.7 : 1,
+                              })}
+                            >
+                              <Svg width={9} height={9} viewBox="0 0 24 24" fill={theme.accent} stroke="none">
+                                <Path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                              </Svg>
+                              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11.5, color: theme.accent }}>
+                                {alert.direction === 'above' ? '↑' : '↓'} ${alert.targetPrice.toFixed(0)} · FIRED
+                              </Text>
+                            </Pressable>
+                          ))}
+                          {/* Active (waiting) alerts — muted gold */}
+                          {activeAlerts.map((alert) => (
+                            <Pressable
+                              key={alert.id}
+                              onPress={() => setAlertSkuId(sku.id)}
+                              style={({ pressed }) => ({
+                                flexDirection: 'row', alignItems: 'center',
+                                backgroundColor: `${theme.premium}15`,
+                                borderWidth: 0.5, borderColor: `${theme.premium}40`,
+                                borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5,
+                                opacity: pressed ? 0.7 : 1,
+                              })}
+                            >
                               <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11.5, color: theme.premium }}>
                                 {alert.direction === 'above' ? '↑' : '↓'} ${alert.targetPrice.toFixed(0)}
                               </Text>
-                            </View>
+                            </Pressable>
                           ))}
                           <Pressable
                             onPress={() => setAlertSkuId(sku.id)}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,9 +16,11 @@ import Svg, { Path } from 'react-native-svg';
 
 import { buildTheme } from '@/lib/theme';
 import { useAppStore } from '@/stores/appStore';
-import { UpgradeContext } from '@/lib/types';
+import { UpgradeContext, RewardSummary } from '@/lib/types';
+import { fetchRewardSummary, claimRewardPremium } from '@/lib/api';
 import AppHeader from '@/components/AppHeader';
 import UpgradeSheet from '@/components/UpgradeSheet';
+import GuideSheet from '@/components/GuideSheet';
 import { supabase } from '@/lib/supabase';
 import { CATEGORIES } from '@/lib/appConfig';
 import * as api from '@/lib/api';
@@ -32,6 +34,50 @@ interface SettingsGroup { label: string; rows: SettingsRow[]; }
 const PRIVACY_URL = 'https://trendnable.app/privacy';
 const TERMS_URL   = 'https://trendnable.app/terms';
 
+// Inline progress bar for free-tier limits on the premium upsell card.
+function UsageMeter({ label, used, limit, theme, isDark }: {
+  label: string;
+  used: number;
+  limit: number;
+  theme: ReturnType<typeof buildTheme>;
+  isDark: boolean;
+}) {
+  const pct = Math.min(100, Math.round((used / limit) * 100));
+  const atCap = used >= limit;
+  const trackBg = isDark ? 'rgba(241,194,76,0.16)' : 'rgba(180,140,30,0.18)';
+  const fillColor = atCap ? '#fb7185' : theme.premium;
+  const textColor = isDark ? theme.premium : theme.premiumInk;
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <Text style={{
+        fontFamily: 'Inter_600SemiBold', fontSize: 11,
+        color: textColor, opacity: 0.85,
+        width: 86,
+      }}>
+        {label}
+      </Text>
+      <View style={{
+        flex: 1, height: 5, borderRadius: 999,
+        backgroundColor: trackBg, overflow: 'hidden',
+      }}>
+        <View style={{
+          width: `${pct}%`, height: '100%',
+          backgroundColor: fillColor,
+        }} />
+      </View>
+      <Text style={{
+        fontFamily: 'JetBrainsMono_700Bold', fontSize: 11,
+        color: atCap ? '#fb7185' : textColor,
+        fontVariant: ['tabular-nums'],
+        minWidth: 38, textAlign: 'right',
+      }}>
+        {used} / {limit}
+      </Text>
+    </View>
+  );
+}
+
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const isDark = useAppStore((s) => s.isDark);
@@ -40,12 +86,39 @@ export default function SettingsScreen() {
   const followedCategories = useAppStore((s) => s.followedCategories);
   const setFollowedCategories = useAppStore((s) => s.setFollowedCategories);
   const user = useAppStore((s) => s.user);
+  const watchlistCount = useAppStore((s) => s.watchlist.length + s.catalogWatchlist.length);
+  const scanQuota = useAppStore((s) => s.scanQuota);
+  const setNotifyMovers = useAppStore((s) => s.setNotifyMovers);
+  const setNotifyInsights = useAppStore((s) => s.setNotifyInsights);
   const theme = buildTheme(isDark);
+
+  const rewardUnits = useAppStore((s) => s.rewardUnits);
+  const stars = Math.floor(rewardUnits / 50);
 
   const [scrolled, setScrolled] = useState(false);
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [catsExpanded, setCatsExpanded] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [rewardSummary, setRewardSummary] = useState<RewardSummary | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchRewardSummary(user.id).then(setRewardSummary).catch(() => {});
+  }, [user?.id]);
+
+  async function handleClaimFreeMonth() {
+    if (!user) return;
+    try {
+      await claimRewardPremium(user.id);
+      useAppStore.getState().setIsPremium(true);
+      const updated = await fetchRewardSummary(user.id);
+      setRewardSummary(updated);
+      Alert.alert('🎉 Free month unlocked!', 'Premium is active for 30 days.');
+    } catch (e: unknown) {
+      Alert.alert('Could not claim', (e as Error).message ?? 'Please try again.');
+    }
+  }
 
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
 
@@ -153,8 +226,30 @@ export default function SettingsScreen() {
       ],
     },
     {
+      label: 'Notifications',
+      rows: [
+        {
+          id: 'notifyMovers', type: 'toggle',
+          title: 'Watchlist movers',
+          value: user?.notify_movers ?? true,
+          onToggle: () => setNotifyMovers(!(user?.notify_movers ?? true)),
+        },
+        {
+          id: 'notifyInsights', type: 'toggle',
+          title: 'Insight changes',
+          value: user?.notify_insights ?? true,
+          onToggle: () => setNotifyInsights(!(user?.notify_insights ?? true)),
+        },
+      ],
+    },
+    {
       label: 'Account',
       rows: [
+        {
+          id: 'guide', type: 'nav', title: 'Feature guide',
+          detail: 'What you can do & where to find it',
+          onPress: () => setGuideOpen(true),
+        },
         {
           id: 'subscription', type: 'nav', title: 'Subscription',
           detail: isPremium ? 'Premium — manage in App Store' : 'Free',
@@ -256,43 +351,150 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* Sparks reward card */}
+        {user && (
+          <View style={{
+            backgroundColor: theme.surface,
+            borderRadius: theme.radiusLg,
+            padding: 18,
+            marginBottom: 20,
+          }}>
+            {/* Header row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+              <Svg width={14} height={14} viewBox="0 0 24 24" style={{ marginRight: 6 }}>
+                <Path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill={theme.premium} />
+              </Svg>
+              <Text style={{
+                fontFamily: 'Inter_700Bold', fontSize: 11,
+                color: theme.premium, letterSpacing: 0.14 * 11,
+                textTransform: 'uppercase', flex: 1,
+              }}>
+                Sparks
+              </Text>
+              {/* Star pip row — up to 5 stars, each = 50 units */}
+              <View style={{ flexDirection: 'row', gap: 4 }}>
+                {Array.from({ length: 5 }).map((_, i) => {
+                  const filled = i < stars;
+                  return (
+                    <View key={i} style={{
+                      width: 18, height: 18, borderRadius: 999,
+                      backgroundColor: filled ? '#E8A33D' : theme.surface2,
+                      borderWidth: filled ? 0 : 1,
+                      borderColor: theme.premium,
+                      alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <Text style={{ fontSize: 10, color: filled ? '#1a1008' : theme.premium, lineHeight: 12 }}>★</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Progress bar */}
+            <View style={{ height: 6, borderRadius: 999, backgroundColor: theme.surface2, overflow: 'hidden', marginBottom: 8 }}>
+              <View style={{
+                height: '100%',
+                borderRadius: 999,
+                backgroundColor: theme.premium,
+                width: `${((rewardUnits % 50) / 50) * 100}%`,
+              }} />
+            </View>
+
+            {/* Status text */}
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginBottom: 2 }}>
+              {rewardUnits} Sparks · {stars} star{stars !== 1 ? 's' : ''} · {50 - (rewardUnits % 50)} to next star
+            </Text>
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.faint }}>
+              Share prices during scans to earn more
+            </Text>
+
+            {/* Active reward premium period */}
+            {rewardSummary?.expiresAt && new Date(rewardSummary.expiresAt) > new Date() && (
+              <Text style={{
+                fontFamily: 'Inter_600SemiBold', fontSize: 12,
+                color: '#34d399', marginTop: 10,
+              }}>
+                Free month active · expires {new Date(rewardSummary.expiresAt).toLocaleDateString()}
+              </Text>
+            )}
+
+            {/* Claim button — only when eligible and not in active reward period */}
+            {rewardSummary?.canClaimFreeMonth && !(rewardSummary.expiresAt && new Date(rewardSummary.expiresAt) > new Date()) && (
+              <Pressable
+                onPress={handleClaimFreeMonth}
+                accessibilityRole="button"
+                accessibilityLabel="Claim your free month of Premium"
+                style={({ pressed }) => ({
+                  alignSelf: 'flex-end',
+                  marginTop: 12,
+                  backgroundColor: theme.premium,
+                  paddingHorizontal: 14, paddingVertical: 8,
+                  borderRadius: 999,
+                  opacity: pressed ? 0.8 : 1,
+                })}
+              >
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: theme.premiumInk }}>
+                  Claim your free month →
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
         {/* Premium upsell */}
         {!isPremium && (
           <Pressable
             onPress={() => setUpgradeContext('feature')}
             accessibilityRole="button"
-            accessibilityLabel="Upgrade to Trendnable Premium"
+            accessibilityLabel="Unlock Trendnable Premium"
             style={({ pressed }) => ({
               width: '100%',
               backgroundColor: isDark ? '#2A1D08' : '#FFF8EC',
               borderRadius: theme.radius,
               padding: 18,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 14,
               borderWidth: 0.5,
               borderColor: theme.premium,
               marginBottom: 20,
               opacity: pressed ? 0.9 : 1,
             })}
           >
-            <View style={{
-              width: 40, height: 40, borderRadius: 12,
-              backgroundColor: theme.premium, alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Svg width={20} height={20} viewBox="0 0 12 12" fill={theme.premiumInk}>
-                <Path d="M6 1.5l1.5 3 3 .4-2.2 2 .6 3.1L6 8.5 3.1 10l.6-3.1L1.5 4.9l3-.4z" />
-              </Svg>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              <View style={{
+                width: 40, height: 40, borderRadius: 12,
+                backgroundColor: theme.premium, alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Svg width={20} height={20} viewBox="0 0 12 12" fill={theme.premiumInk}>
+                  <Path d="M6 1.5l1.5 3 3 .4-2.2 2 .6 3.1L6 8.5 3.1 10l.6-3.1L1.5 4.9l3-.4z" />
+                </Svg>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: theme.fontDispBold, fontSize: 17, color: isDark ? theme.premium : theme.premiumInk, letterSpacing: -0.3 }}>
+                  Trendnable Premium
+                </Text>
+                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12.5, color: isDark ? theme.premium : theme.premiumInk, opacity: 0.85, marginTop: 2 }}>
+                  P&L · history · alerts · $2.99/mo
+                </Text>
+              </View>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: isDark ? theme.premium : theme.premiumInk }}>→</Text>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: theme.fontDispBold, fontSize: 17, color: isDark ? theme.premium : theme.premiumInk, letterSpacing: -0.3 }}>
-                Trendnable Premium
-              </Text>
-              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12.5, color: isDark ? theme.premium : theme.premiumInk, opacity: 0.85, marginTop: 2 }}>
-                P&L · history · unlimited watchlist · $2.99/mo
-              </Text>
+
+            {/* Usage meters — show progress toward the wall */}
+            <View style={{ marginTop: 14, gap: 8 }}>
+              <UsageMeter
+                label="Watchlist"
+                used={watchlistCount}
+                limit={20}
+                theme={theme}
+                isDark={isDark}
+              />
+              <UsageMeter
+                label="Scans today"
+                used={scanQuota?.used ?? 0}
+                limit={scanQuota?.limit ?? 5}
+                theme={theme}
+                isDark={isDark}
+              />
             </View>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: isDark ? theme.premium : theme.premiumInk }}>→</Text>
           </Pressable>
         )}
 
@@ -490,6 +692,13 @@ export default function SettingsScreen() {
         theme={theme}
         onClose={() => setUpgradeContext(null)}
         onConfirm={() => setUpgradeContext(null)}
+      />
+
+      <GuideSheet
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        theme={theme}
+        isDark={isDark}
       />
     </View>
   );

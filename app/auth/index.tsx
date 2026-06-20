@@ -175,7 +175,7 @@ export default function AuthScreen() {
         <View style={styles.logoRow}>
           <Image
             source={require('../../assets/trendnable_logo_b.png')}
-            style={{ width: 52, height: 52, borderRadius: 14 }}
+            style={{ width: 90, height: 90, borderRadius: 22 }}
             resizeMode="contain"
           />
         </View>

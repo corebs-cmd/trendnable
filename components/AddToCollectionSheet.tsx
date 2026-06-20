@@ -4,9 +4,10 @@ import {
   Text,
   TextInput,
   Pressable,
+  Image,
 } from 'react-native';
 import { Theme, RADIUS } from '@/lib/theme';
-import { CollectionItem, SKU } from '@/lib/types';
+import { CollectionFormData, SKU } from '@/lib/types';
 import { fmtPrice } from '@/lib/appConfig';
 import { useAppStore } from '@/stores/appStore';
 
@@ -116,10 +117,20 @@ function FieldLabel({ label, color }: { label: string; color: string }) {
 // ─── Props ──────────────────────────────────────────────────────────────────
 interface AddToCollectionSheetProps {
   open: boolean;
-  skuId?: string;
   theme: Theme;
   onClose: () => void;
-  onConfirm: (item: CollectionItem) => void;
+  onConfirm: (data: CollectionFormData) => void;
+  // SKU mode (from collection page — search and pick from hotSkus)
+  skuId?: string;
+  // Catalog/scan mode — pass item data directly, no search needed
+  catalogItem?: {
+    name: string;
+    series: string;
+    imageUrl?: string | null;
+    median: number;
+    categoryId: string;
+    cardVariant?: 'raw' | 'graded';
+  };
 }
 
 const CONDITIONS = ['Sealed', 'Mint', 'Near Mint', 'Loose', 'Damaged'] as const;
@@ -132,11 +143,11 @@ type Grader = (typeof GRADERS)[number];
 export default function AddToCollectionSheet({
   open,
   skuId,
+  catalogItem,
   theme,
   onClose,
   onConfirm,
 }: AddToCollectionSheetProps) {
-  const addToCollection = useAppStore((s) => s.addToCollection);
   const hotSkus = useAppStore((s) => s.hotSkus);
 
   const skuLookup = (id: string | undefined): SKU | undefined =>
@@ -146,6 +157,7 @@ export default function AddToCollectionSheet({
   const [searchQuery, setSearchQuery] = useState('');
   const [qty, setQty] = useState(1);
   const [price, setPrice] = useState<string>(() => {
+    if (catalogItem) return String(catalogItem.median);
     const s = skuLookup(skuId);
     return s ? String(s.price.median) : '';
   });
@@ -156,7 +168,9 @@ export default function AddToCollectionSheet({
 
   const selectedSku = skuLookup(selected);
 
-  const isSearchView = !selected;
+  // In catalog mode we skip the search view entirely
+  const isCatalogMode = !!catalogItem;
+  const isSearchView = !isCatalogMode && !selected;
 
   const filteredSKUs = hotSkus.filter((s) => {
     if (!searchQuery.trim()) return true;
@@ -170,7 +184,18 @@ export default function AddToCollectionSheet({
 
   const priceNum = parseFloat(price) || 0;
   const totalCost = priceNum * qty;
-  const currentValue = selectedSku ? selectedSku.price.median * qty : 0;
+
+  // Current value: catalog mode uses catalogItem.median; SKU mode uses selectedSku median
+  const currentValue = isCatalogMode
+    ? catalogItem.median * qty
+    : selectedSku
+    ? selectedSku.price.median * qty
+    : 0;
+
+  // Detect graded TCG: catalog mode uses catalogItem props; SKU mode uses selectedSku
+  const isTcgGraded = isCatalogMode
+    ? catalogItem.categoryId === 'tcg' && catalogItem.cardVariant === 'graded'
+    : !!(selectedSku?.category === 'tcg' && selectedSku?.cardVariant === 'graded');
 
   function handleSelect(id: string) {
     setSelected(id);
@@ -179,10 +204,11 @@ export default function AddToCollectionSheet({
   }
 
   function handleConfirm() {
-    if (!selected || !selectedSku) return;
-    const isTcgGraded = selectedSku.category === 'tcg' && selectedSku.cardVariant === 'graded';
-    const item: CollectionItem = {
-      skuId: selected,
+    // In catalog mode we don't need a selectedSku; in SKU mode we require one
+    if (!isCatalogMode && !selected) return;
+
+    const data: CollectionFormData = {
+      ...(selected ? { skuId: selected } : {}),
       qty,
       purchased: priceNum,
       purchaseDate: new Date().toISOString().slice(0, 10),
@@ -191,15 +217,20 @@ export default function AddToCollectionSheet({
       forSale: false,
       ...(isTcgGraded
         ? { cardVariant: 'graded' as const, cardGrader: grader, cardGrade: grade || undefined }
-        : selectedSku.category === 'tcg'
-        ? { cardVariant: 'raw' as const }
-        : {}),
+        : isCatalogMode
+          ? catalogItem.categoryId === 'tcg'
+            ? { cardVariant: (catalogItem.cardVariant ?? 'raw') as 'raw' | 'graded' }
+            : {}
+          : selectedSku?.category === 'tcg'
+            ? { cardVariant: 'raw' as const }
+            : {}),
     };
-    addToCollection(item);
-    onConfirm(item);
+
+    onConfirm(data);
+
     // reset
     setQty(1);
-    setPrice('');
+    setPrice(isCatalogMode ? String(catalogItem.median) : '');
     setCondition('Mint');
     setGrader('PSA');
     setGrade('');
@@ -208,6 +239,12 @@ export default function AddToCollectionSheet({
     setSearchQuery('');
   }
 
+  // Derive header display values depending on mode
+  const headerName = isCatalogMode ? catalogItem.name : selectedSku?.name ?? '';
+  const headerSeries = isCatalogMode ? catalogItem.series : selectedSku?.series ?? '';
+  const headerMedian = isCatalogMode ? catalogItem.median : selectedSku?.price.median ?? 0;
+  const headerImageUrl = isCatalogMode ? catalogItem.imageUrl : selectedSku?.imageUrl;
+
   return (
     <Sheet
       open={open}
@@ -215,7 +252,7 @@ export default function AddToCollectionSheet({
       theme={theme}
       title="Add to Collection"
     >
-      {/* ── Search view ── */}
+      {/* ── Search view (SKU mode only, before item is selected) ── */}
       {isSearchView ? (
         <View>
           {/* Search input */}
@@ -291,62 +328,87 @@ export default function AddToCollectionSheet({
           </View>
         </View>
       ) : (
-        /* ── Form view ── */
+        /* ── Form view (catalog mode always; SKU mode after item picked) ── */
         <View>
           {/* Selected item header */}
-          {selectedSku && (
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: theme.surface2,
-                borderRadius: theme.radius,
-                padding: 12,
-                marginBottom: 20,
-              }}
-            >
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: theme.surface2,
+              borderRadius: theme.radius,
+              padding: 12,
+              marginBottom: 20,
+            }}
+          >
+            {/* Thumbnail: catalog mode renders image or placeholder; SKU mode uses ProductThumb */}
+            {isCatalogMode ? (
+              headerImageUrl ? (
+                <Image
+                  source={{ uri: headerImageUrl }}
+                  style={{ width: 60, height: 60, borderRadius: RADIUS.card }}
+                  resizeMode="contain"
+                />
+              ) : (
+                <View
+                  style={{
+                    width: 60,
+                    height: 60,
+                    borderRadius: RADIUS.card,
+                    backgroundColor: theme.surface,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 28 }}>📦</Text>
+                </View>
+              )
+            ) : selectedSku ? (
               <ProductThumb sku={selectedSku} theme={theme} size={60} />
-              <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
-                <Text
-                  style={{
-                    fontFamily: theme.fontDispBold,
-                    fontSize: 15,
-                    color: theme.text,
-                    letterSpacing: -0.2,
-                    marginBottom: 2,
-                  }}
-                  numberOfLines={1}
-                >
-                  {selectedSku.name}
-                </Text>
-                <Text
-                  style={{
-                    fontFamily: 'Inter_400Regular',
-                    fontSize: 12,
-                    color: theme.muted,
-                  }}
-                >
-                  Today's median {fmtPrice(selectedSku.price.median)}
-                </Text>
-              </View>
-              {!skuId && (
-                <Pressable
-                  onPress={() => setSelected(undefined)}
-                  style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
-                >
-                  <Text
-                    style={{
-                      fontFamily: 'Inter_700Bold',
-                      fontSize: 13,
-                      color: theme.accent,
-                    }}
-                  >
-                    Change
-                  </Text>
-                </Pressable>
-              )}
+            ) : null}
+
+            <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
+              <Text
+                style={{
+                  fontFamily: theme.fontDispBold,
+                  fontSize: 15,
+                  color: theme.text,
+                  letterSpacing: -0.2,
+                  marginBottom: 2,
+                }}
+                numberOfLines={1}
+              >
+                {headerName}
+              </Text>
+              <Text
+                style={{
+                  fontFamily: 'Inter_400Regular',
+                  fontSize: 12,
+                  color: theme.muted,
+                }}
+              >
+                Today's median {fmtPrice(headerMedian)}
+              </Text>
             </View>
-          )}
+
+            {/* Change button only available in SKU search mode (not catalog, not fixed skuId) */}
+            {!isCatalogMode && !skuId && (
+              <Pressable
+                onPress={() => setSelected(undefined)}
+                style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
+              >
+                <Text
+                  style={{
+                    fontFamily: 'Inter_700Bold',
+                    fontSize: 13,
+                    color: theme.accent,
+                  }}
+                >
+                  Change
+                </Text>
+              </Pressable>
+            )}
+          </View>
 
           {/* Quantity */}
           <View style={{ marginBottom: 20 }}>
@@ -409,7 +471,7 @@ export default function AddToCollectionSheet({
           </View>
 
           {/* Condition / Grading — graded TCG cards get grader+grade, everything else gets condition chips */}
-          {selectedSku?.category === 'tcg' && selectedSku?.cardVariant === 'graded' ? (
+          {isTcgGraded ? (
             <View style={{ marginBottom: 20 }}>
               <FieldLabel label="Grader" color={theme.faint} />
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
@@ -568,7 +630,7 @@ export default function AddToCollectionSheet({
             theme={theme}
             size="lg"
             onPress={handleConfirm}
-            disabled={!selected || priceNum <= 0}
+            disabled={(!isCatalogMode && !selected) || priceNum <= 0}
           >
             Add to collection
           </PrimaryButton>

@@ -253,7 +253,7 @@ function LogoDisney() {
         <Rect x={64} y={44} width={14} height={36} />
         <Polygon points="71,26 64,44 78,44" />
         {/* gate arch */}
-        <Path d="M40 80 Q50 70 60 80 L60 84 L40 84 Z" fill="#0A1426" />
+        <Path d="M40 80 Q50 70 60 80 L60 84 L40 84 Z" fill="#0D0D0D" />
         {/* base */}
         <Rect x={16} y={80} width={68} height={10} rx={2} />
       </G>

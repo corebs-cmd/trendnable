@@ -119,7 +119,7 @@ export default function PriceAlertSheet({ open, sku, theme, onClose, onUpgrade }
           <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.muted }}>
             {sku.short}  ·  current median
           </Text>
-          <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 20, color: '#FC792E', fontVariant: ['tabular-nums'] }}>
+          <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 20, color: '#FF5500', fontVariant: ['tabular-nums'] }}>
             ${currentPrice.toFixed(0)}
           </Text>
         </View>
@@ -281,7 +281,7 @@ export default function PriceAlertSheet({ open, sku, theme, onClose, onUpgrade }
                   </View>
                   <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: theme.text, flex: 1 }}>
                     {alert.direction === 'above' ? 'Above' : 'Below'}{' '}
-                    <Text style={{ fontFamily: 'JetBrainsMono_700Bold', color: '#FC792E' }}>
+                    <Text style={{ fontFamily: 'JetBrainsMono_700Bold', color: '#FF5500' }}>
                       ${alert.targetPrice.toFixed(0)}
                     </Text>
                   </Text>

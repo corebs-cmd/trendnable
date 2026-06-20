@@ -6,6 +6,8 @@ export interface StickerDef {
   shape: 'round' | 'card';
   glow: string;
   ar: number;
+  /** Network image URL from Supabase Storage — preferred over bundled asset when set */
+  imageUrl?: string;
 }
 
 export const STICKERS: Record<string, StickerDef> = {
@@ -93,7 +95,18 @@ export const STICKER_IMAGES: Record<string, ReturnType<typeof require>> = {
   starWarsCelebration2022:require('../assets/stickers/star-wars-celebration-2022.png'),
 };
 
+// Runtime catalog loaded from DB — overrides the static catalog for updated metadata/images
+let _runtimeCatalog: Record<string, StickerDef> = {};
+
+/** Call once at app start with rows fetched from the `stickers` DB table */
+export function setStickerCatalog(rows: StickerDef[]) {
+  _runtimeCatalog = {};
+  for (const row of rows) _runtimeCatalog[row.key] = row;
+}
+
 export function resolveStickerKeys(keys: string[] | null | undefined): StickerDef[] {
   if (!keys || keys.length === 0) return [];
-  return keys.slice(0, 3).map((k) => STICKERS[k]).filter(Boolean);
+  return keys.slice(0, 3)
+    .map((k) => _runtimeCatalog[k] ?? STICKERS[k])
+    .filter(Boolean);
 }

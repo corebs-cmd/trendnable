@@ -71,6 +71,11 @@ export default function RootLayout() {
       // Load hot SKUs — no auth needed, available to all users
       store.loadHotSkus().catch(console.error);
 
+      // Load sticker catalog from DB into reactive store (non-blocking)
+      api.fetchStickerCatalog()
+        .then((rows) => useAppStore.getState().setStickerCatalog(rows))
+        .catch(console.warn);
+
       // Restore Supabase session
       const { data: { session } } = await supabase.auth.getSession();
 

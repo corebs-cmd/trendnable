@@ -24,7 +24,6 @@ import SKUCard from '@/components/SKUCard';
 import Sheet from '@/components/Sheet';
 import FilterGroup from '@/components/FilterGroup';
 import PrimaryButton from '@/components/PrimaryButton';
-import NotificationBanner from '@/components/NotificationBanner';
 import NotificationsSheet from '@/components/NotificationsSheet';
 
 type SortBy = 'hot' | 'velocity' | 'price';
@@ -148,12 +147,6 @@ export default function HotScreen() {
         scrolled={scrolled}
         trailing={
           <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-            <IconButton theme={theme} onPress={() => router.push('/scan')} accessibilityLabel="Scan barcode">
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2} strokeLinecap="round">
-                <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                <Circle cx="12" cy="13" r="4" />
-              </Svg>
-            </IconButton>
             <IconButton theme={theme} onPress={() => setFilterSheetOpen(true)} accessibilityLabel="Open filters">
               <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2} strokeLinecap="round">
                 <Path d="M3 6h18M6 12h12M10 18h4" />
@@ -199,8 +192,6 @@ export default function HotScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.accent} />
         }
       >
-        <NotificationBanner theme={theme} onPress={() => setNotifOpen(true)} />
-
         {/* ── Date / context subheader ── */}
         <View style={{ paddingHorizontal: 20, paddingBottom: 14 }}>
           <Text style={{
@@ -216,42 +207,6 @@ export default function HotScreen() {
             What's moving today
           </Text>
         </View>
-
-        {/* ── New Today card ── */}
-        {newCount > 0 && (
-          <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
-            <Pressable
-              onPress={() => setNewTodayOpen(true)}
-              style={({ pressed }) => ({
-                borderRadius: theme.radius, padding: 14,
-                flexDirection: 'row', alignItems: 'center', gap: 12,
-                opacity: pressed ? 0.88 : 1,
-                backgroundColor: isDark ? '#162640' : '#2563EB',
-              })}
-            >
-              <View style={{
-                width: 44, height: 44, borderRadius: 12,
-                backgroundColor: 'rgba(255,255,255,0.18)',
-                alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Text style={{ color: '#FFFFFF', fontFamily: theme.fontMonoBold, fontSize: 17, letterSpacing: -0.5 }}>
-                  +{newCount}
-                </Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: '#FFFFFF', fontSize: 15, fontFamily: theme.fontDispBold, letterSpacing: -0.3 }}>
-                  New Today
-                </Text>
-                <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12.5, fontFamily: 'Inter_400Regular', marginTop: 2 }} numberOfLines={1}>
-                  {newCount} SKU{newCount !== 1 ? 's' : ''} added in the last 24 hours
-                </Text>
-              </View>
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
-                <Path d="M9 6l6 6-6 6" />
-              </Svg>
-            </Pressable>
-          </View>
-        )}
 
         {/* ── Category chips — single select ── */}
         <ScrollView
@@ -329,6 +284,119 @@ export default function HotScreen() {
                 </View>
               )}
 
+              {/* ── Scan buttons ── */}
+              <View style={{ paddingHorizontal: 20, marginBottom: 12, flexDirection: 'row', gap: 10 }}>
+                {/* Scan Barcode */}
+                <Pressable
+                  onPress={() => router.push('/scan?mode=barcode')}
+                  accessibilityLabel="Scan barcode"
+                  style={({ pressed }) => ({
+                    flex: 1, borderRadius: theme.radius, padding: 14,
+                    flexDirection: 'row', alignItems: 'center', gap: 10,
+                    opacity: pressed ? 0.88 : 1,
+                    backgroundColor: '#FF5500',
+                  })}
+                >
+                  <View style={{
+                    width: 40, height: 40, borderRadius: 10,
+                    backgroundColor: 'rgba(255,255,255,0.18)',
+                    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth={2} strokeLinecap="round">
+                      <Path d="M3 5h2M3 5v2M3 5h2m14 0h2v2m-2-2h-2m0 14h2v-2m-2 2h-2M3 19h2v-2M3 19v-2" />
+                      <Path d="M7 8h10v8H7z" strokeWidth={1.5} />
+                    </Svg>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#FFFFFF', fontSize: 13.5, fontFamily: theme.fontDispBold, letterSpacing: -0.2 }}>
+                      Scan Barcode
+                    </Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.78)', fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 }}>
+                      Product barcode
+                    </Text>
+                  </View>
+                </Pressable>
+
+                {/* Visual Scan */}
+                <Pressable
+                  onPress={() => router.push('/scan?mode=visual')}
+                  accessibilityLabel="Visual scan"
+                  style={({ pressed }) => ({
+                    flex: 1, borderRadius: theme.radius, padding: 14,
+                    flexDirection: 'row', alignItems: 'center', gap: 10,
+                    opacity: pressed ? 0.88 : 1,
+                    backgroundColor: '#2A1D08',
+                    borderWidth: 0.5,
+                    borderColor: theme.premium,
+                  })}
+                >
+                  <View style={{
+                    width: 40, height: 40, borderRadius: 10,
+                    backgroundColor: theme.premium,
+                    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.premiumInk} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                      <Circle cx="12" cy="13" r="4" />
+                    </Svg>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <Text style={{ color: theme.premium, fontSize: 13.5, fontFamily: theme.fontDispBold, letterSpacing: -0.2 }}>
+                        Visual Scan
+                      </Text>
+                      {!isPremium && (
+                        <Svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke={theme.premium} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                          <Path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z" />
+                          <Path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                        </Svg>
+                      )}
+                    </View>
+                    <Text style={{ color: `${theme.premium}99`, fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 }}>
+                      Point & identify
+                    </Text>
+                  </View>
+                </Pressable>
+              </View>
+
+              {/* ── New Today card ── */}
+              {newCount > 0 && (
+                <View style={{ paddingHorizontal: 20, marginBottom: 32 }}>
+                  <Pressable
+                    onPress={() => setNewTodayOpen(true)}
+                    style={({ pressed }) => ({
+                      borderRadius: theme.radius, padding: 14,
+                      flexDirection: 'row', alignItems: 'center', gap: 12,
+                      opacity: pressed ? 0.75 : 1,
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(21,23,26,0.05)',
+                      borderWidth: 1,
+                      borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(21,23,26,0.12)',
+                    })}
+                  >
+                    <View style={{
+                      width: 44, height: 44, borderRadius: 12,
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(21,23,26,0.07)',
+                      alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <Text style={{ color: theme.text, fontFamily: theme.fontMonoBold, fontSize: 17, letterSpacing: -0.5 }}>
+                        +{newCount}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: theme.text, fontSize: 15, fontFamily: theme.fontDispBold, letterSpacing: -0.3 }}>
+                        New Today
+                      </Text>
+                      <Text style={{ color: theme.muted, fontSize: 12.5, fontFamily: 'Inter_400Regular', marginTop: 2 }} numberOfLines={1}>
+                        {newCount} SKU{newCount !== 1 ? 's' : ''} added in the last 24 hours
+                      </Text>
+                    </View>
+                    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={theme.muted} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M9 6l6 6-6 6" />
+                    </Svg>
+                  </Pressable>
+                </View>
+              )}
+
               {/* Per-category sections */}
               {sections.map(({ catId, cat, skus }) => (
                 <View key={catId} style={{ marginBottom: 32 }}>
@@ -372,6 +440,7 @@ export default function HotScreen() {
             </>
           )}
         </View>
+
       </ScrollView>
 
       <NotificationsSheet
@@ -412,7 +481,7 @@ export default function HotScreen() {
                 <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginTop: 2 }} numberOfLines={1}>{sku.series ?? sku.category}</Text>
               </View>
               <View style={{ alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
-                <Text style={{ fontFamily: theme.fontMonoBold, fontSize: 14, color: '#FC792E' }}>${sku.price.median.toFixed(0)}</Text>
+                <Text style={{ fontFamily: theme.fontMonoBold, fontSize: 14, color: '#FF5500' }}>${sku.price.median.toFixed(0)}</Text>
                 <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.muted }}>{sku.listings} listed</Text>
               </View>
               <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={theme.faint} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">

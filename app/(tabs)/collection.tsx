@@ -15,8 +15,8 @@ import Svg, { Path, Circle } from 'react-native-svg';
 import { buildTheme, categoryColor } from '@/lib/theme';
 import { useAppStore } from '@/stores/appStore';
 import { catById, fmtPrice } from '@/lib/appConfig';
-import { CollectionItemEnriched, UpgradeContext, CatalogCollectionItem } from '@/lib/types';
-import { promoteCatalogToSku } from '@/lib/api';
+import { CollectionItemEnriched, UpgradeContext, CatalogCollectionItem, CollectionFormData } from '@/lib/types';
+import { promoteCatalogToSku, fetchSkuById } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import AppHeader from '@/components/AppHeader';
 import IconButton from '@/components/IconButton';
@@ -25,6 +25,7 @@ import UpgradeSheet from '@/components/UpgradeSheet';
 import { ProductThumb } from '@/components/ProductPlaceholder';
 import AddToCollectionSheet from '@/components/AddToCollectionSheet';
 import CatalogItemSheet from '@/components/CatalogItemSheet';
+import PriceAlertSheet from '@/components/PriceAlertSheet';
 
 const VALUE_HISTORY_BASE = [0.72, 0.74, 0.75, 0.77, 0.79, 0.81, 0.83, 0.86, 0.89, 0.92, 0.94, 0.96, 0.98, 1.0];
 
@@ -34,18 +35,111 @@ type CollectionRow =
   | { type: 'sku'; item: CollectionItemEnriched }
   | { type: 'catalog'; item: CatalogCollectionItem };
 
+// Renders the per-category portfolio breakdown. Free users see the top row
+// fully + the rest blurred behind an Unlock CTA.
+function CategoryBreakdown({ rows, total, theme, isDark, isPremium, onUnlock }: {
+  rows: { categoryId: string; value: number; count: number }[];
+  total: number;
+  theme: ReturnType<typeof buildTheme>;
+  isDark: boolean;
+  isPremium: boolean;
+  onUnlock: () => void;
+}) {
+  const top = rows[0];
+  const rest = rows.slice(1);
+  const visibleRows = isPremium ? rows : rows.slice(0, 1);
+
+  return (
+    <View style={{
+      backgroundColor: theme.surface, borderRadius: theme.radiusLg,
+      padding: 18, marginBottom: 20,
+    }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, color: theme.muted, letterSpacing: 0.14 * 11, textTransform: 'uppercase' }}>
+          Breakdown by category
+        </Text>
+        {!isPremium && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Svg width={9} height={9} viewBox="0 0 24 24" fill="none" stroke={theme.premium} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+              <Path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4" />
+            </Svg>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: theme.premium, letterSpacing: 0.6 }}>PREMIUM</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={{ gap: 12 }}>
+        {visibleRows.map((row) => {
+          const pct = total > 0 ? (row.value / total) * 100 : 0;
+          const tint = categoryColor(row.categoryId, isDark);
+          const cat = catById(row.categoryId);
+          return (
+            <View key={row.categoryId}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: theme.text }}>
+                  {cat?.label ?? row.categoryId}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+                  <Text style={{ fontFamily: theme.fontMono, fontSize: 11.5, color: theme.faint, fontVariant: ['tabular-nums'] }}>
+                    {row.count} item{row.count === 1 ? '' : 's'}
+                  </Text>
+                  <Text style={{ fontFamily: theme.fontMonoBold, fontSize: 14, color: theme.text, fontVariant: ['tabular-nums'] }}>
+                    ${Math.round(row.value).toLocaleString()}
+                  </Text>
+                  <Text style={{ fontFamily: theme.fontMono, fontSize: 11, color: theme.muted, fontVariant: ['tabular-nums'], minWidth: 38, textAlign: 'right' }}>
+                    {pct.toFixed(0)}%
+                  </Text>
+                </View>
+              </View>
+              <View style={{ height: 6, borderRadius: 999, backgroundColor: tint + '22', overflow: 'hidden' }}>
+                <View style={{ width: `${pct}%`, height: '100%', backgroundColor: tint }} />
+              </View>
+            </View>
+          );
+        })}
+      </View>
+
+      {!isPremium && rest.length > 0 && (
+        <Pressable
+          onPress={onUnlock}
+          style={({ pressed }) => ({
+            marginTop: 14,
+            paddingVertical: 12, paddingHorizontal: 14,
+            borderRadius: 12,
+            backgroundColor: 'rgba(241,194,76,0.08)',
+            borderWidth: 1, borderColor: 'rgba(241,194,76,0.28)',
+            flexDirection: 'row', alignItems: 'center', gap: 10,
+            opacity: pressed ? 0.75 : 1,
+          })}
+        >
+          <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={theme.premium} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+            <Path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4" />
+          </Svg>
+          <Text style={{ flex: 1, fontFamily: 'Inter_600SemiBold', fontSize: 12.5, color: theme.premium }}>
+            Unlock to see all {rows.length} categories
+          </Text>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: theme.premium }}>→</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
 export default function CollectionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const isDark = useAppStore((s) => s.isDark);
   const isPremium = useAppStore((s) => s.isPremium);
   const storeCollection = useAppStore((s) => s.collection);
+  const addToCollection = useAppStore((s) => s.addToCollection);
   const removeFromCollection = useAppStore((s) => s.removeFromCollection);
   const updateCollectionItem = useAppStore((s) => s.updateCollectionItem);
   const hotSkus = useAppStore((s) => s.hotSkus);
+  const priceAlerts = useAppStore((s) => s.priceAlerts);
   const catalogCollection = useAppStore((s) => s.catalogCollection);
   const removeCatalogFromCollection = useAppStore((s) => s.removeCatalogFromCollection);
   const completeCatalogMigration = useAppStore((s) => s.completeCatalogMigration);
+  const mergeSkuIntoHot          = useAppStore((s) => s.mergeSkuIntoHot);
   const loadUserData = useAppStore((s) => s.loadUserData);
   const userId = useAppStore((s) => s.user?.id);
   const theme = buildTheme(isDark);
@@ -56,6 +150,18 @@ export default function CollectionScreen() {
     const run = async () => {
       await loadUserData(userId);
       if (!active) return;
+
+      // Recover storeCollection items whose SKU isn't in hotSkus.
+      // This happens when a scan-created SKU (is_active:false) is not in v_hot_skus.
+      // After completeCatalogMigration clears catalog_id, the item lives only in
+      // storeCollection — if the SKU isn't in hotSkus the item becomes invisible.
+      const currentHotIds = new Set(useAppStore.getState().hotSkus.map((s) => s.id));
+      for (const item of useAppStore.getState().collection) {
+        if (!currentHotIds.has(item.skuId)) {
+          fetchSkuById(item.skuId).then((sku) => { if (sku && active) mergeSkuIntoHot(sku); }).catch(() => {});
+        }
+      }
+
       const all = useAppStore.getState().catalogCollection;
 
       // Syncing: sku_id already known in DB — just clear the catalog link
@@ -65,6 +171,7 @@ export default function CollectionScreen() {
           qty: item.qty, purchased: item.purchased,
           purchaseDate: item.purchaseDate, condition: item.condition,
         });
+        fetchSkuById(item.skuId!).then((sku) => { if (sku) mergeSkuIntoHot(sku); }).catch(() => {});
       }
 
       // Pending: sku_id not yet assigned — promote first
@@ -80,6 +187,7 @@ export default function CollectionScreen() {
             qty: item.qty, purchased: item.purchased,
             purchaseDate: item.purchaseDate, condition: item.condition,
           });
+          fetchSkuById(promotion.skuId).then((sku) => { if (sku) mergeSkuIntoHot(sku); }).catch(() => {});
         }
       }
     };
@@ -93,6 +201,7 @@ export default function CollectionScreen() {
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [catalogDetailId, setCatalogDetailId] = useState<string | null>(null);
+  const [alertSkuId, setAlertSkuId] = useState<string | null>(null);
 
   const items: CollectionItemEnriched[] = useMemo(() => {
     return storeCollection.map((item) => {
@@ -103,6 +212,11 @@ export default function CollectionScreen() {
       return { ...item, sku, current, cost, pl: current - cost };
     }).filter(Boolean) as CollectionItemEnriched[];
   }, [storeCollection, hotSkus]);
+
+  const alertSku = useMemo(
+    () => items.find((i) => i.skuId === alertSkuId)?.sku ?? null,
+    [items, alertSkuId]
+  );
 
   const catalogTotal = useMemo(() =>
     catalogCollection.reduce((s, i) => s + (i.currentPrice != null ? i.currentPrice * i.qty : 0), 0),
@@ -120,6 +234,23 @@ export default function CollectionScreen() {
   const totalQty = useMemo(() => items.reduce((s, i) => s + i.qty, 0) + catalogQty, [items, catalogQty]);
   const plPositive = totalPL >= 0;
   const plPct = totalCost > 0 ? (totalPL / totalCost) * 100 : 0;
+
+  // Per-category aggregates for the breakdown section. Sorted by value desc.
+  const breakdown = useMemo(() => {
+    const map = new Map<string, { value: number; count: number }>();
+    for (const item of items) {
+      const prev = map.get(item.sku.category) ?? { value: 0, count: 0 };
+      map.set(item.sku.category, { value: prev.value + item.current, count: prev.count + item.qty });
+    }
+    for (const item of catalogCollection) {
+      const val = (item.currentPrice ?? 0) * item.qty;
+      const prev = map.get(item.categoryId) ?? { value: 0, count: 0 };
+      map.set(item.categoryId, { value: prev.value + val, count: prev.count + item.qty });
+    }
+    return Array.from(map.entries())
+      .map(([categoryId, v]) => ({ categoryId, value: v.value, count: v.count }))
+      .sort((a, b) => b.value - a.value);
+  }, [items, catalogCollection]);
 
   const heroData = useMemo(() => VALUE_HISTORY_BASE.map((m) => Math.round(total * m)), [total]);
 
@@ -168,26 +299,34 @@ export default function CollectionScreen() {
         scrolled={scrolled}
         trailing={
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <IconButton
-              theme={theme}
-              accessibilityLabel="Share collection"
-              onPress={() => isPremium ? null : setUpgradeContext('share')}
-            >
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.muted} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <Path d="M12 16V4M8 8l4-4 4 4" />
-                <Path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6" />
-              </Svg>
-            </IconButton>
-            <IconButton
-              theme={theme}
-              accessibilityLabel="Scan barcode"
-              onPress={() => router.push('/scan')}
-            >
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.text} strokeWidth={2} strokeLinecap="round">
-                <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                <Circle cx="12" cy="13" r="4" />
-              </Svg>
-            </IconButton>
+            <View style={{ position: 'relative' }}>
+              <IconButton
+                theme={theme}
+                accessibilityLabel={isPremium ? 'Share collection' : 'Share collection (Premium)'}
+                onPress={() => isPremium ? null : setUpgradeContext('share')}
+              >
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isPremium ? theme.muted : theme.premium} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <Path d="M12 16V4M8 8l4-4 4 4" />
+                  <Path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6" />
+                </Svg>
+              </IconButton>
+              {!isPremium && (
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute', top: 2, right: 2,
+                    width: 12, height: 12, borderRadius: 6,
+                    backgroundColor: theme.premium,
+                    alignItems: 'center', justifyContent: 'center',
+                    borderWidth: 1.5, borderColor: theme.bg,
+                  }}
+                >
+                  <Svg width={6} height={6} viewBox="0 0 24 24" fill="none" stroke={theme.bg} strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round">
+                    <Path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4" />
+                  </Svg>
+                </View>
+              )}
+            </View>
             <IconButton
               theme={theme}
               accessibilityLabel="Add item to collection"
@@ -207,6 +346,81 @@ export default function CollectionScreen() {
         onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 10)}
         scrollEventThrottle={16}
       >
+        {/* ── Scan buttons ── */}
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+          {/* Scan Barcode */}
+          <Pressable
+            onPress={() => router.push('/scan?mode=barcode')}
+            accessibilityLabel="Scan barcode"
+            style={({ pressed }) => ({
+              flex: 1, borderRadius: theme.radius, padding: 14,
+              flexDirection: 'row', alignItems: 'center', gap: 10,
+              opacity: pressed ? 0.88 : 1,
+              backgroundColor: '#FF5500',
+            })}
+          >
+            <View style={{
+              width: 40, height: 40, borderRadius: 10,
+              backgroundColor: 'rgba(255,255,255,0.18)',
+              alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth={2} strokeLinecap="round">
+                <Path d="M3 5h2M3 5v2M3 5h2m14 0h2v2m-2-2h-2m0 14h2v-2m-2 2h-2M3 19h2v-2M3 19v-2" />
+                <Path d="M7 8h10v8H7z" strokeWidth={1.5} />
+              </Svg>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#FFFFFF', fontSize: 13.5, fontFamily: theme.fontDispBold, letterSpacing: -0.2 }}>
+                Scan Barcode
+              </Text>
+              <Text style={{ color: 'rgba(255,255,255,0.78)', fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 }}>
+                Product barcode
+              </Text>
+            </View>
+          </Pressable>
+
+          {/* Visual Scan */}
+          <Pressable
+            onPress={() => router.push('/scan?mode=visual')}
+            accessibilityLabel="Visual scan"
+            style={({ pressed }) => ({
+              flex: 1, borderRadius: theme.radius, padding: 14,
+              flexDirection: 'row', alignItems: 'center', gap: 10,
+              opacity: pressed ? 0.88 : 1,
+              backgroundColor: '#2A1D08',
+              borderWidth: 0.5,
+              borderColor: theme.premium,
+            })}
+          >
+            <View style={{
+              width: 40, height: 40, borderRadius: 10,
+              backgroundColor: theme.premium,
+              alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.premiumInk} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <Circle cx="12" cy="13" r="4" />
+              </Svg>
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <Text style={{ color: theme.premium, fontSize: 13.5, fontFamily: theme.fontDispBold, letterSpacing: -0.2 }}>
+                  Visual Scan
+                </Text>
+                {!isPremium && (
+                  <Svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke={theme.premium} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                    <Path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z" />
+                    <Path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </Svg>
+                )}
+              </View>
+              <Text style={{ color: `${theme.premium}99`, fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 }}>
+                Point & identify
+              </Text>
+            </View>
+          </Pressable>
+        </View>
+
         {/* Hero value card */}
         <View style={{
           backgroundColor: theme.surface, borderRadius: theme.radiusLg,
@@ -225,7 +439,7 @@ export default function CollectionScreen() {
               </Text>
             </View>
 
-            {totalCost > 0 && (
+            {totalCost > 0 && isPremium && (
               <View style={{ alignItems: 'flex-end', paddingTop: 4 }}>
                 <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.muted, letterSpacing: 0.1 * 11, textTransform: 'uppercase', marginBottom: 4 }}>P&L</Text>
                 <Text style={{ fontFamily: theme.fontMonoBold, fontSize: 22, color: plPositive ? theme.pos : theme.neg, letterSpacing: -0.02 * 22, fontVariant: ['tabular-nums'] }}>
@@ -235,6 +449,29 @@ export default function CollectionScreen() {
                   {plPositive ? '+' : ''}{plPct.toFixed(1)}%
                 </Text>
               </View>
+            )}
+
+            {totalCost > 0 && !isPremium && (
+              <Pressable
+                onPress={() => setUpgradeContext('pl')}
+                style={({ pressed }) => ({
+                  alignItems: 'flex-end', paddingTop: 4,
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.premium, letterSpacing: 0.1 * 11, textTransform: 'uppercase' }}>P&L</Text>
+                  <Svg width={9} height={9} viewBox="0 0 24 24" fill="none" stroke={theme.premium} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                    <Path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4" />
+                  </Svg>
+                </View>
+                <Text style={{ fontFamily: theme.fontMonoBold, fontSize: 22, color: theme.premium, letterSpacing: -0.02 * 22, fontVariant: ['tabular-nums'] }}>
+                  +$•••
+                </Text>
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: theme.premium, marginTop: 4, letterSpacing: 0.3 }}>
+                  TAP TO UNLOCK
+                </Text>
+              </Pressable>
             )}
           </View>
 
@@ -250,23 +487,43 @@ export default function CollectionScreen() {
                 <Pressable
                   key={w.key}
                   style={{
+                    flexDirection: 'row', alignItems: 'center', gap: 4,
                     paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999,
                     backgroundColor: active ? theme.surface2 : 'transparent',
+                    borderWidth: locked ? 1 : 0,
+                    borderColor: locked ? 'rgba(241,194,76,0.32)' : 'transparent',
                   }}
                   onPress={() => locked ? setUpgradeContext('history') : setChartWindow(w.key)}
                 >
                   <Text style={{
                     fontFamily: active ? 'Inter_600SemiBold' : 'Inter_400Regular',
                     fontSize: 12,
-                    color: locked ? theme.faint : active ? theme.text : theme.muted,
+                    color: locked ? theme.premium : active ? theme.text : theme.muted,
                   }}>
-                    {w.label}{locked ? ' ◆' : ''}
+                    {w.label}
                   </Text>
+                  {locked && (
+                    <Svg width={9} height={9} viewBox="0 0 24 24" fill="none" stroke={theme.premium} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4" />
+                    </Svg>
+                  )}
                 </Pressable>
               );
             })}
           </View>
         </View>
+
+        {/* Category breakdown — premium feature */}
+        {breakdown.length > 1 && total > 0 && (
+          <CategoryBreakdown
+            rows={breakdown}
+            total={total}
+            theme={theme}
+            isDark={isDark}
+            isPremium={isPremium}
+            onUnlock={() => setUpgradeContext('breakdown')}
+          />
+        )}
 
         {/* Filter chips */}
         <ScrollView
@@ -336,90 +593,157 @@ export default function CollectionScreen() {
                 const item = row.item;
                 const plPos = item.pl >= 0;
                 const itemPlPct = item.cost > 0 ? (item.pl / item.cost) * 100 : 0;
+                const activeAlerts    = priceAlerts.filter((a) => a.skuId === item.skuId && a.isActive);
+                const triggeredAlerts = priceAlerts.filter((a) => a.skuId === item.skuId && !a.isActive && a.triggeredAt !== null);
+                const hasAlerts = activeAlerts.length > 0 || triggeredAlerts.length > 0;
                 return (
-                  <Pressable
-                    key={`sku-${item.skuId}`}
-                    style={({ pressed }) => ({
-                      flexDirection: 'row', alignItems: 'center', gap: 12,
-                      backgroundColor: theme.surface, borderRadius: theme.radius,
-                      padding: 12, opacity: pressed ? 0.78 : 1,
-                    })}
-                    onPress={() => router.push(`/sku/${item.skuId}`)}
-                  >
-                    <ProductThumb sku={item.sku} theme={theme} size={60} />
+                  <View key={`sku-${item.skuId}`}>
+                    <Pressable
+                      style={({ pressed }) => ({
+                        flexDirection: 'row', alignItems: 'center', gap: 12,
+                        backgroundColor: theme.surface, borderRadius: theme.radius,
+                        padding: 12, opacity: pressed ? 0.78 : 1,
+                      })}
+                      onPress={() => router.push(`/sku/${item.skuId}`)}
+                    >
+                      <ProductThumb sku={item.sku} theme={theme} size={60} />
 
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={{ fontFamily: theme.fontDispBold, fontSize: 15, color: theme.text, letterSpacing: -0.2, flex: 1 }} numberOfLines={1}>
-                          {item.sku.short}
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={{ fontFamily: theme.fontDispBold, fontSize: 15, color: theme.text, letterSpacing: -0.2, flex: 1 }} numberOfLines={1}>
+                            {item.sku.short}
+                          </Text>
+                          {item.forSale && (
+                            <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999, borderWidth: 0.5, borderColor: theme.gold }}>
+                              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, color: theme.gold, letterSpacing: 0.1 * 9, textTransform: 'uppercase' }}>
+                                For sale
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        {!!item.sku.series && (
+                          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11.5, color: theme.muted, letterSpacing: -0.1 }} numberOfLines={1}>
+                            {item.sku.series}
+                          </Text>
+                        )}
+                        <Text style={{ fontFamily: theme.fontMono, fontSize: 11.5, color: theme.faint }}>
+                          ×{item.qty} · {item.condition}
                         </Text>
-                        {item.forSale && (
-                          <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999, borderWidth: 0.5, borderColor: theme.gold }}>
-                            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, color: theme.gold, letterSpacing: 0.1 * 9, textTransform: 'uppercase' }}>
-                              For sale
-                            </Text>
-                          </View>
+                      </View>
+
+                      <View style={{ alignItems: 'flex-end', gap: 3 }}>
+                        <Text style={{ fontFamily: theme.fontMonoBold, fontSize: 15, color: theme.text, fontVariant: ['tabular-nums'], letterSpacing: -0.2 }}>
+                          ${Math.round(item.current).toLocaleString()}
+                        </Text>
+                        {item.cost > 0 && isPremium && (
+                          <Text style={{ fontFamily: theme.fontMono, fontSize: 12, color: plPos ? theme.pos : theme.neg, fontVariant: ['tabular-nums'] }}>
+                            {plPos ? '+' : ''}${Math.abs(Math.round(item.pl))} ({plPos ? '+' : ''}{itemPlPct.toFixed(1)}%)
+                          </Text>
+                        )}
+                        {item.cost > 0 && !isPremium && (
+                          <Text style={{ fontFamily: theme.fontMono, fontSize: 12, color: theme.premium, fontVariant: ['tabular-nums'] }}>
+                            +$••• 🔒
+                          </Text>
                         )}
                       </View>
-                      {!!item.sku.series && (
-                        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11.5, color: theme.muted, letterSpacing: -0.1 }} numberOfLines={1}>
-                          {item.sku.series}
-                        </Text>
-                      )}
-                      <Text style={{ fontFamily: theme.fontMono, fontSize: 11.5, color: theme.faint }}>
-                        ×{item.qty} · {item.condition}
-                      </Text>
-                    </View>
-
-                    <View style={{ alignItems: 'flex-end', gap: 3 }}>
-                      <Text style={{ fontFamily: theme.fontMonoBold, fontSize: 15, color: theme.text, fontVariant: ['tabular-nums'], letterSpacing: -0.2 }}>
-                        ${Math.round(item.current).toLocaleString()}
-                      </Text>
-                      {item.cost > 0 && (
-                        <Text style={{ fontFamily: theme.fontMono, fontSize: 12, color: plPos ? theme.pos : theme.neg, fontVariant: ['tabular-nums'] }}>
-                          {plPos ? '+' : ''}${Math.abs(Math.round(item.pl))} ({plPos ? '+' : ''}{itemPlPct.toFixed(1)}%)
-                        </Text>
-                      )}
-                    </View>
-                    <Pressable
-                      onPress={() =>
-                        Alert.alert(
-                          item.sku.name,
-                          undefined,
-                          [
-                            {
-                              text: item.forSale ? 'Remove from sale listing' : 'List as for sale',
-                              onPress: () => updateCollectionItem(item.skuId, { forSale: !item.forSale }),
-                            },
-                            {
-                              text: 'Mark as sold',
-                              onPress: () => removeFromCollection(item.skuId),
-                            },
-                            {
-                              text: 'Remove from collection',
-                              style: 'destructive',
-                              onPress: () => removeFromCollection(item.skuId),
-                            },
-                            { text: 'Cancel', style: 'cancel' },
-                          ]
-                        )
-                      }
-                      accessibilityRole="button"
-                      accessibilityLabel={`Manage ${item.sku.name}`}
-                      style={({ pressed }) => ({
-                        width: 32, height: 32, marginLeft: 2,
-                        alignItems: 'center', justifyContent: 'center',
-                        opacity: pressed ? 0.4 : 1,
-                      })}
-                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
-                    >
-                      <Svg width={18} height={4} viewBox="0 0 18 4">
-                        <Circle cx={2} cy={2} r={1.7} fill={theme.faint} />
-                        <Circle cx={9} cy={2} r={1.7} fill={theme.faint} />
-                        <Circle cx={16} cy={2} r={1.7} fill={theme.faint} />
-                      </Svg>
+                      <Pressable
+                        onPress={() =>
+                          Alert.alert(
+                            item.sku.name,
+                            undefined,
+                            [
+                              {
+                                text: item.forSale ? 'Remove from sale listing' : 'List as for sale',
+                                onPress: () => updateCollectionItem(item.skuId, { forSale: !item.forSale }),
+                              },
+                              {
+                                text: 'Mark as sold',
+                                onPress: () => removeFromCollection(item.skuId),
+                              },
+                              {
+                                text: 'Remove from collection',
+                                style: 'destructive',
+                                onPress: () => removeFromCollection(item.skuId),
+                              },
+                              { text: 'Cancel', style: 'cancel' },
+                            ]
+                          )
+                        }
+                        accessibilityRole="button"
+                        accessibilityLabel={`Manage ${item.sku.name}`}
+                        style={({ pressed }) => ({
+                          width: 32, height: 32, marginLeft: 2,
+                          alignItems: 'center', justifyContent: 'center',
+                          opacity: pressed ? 0.4 : 1,
+                        })}
+                        hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+                      >
+                        <Svg width={18} height={4} viewBox="0 0 18 4">
+                          <Circle cx={2} cy={2} r={1.7} fill={theme.faint} />
+                          <Circle cx={9} cy={2} r={1.7} fill={theme.faint} />
+                          <Circle cx={16} cy={2} r={1.7} fill={theme.faint} />
+                        </Svg>
+                      </Pressable>
                     </Pressable>
-                  </Pressable>
+
+                    {/* Alert chips row */}
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 2, marginTop: hasAlerts ? 6 : 0 }}>
+                      {triggeredAlerts.map((alert) => (
+                        <Pressable
+                          key={alert.id}
+                          onPress={() => setAlertSkuId(item.skuId)}
+                          style={({ pressed }) => ({
+                            flexDirection: 'row', alignItems: 'center', gap: 5,
+                            backgroundColor: `${theme.accent}22`,
+                            borderWidth: 1, borderColor: theme.accent,
+                            borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5,
+                            opacity: pressed ? 0.7 : 1,
+                          })}
+                        >
+                          <Svg width={9} height={9} viewBox="0 0 24 24" fill={theme.accent} stroke="none">
+                            <Path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                          </Svg>
+                          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11.5, color: theme.accent }}>
+                            {alert.direction === 'above' ? '↑' : '↓'} ${alert.targetPrice.toFixed(0)} · FIRED
+                          </Text>
+                        </Pressable>
+                      ))}
+                      {activeAlerts.map((alert) => (
+                        <Pressable
+                          key={alert.id}
+                          onPress={() => setAlertSkuId(item.skuId)}
+                          style={({ pressed }) => ({
+                            flexDirection: 'row', alignItems: 'center',
+                            backgroundColor: `${theme.premium}15`,
+                            borderWidth: 0.5, borderColor: `${theme.premium}40`,
+                            borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5,
+                            opacity: pressed ? 0.7 : 1,
+                          })}
+                        >
+                          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11.5, color: theme.premium }}>
+                            {alert.direction === 'above' ? '↑' : '↓'} ${alert.targetPrice.toFixed(0)}
+                          </Text>
+                        </Pressable>
+                      ))}
+                      <Pressable
+                        onPress={() => setAlertSkuId(item.skuId)}
+                        style={({ pressed }) => ({
+                          flexDirection: 'row', alignItems: 'center', gap: 4,
+                          backgroundColor: theme.surface2,
+                          borderWidth: 0.5, borderColor: theme.hairline,
+                          borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5,
+                          opacity: pressed ? 0.7 : 1,
+                        })}
+                      >
+                        <Svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={theme.faint} strokeWidth={2.5} strokeLinecap="round">
+                          <Path d="M12 5v14M5 12h14" />
+                        </Svg>
+                        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11.5, color: theme.muted }}>
+                          alert
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
                 );
               }
 
@@ -535,7 +859,23 @@ export default function CollectionScreen() {
         open={addOpen}
         theme={theme}
         onClose={() => setAddOpen(false)}
-        onConfirm={() => setAddOpen(false)}
+        onConfirm={(data: CollectionFormData) => {
+          if (data.skuId) {
+            addToCollection({
+              skuId: data.skuId,
+              qty: data.qty,
+              purchased: data.purchased,
+              purchaseDate: data.purchaseDate,
+              condition: data.condition,
+              notes: data.notes,
+              forSale: data.forSale,
+              ...(data.cardVariant ? { cardVariant: data.cardVariant } : {}),
+              ...(data.cardGrader ? { cardGrader: data.cardGrader } : {}),
+              ...(data.cardGrade ? { cardGrade: data.cardGrade } : {}),
+            });
+          }
+          setAddOpen(false);
+        }}
       />
 
       <CatalogItemSheet
@@ -544,6 +884,16 @@ export default function CollectionScreen() {
         theme={theme}
         onClose={() => setCatalogDetailId(null)}
       />
+
+      {alertSku && (
+        <PriceAlertSheet
+          open={alertSkuId !== null}
+          sku={alertSku}
+          theme={theme}
+          onClose={() => setAlertSkuId(null)}
+          onUpgrade={() => { setAlertSkuId(null); setUpgradeContext('priceAlerts'); }}
+        />
+      )}
     </View>
   );
 }

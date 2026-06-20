@@ -1,5 +1,26 @@
 import { supabase } from './supabase';
-import { CollectionItem, DBUser, DBCollectionItem, SKU, PriceAlert, AppNotification, ScanResult, CatalogWatchlistItem, CatalogCollectionItem, SkuInsight, InsightResponse, InsightDirection } from './types';
+import { CollectionItem, DBUser, DBCollectionItem, SKU, PriceAlert, AppNotification, ScanResult, CatalogWatchlistItem, CatalogCollectionItem, SkuInsight, InsightResponse, InsightDirection, RewardSummary } from './types';
+import type { StickerDef } from './stickers';
+
+// ── Sticker catalog ───────────────────────────────────────────────────────────
+
+export async function fetchStickerCatalog(): Promise<StickerDef[]> {
+  const { data, error } = await supabase
+    .from('stickers')
+    .select('key, label, sub, family, shape, glow, ar, image_url')
+    .order('display_order', { ascending: true });
+  if (error || !data) return [];
+  return data.map((row: any) => ({
+    key: row.key,
+    label: row.label,
+    sub: row.sub ?? '',
+    family: row.family as StickerDef['family'],
+    shape: row.shape as StickerDef['shape'],
+    glow: row.glow,
+    ar: Number(row.ar),
+    imageUrl: row.image_url ?? undefined,
+  }));
+}
 
 // ── Users ────────────────────────────────────────────────────────────────────
 
@@ -8,9 +29,11 @@ export async function createUserProfile(
   email: string,
   name: string | null
 ): Promise<DBUser | null> {
+  // Upsert so this is idempotent — the auth trigger (migration 041) may have
+  // already created the row before the client session was established.
   const { data, error } = await supabase
     .from('users')
-    .insert({
+    .upsert({
       id,
       email,
       name,
@@ -19,11 +42,15 @@ export async function createUserProfile(
       followed_categories: [],
       notification_digest_enabled: true,
       notification_digest_time: '08:00',
-    })
+    }, { onConflict: 'id', ignoreDuplicates: false })
     .select()
     .single();
 
   if (error) {
+    // Row may already exist from the trigger — try reading it instead
+    if (error.code === '42501') {
+      return fetchUserProfile(id);
+    }
     console.error('createUserProfile:', error.message);
     return null;
   }
@@ -67,6 +94,18 @@ export async function updateUserPremium(userId: string, isPremium: boolean): Pro
     .update({ is_premium: isPremium })
     .eq('id', userId);
   if (error) console.error('updateUserPremium:', error.message);
+}
+
+export async function updateNotificationPrefs(
+  userId: string,
+  prefs: { notifyMovers?: boolean; notifyInsights?: boolean }
+): Promise<void> {
+  const updates: Record<string, unknown> = {};
+  if (prefs.notifyMovers   !== undefined) updates.notify_movers   = prefs.notifyMovers;
+  if (prefs.notifyInsights !== undefined) updates.notify_insights = prefs.notifyInsights;
+  if (Object.keys(updates).length === 0) return;
+  const { error } = await supabase.from('users').update(updates).eq('id', userId);
+  if (error) console.error('updateNotificationPrefs:', error.message);
 }
 
 // ── Collection ───────────────────────────────────────────────────────────────
@@ -207,13 +246,13 @@ export async function fetchSkuInsight(
       .maybeSingle(),
     supabase
       .from('sku_narratives')
-      .select('description')
+      .select('narrative')
       .eq('sku_id', skuId)
       .maybeSingle(),
   ]);
 
   const insight = insightData.data ? rowToInsight(insightData.data as Record<string, unknown>) : null;
-  const fallbackDescription = (narrativeData.data as Record<string, unknown> | null)?.description as string ?? '';
+  const fallbackDescription = (narrativeData.data as Record<string, unknown> | null)?.narrative as string ?? '';
 
   let personalizedAction: string | null = null;
   if (isPremium && userId && insight) {
@@ -264,28 +303,24 @@ function rowToInsight(row: Record<string, unknown>): SkuInsight {
 }
 
 export async function fetchSkuById(skuId: string): Promise<SKU | null> {
-  // Try the hot feed view first (active, fully processed SKUs)
-  const { data: hotData } = await supabase
-    .from('v_hot_skus')
-    .select('*')
-    .eq('id', skuId)
-    .maybeSingle();
-  if (hotData) return rowToSku(hotData as Record<string, unknown>);
-
-  // Fallback: inactive SKU (e.g. just promoted from a scan, not yet in hot feed)
-  const { data } = await supabase
-    .from('skus')
-    .select(`
-      id, name, short, series, category_id, fandom_id,
-      ebay_query, ebay_url, image_url, pop_number, exclusive_type, sticker_keys,
-      card_variant, card_grader, card_grade, created_at,
-      hot_index(hot_score, delta_24h, momentum, velocity_score, volume_score, confirmation_score, freshness_score),
-      daily_snapshots(price_low, price_median, price_high, listing_count, snapshot_date)
-    `)
-    .eq('id', skuId)
-    .order('snapshot_date', { referencedTable: 'daily_snapshots', ascending: false })
-    .limit(1, { referencedTable: 'daily_snapshots' })
-    .maybeSingle();
+  // Query skus directly so admin-editable fields (sticker_keys, etc.) are always fresh.
+  // Fetch insight in parallel so direction/color matches the hot list.
+  const [{ data }, insightsMap] = await Promise.all([
+    supabase
+      .from('skus')
+      .select(`
+        id, name, short, series, category_id, fandom_id,
+        ebay_query, ebay_url, image_url, pop_number, exclusive_type, sticker_keys,
+        card_variant, card_grader, card_grade, created_at,
+        hot_index(hot_score, delta_24h, momentum, velocity_score, volume_score, confirmation_score, freshness_score),
+        daily_snapshots(price_low, price_median, price_high, listing_count, snapshot_date)
+      `)
+      .eq('id', skuId)
+      .order('snapshot_date', { referencedTable: 'daily_snapshots', ascending: false })
+      .limit(1, { referencedTable: 'daily_snapshots' })
+      .maybeSingle(),
+    fetchCurrentInsightsMap([skuId]),
+  ]);
 
   if (!data) return null;
 
@@ -294,7 +329,7 @@ export async function fetchSkuById(skuId: string): Promise<SKU | null> {
   const dsArr = d.daily_snapshots as Record<string, unknown>[] | null;
   const ds = Array.isArray(dsArr) ? dsArr[0] : null;
 
-  return rowToSku({
+  const sku = rowToSku({
     ...d,
     hot_score:            hi?.hot_score          ?? 0,
     delta_24h:            hi?.delta_24h           ?? 0,
@@ -313,6 +348,9 @@ export async function fetchSkuById(skuId: string): Promise<SKU | null> {
     force_featured_until: null,
     fandom_ids:           [],
   } as Record<string, unknown>);
+
+  const ins = insightsMap.get(skuId);
+  return ins ? { ...sku, direction: ins.direction, insight: ins } : sku;
 }
 
 export async function fetchSkuHistory(
@@ -452,6 +490,8 @@ function rowToSku(row: Record<string, unknown>): SKU {
     priceLoose:     row.price_loose     != null ? Number(row.price_loose)      : null,
     priceLooseCount:row.price_loose_count != null ? Number(row.price_loose_count): null,
     stickerKeys: Array.isArray(row.sticker_keys) ? (row.sticker_keys as string[]) : null,
+    ppgPrice:    row.ppg_price    != null ? Number(row.ppg_price)    : null,
+    retailPrice: row.retail_price != null ? Number(row.retail_price) : null,
     direction: (row.insight_direction as InsightDirection) ?? undefined,
   };
 }
@@ -496,7 +536,49 @@ function dbToCollectionItem(row: DBCollectionItem): CollectionItem {
   };
 }
 
+// ── Scan quota (free tier) ────────────────────────────────────────────────────
+
+const SCAN_DAILY_LIMIT = 1;
+
+export interface ScanQuota {
+  used: number;
+  limit: number;
+  resetsAt: string;
+  isPremium: boolean;
+}
+
+function nextUtcMidnightIso(): string {
+  const d = new Date();
+  d.setUTCHours(24, 0, 0, 0);
+  return d.toISOString();
+}
+
+export async function fetchScanQuota(userId: string): Promise<ScanQuota> {
+  const { data } = await supabase
+    .from('users')
+    .select('is_premium, scan_count_day, scan_count_used')
+    .eq('id', userId)
+    .maybeSingle();
+
+  const today = new Date().toISOString().slice(0, 10);
+  const isPremium = (data?.is_premium as boolean | undefined) ?? false;
+  const used = data?.scan_count_day === today ? ((data?.scan_count_used as number | undefined) ?? 0) : 0;
+
+  return {
+    used,
+    limit: SCAN_DAILY_LIMIT,
+    resetsAt: nextUtcMidnightIso(),
+    isPremium,
+  };
+}
+
 // ── Scan pipeline ─────────────────────────────────────────────────────────────
+
+export type ScanError = Error & {
+  errorCode?: string;
+  // Populated when errorCode === 'quota_exceeded'
+  quota?: { used: number; limit: number; resetsAt: string };
+};
 
 export async function callScanPipeline(barcode: string, accessToken: string): Promise<ScanResult> {
   const url = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/scan-pipeline`;
@@ -512,8 +594,11 @@ export async function callScanPipeline(barcode: string, accessToken: string): Pr
   const data = await response.json();
 
   if (!response.ok || data.ok === false) {
-    const err = new Error(data.message ?? data.error ?? 'Scan failed') as Error & { errorCode?: string };
+    const err = new Error(data.message ?? data.error ?? 'Scan failed') as ScanError;
     err.errorCode = data.error;
+    if (data.error === 'quota_exceeded') {
+      err.quota = { used: data.used, limit: data.limit, resetsAt: data.resetsAt };
+    }
     throw err;
   }
 
@@ -545,6 +630,58 @@ export async function callScanPipeline(barcode: string, accessToken: string): Pr
     isNewToCatalog:    data.is_new_to_catalog,
     qualityGatePassed: data.quality_gate_passed,
     barcode:           data.barcode,
+    ebayQuery:         data.ebay_query,
+    imageUrl:          data.image_url ?? null,
+  };
+}
+
+export async function callVisionPipeline(imageBase64: string, accessToken: string): Promise<ScanResult> {
+  const url = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/vision-pipeline`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ imageBase64 }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok || data.ok === false) {
+    const err = new Error(data.message ?? data.error ?? 'Vision scan failed') as ScanError;
+    err.errorCode = data.error;
+    throw err;
+  }
+
+  return {
+    catalogId:      data.catalog_id,
+    skuId:          data.sku_id ?? null,
+    name:           data.name,
+    short:          data.short,
+    series:         data.series ?? null,
+    categoryId:     data.category_id,
+    fandomId:       data.fandom_id ?? null,
+    variantType:    data.variant_type ?? null,
+    popNumber:      data.pop_number ?? null,
+    price: {
+      low:    data.price.low,
+      median: data.price.median,
+      high:   data.price.high,
+    },
+    listings:          data.listings,
+    soldCount:         data.sold_count ?? 0,
+    sellabilityScore:  data.sellability_score ?? 0,
+    scoreEstimate:     data.score_estimate,
+    scoreBreakdown: {
+      velocity:     data.score_breakdown.velocity,
+      volume:       data.score_breakdown.volume,
+      confirmation: data.score_breakdown.confirmation,
+      freshness:    data.score_breakdown.freshness,
+    },
+    isNewToCatalog:    data.is_new_to_catalog,
+    qualityGatePassed: data.quality_gate_passed,
+    barcode:           data.barcode ?? null,
     ebayQuery:         data.ebay_query,
     imageUrl:          data.image_url ?? null,
   };
@@ -749,4 +886,102 @@ export async function savePushToken(userId: string, token: string): Promise<void
     .update({ push_token: token })
     .eq('id', userId);
   if (error) console.error('savePushToken:', error.message);
+}
+
+// ── Community pricing ─────────────────────────────────────────────────────────
+
+// Validates a community-submitted price against eBay median.
+// Rules: >= $5, >= 5% of median, <= 10× median.
+export function validateCommunityPrice(value: number, ebayMedian: number): boolean {
+  if (value < 5) return false;
+  if (ebayMedian > 0 && value < ebayMedian * 0.05) return false;
+  if (ebayMedian > 0 && value > ebayMedian * 10) return false;
+  return true;
+}
+
+// Submits a community price (ppg and/or retail) for a catalog or sku entry.
+// Awards 2 reward units per valid field submitted.
+// Returns { awarded: number } — total units awarded this call.
+export async function submitCommunityPrice(params: {
+  catalogId?: string;
+  skuId?: string;
+  ppgPrice?: number | null;
+  retailPrice?: number | null;
+  ebayMedian: number;
+  userId: string;
+  accessToken: string;
+}): Promise<{ awarded: number }> {
+  const { catalogId, skuId, ppgPrice, retailPrice, ebayMedian, userId } = params;
+  let awarded = 0;
+
+  const validPpg    = ppgPrice    != null && validateCommunityPrice(ppgPrice,    ebayMedian);
+  const validRetail = retailPrice != null && validateCommunityPrice(retailPrice, ebayMedian);
+
+  if (!validPpg && !validRetail) return { awarded: 0 };
+
+  const update: Record<string, unknown> = { community_contributor_id: userId };
+  if (validPpg)    update.ppg_price    = ppgPrice;
+  if (validRetail) update.retail_price = retailPrice;
+
+  // Update catalog row
+  if (catalogId) {
+    await supabase.from('product_catalog').update(update).eq('id', catalogId);
+  }
+  // Update sku row
+  if (skuId) {
+    await supabase.from('skus').update(update).eq('id', skuId);
+  }
+
+  // Award units + log events
+  const events: { user_id: string; event_type: string; units: number; sku_id?: string; catalog_id?: string }[] = [];
+  if (validPpg) {
+    awarded += 2;
+    events.push({ user_id: userId, event_type: 'ppg_price', units: 2, sku_id: skuId, catalog_id: catalogId });
+  }
+  if (validRetail) {
+    awarded += 2;
+    events.push({ user_id: userId, event_type: 'retail_price', units: 2, sku_id: skuId, catalog_id: catalogId });
+  }
+
+  if (events.length > 0) {
+    await supabase.from('reward_events').insert(events);
+    // Fetch current units, add awarded amount, persist
+    const { data: userData } = await supabase.from('users').select('reward_units').eq('id', userId).single();
+    const current = (userData as any)?.reward_units ?? 0;
+    await supabase.from('users').update({ reward_units: current + awarded }).eq('id', userId);
+  }
+
+  return { awarded };
+}
+
+// ── Rewards ───────────────────────────────────────────────────────────────────
+
+export async function fetchRewardSummary(userId: string): Promise<RewardSummary> {
+  const { data } = await supabase
+    .from('users')
+    .select('reward_units, premium_reward_claimed_at, premium_reward_expires_at')
+    .eq('id', userId)
+    .single();
+  const units = (data as any)?.reward_units ?? 0;
+  const claimedAt = (data as any)?.premium_reward_claimed_at ?? null;
+  const expiresAt = (data as any)?.premium_reward_expires_at ?? null;
+  return {
+    units,
+    stars: Math.floor(units / 50),
+    canClaimFreeMonth: units >= 500 && (!expiresAt || new Date(expiresAt) < new Date()),
+    claimedAt,
+    expiresAt,
+  };
+}
+
+export async function claimRewardPremium(userId: string): Promise<{ success: boolean; expiresAt: string }> {
+  const summary = await fetchRewardSummary(userId);
+  if (!summary.canClaimFreeMonth) throw new Error('Not eligible');
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  await supabase.from('users').update({
+    premium_reward_claimed_at: new Date().toISOString(),
+    premium_reward_expires_at: expiresAt,
+    is_premium: true,
+  }).eq('id', userId);
+  return { success: true, expiresAt };
 }

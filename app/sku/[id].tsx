@@ -26,7 +26,7 @@ import { InsightTypePill } from '@/components/signals/DirectionBadge';
 import Sparkline from '@/components/Sparkline';
 import Chip from '@/components/Chip';
 import ExclusiveSticker from '@/components/ExclusiveSticker';
-import { resolveStickerKeys } from '@/lib/stickers';
+import { STICKERS, type StickerDef } from '@/lib/stickers';
 import IOSShareSheet from '@/components/IOSShareSheet';
 import AddToCollectionSheet from '@/components/AddToCollectionSheet';
 import ProductPlaceholder, { ProductThumb } from '@/components/ProductPlaceholder';
@@ -42,10 +42,10 @@ const C = {
   amber:       '#f3963c',
   purple:      '#8071f6',
   green:       '#37d49b',
-  navPill:     'rgba(28,38,64,0.72)',
+  navPill:     'rgba(13,13,13,0.80)',
   cardBorder:  'rgba(255,255,255,0.07)',
-  cardBg:      '#0F1730',
-  scoreBars:   ['#4d8bff', '#37d49b', '#f3963c', '#8071f6'] as const,
+  cardBg:      '#252525',
+  scoreBars:   ['#FF5500', '#37d49b', '#f3963c', '#A82200'] as const,
 };
 
 function formatFiredAt(firedAt: string): string {
@@ -88,12 +88,12 @@ function Card({ children, style, isDark }: {
 }
 
 /* Section title — Fraunces serif 27px matching design's SectionTitle */
-function SectionHeader({ title }: { title: string }) {
+function SectionHeader({ title, isDark }: { title: string; isDark: boolean }) {
   return (
     <View style={{ paddingHorizontal: 18, paddingTop: 24, paddingBottom: 14 }}>
       <Text style={{
         fontFamily: 'Fraunces_700Bold', fontSize: 27,
-        color: '#efece2', letterSpacing: -0.3, lineHeight: 30,
+        color: isDark ? '#E1E4E6' : '#15171A', letterSpacing: -0.3, lineHeight: 30,
       }}>
         {title}
       </Text>
@@ -109,7 +109,7 @@ const DIRECTION_PILL: Record<string, { dot: string; bg: string; border: string; 
   holding: { dot: C.gold,   bg: 'rgba(241,194,76,0.12)',  border: 'rgba(241,194,76,0.32)',  label: 'HOLDING' },
 };
 
-function TierPill({ score, direction }: { score: number; direction?: string | null }) {
+function TierPill({ score, direction, isDark }: { score: number; direction?: string | null; isDark: boolean }) {
   const scoreTier = score >= 80 ? 'HOT' : score >= 65 ? 'STRONG' : score >= 40 ? 'HOLDING' : 'WATCH';
   const cfg = direction ? DIRECTION_PILL[direction] ?? DIRECTION_PILL.holding : null;
   const dotColor  = cfg ? cfg.dot    : C.gold;
@@ -138,7 +138,8 @@ function TierPill({ score, direction }: { score: number; direction?: string | nu
         {label}
       </Text>
       <Text style={{
-        fontFamily: 'JetBrainsMono_700Bold', fontSize: 22, color: '#efece2',
+        fontFamily: 'JetBrainsMono_700Bold', fontSize: 22,
+        color: isDark ? '#E1E4E6' : '#15171A',
         fontVariant: ['tabular-nums'],
       }}>
         {score}
@@ -165,14 +166,14 @@ function StatBox({ label, value, valueColor, isDark }: {
     }}>
       <Text style={{
         fontFamily: 'Inter_600SemiBold', fontSize: 10.5,
-        color: '#808aa1',
+        color: isDark ? '#8A9296' : 'rgba(21,23,26,0.55)',
         letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6,
       }}>
         {label}
       </Text>
       <Text style={{
         fontFamily: 'JetBrainsMono_700Bold', fontSize: 22,
-        color: valueColor ?? '#efece2',
+        color: valueColor ?? (isDark ? '#E1E4E6' : '#15171A'),
         letterSpacing: -0.4, fontVariant: ['tabular-nums'],
       }}>
         {value}
@@ -182,27 +183,34 @@ function StatBox({ label, value, valueColor, isDark }: {
 }
 
 /* Score bar — Fraunces 18px label, per-bar accent color */
-function ScoreBar({ label, value, max = 30, hint, color }: {
+function ScoreBar({ label, value, max = 30, hint, color, isDark }: {
   label: string;
   value: number;
   max?: number;
   hint: string;
   color: string;
+  isDark: boolean;
 }) {
   const pct = Math.min(100, (value / max) * 100);
+  const textPrimary  = isDark ? '#E1E4E6'              : '#15171A';
+  const textMuted    = isDark ? '#8A9296'              : 'rgba(21,23,26,0.55)';
+  const textFaint    = isDark ? 'rgba(21,23,26,0.40)'  : 'rgba(21,23,26,0.45)';
+  const valueActive  = isDark ? '#c8cee0'              : '#15171A';
+  const valueInactive = isDark ? '#545e76'             : 'rgba(21,23,26,0.35)';
+  const trackBg     = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(21,23,26,0.08)';
   return (
     <View style={{ marginBottom: 17 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-        <Text style={{ fontFamily: 'Fraunces_600SemiBold', fontSize: 18, color: '#efece2' }}>{label}</Text>
-        <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 14, color: '#808aa1', fontVariant: ['tabular-nums'] }}>
-          <Text style={{ color: value > 0 ? '#c8cee0' : '#545e76', fontFamily: 'JetBrainsMono_700Bold' }}>{value}</Text>
+        <Text style={{ fontFamily: 'Fraunces_600SemiBold', fontSize: 18, color: textPrimary }}>{label}</Text>
+        <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 14, color: textMuted, fontVariant: ['tabular-nums'] }}>
+          <Text style={{ color: value > 0 ? valueActive : valueInactive, fontFamily: 'JetBrainsMono_700Bold' }}>{value}</Text>
           {' / '}{max}
         </Text>
       </View>
-      <View style={{ height: 5, backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 999, overflow: 'hidden' }}>
+      <View style={{ height: 5, backgroundColor: trackBg, borderRadius: 999, overflow: 'hidden' }}>
         <View style={{ height: 5, width: `${pct}%`, backgroundColor: color, borderRadius: 999 }} />
       </View>
-      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: '#545e76', marginTop: 7 }}>{hint}</Text>
+      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: isDark ? '#545e76' : 'rgba(21,23,26,0.55)', marginTop: 7 }}>{hint}</Text>
     </View>
   );
 }
@@ -220,21 +228,27 @@ function WindowBtn({ label, locked, active, onPress, theme }: {
     <Pressable
       onPress={onPress}
       style={({ pressed }) => ({
+        flexDirection: 'row', alignItems: 'center', gap: 4,
         paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999,
-        backgroundColor: active ? 'rgba(255,255,255,0.10)' : 'transparent',
-        borderWidth: active ? 1 : 0,
-        borderColor: active ? 'transparent' : 'transparent',
+        backgroundColor: active ? (theme.dark ? 'rgba(255,255,255,0.10)' : 'rgba(21,23,26,0.08)') : 'transparent',
+        borderWidth: locked ? 1 : 0,
+        borderColor: locked ? 'rgba(241,194,76,0.32)' : 'transparent',
         opacity: pressed ? 0.72 : 1,
       })}
     >
       <Text style={{
         fontFamily: active ? 'JetBrainsMono_700Bold' : 'JetBrainsMono_400Regular',
         fontSize: 13,
-        color: locked ? '#545e76' : active ? '#efece2' : '#808aa1',
+        color: locked ? C.gold : active ? theme.text : theme.muted,
         letterSpacing: 0.5,
       }}>
-        {label}{locked ? ' ◆' : ''}
+        {label}
       </Text>
+      {locked && (
+        <Svg width={9} height={9} viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+          <Path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4" />
+        </Svg>
+      )}
     </Pressable>
   );
 }
@@ -309,7 +323,7 @@ function HistoryCard({ sku, theme, isPremium, window, setWindow, loading, error 
               >
                 <Text style={{
                   fontFamily: 'Inter_600SemiBold', fontSize: 12.5,
-                  color: metric === m ? '#08101f' : '#808aa1',
+                  color: metric === m ? (theme.dark ? '#0D0D0D' : '#FFFFFF') : theme.muted,
                 }}>
                   {m === 'score' ? 'Score' : 'Price'}
                 </Text>
@@ -330,7 +344,7 @@ function HistoryCard({ sku, theme, isPremium, window, setWindow, loading, error 
           <>
             {/* Current value */}
             <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#808aa1', letterSpacing: 1.1, textTransform: 'uppercase' }}>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.muted, letterSpacing: 1.1, textTransform: 'uppercase' }}>
                 {curLabel}
               </Text>
               <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 18, color, fontVariant: ['tabular-nums'] }}>
@@ -350,7 +364,7 @@ function HistoryCard({ sku, theme, isPremium, window, setWindow, loading, error 
                 <Path
                   key={g}
                   d={`M8,${H * g} L${W - 8},${H * g}`}
-                  stroke="rgba(255,255,255,0.05)"
+                  stroke={theme.dark ? 'rgba(255,255,255,0.05)' : 'rgba(21,23,26,0.06)'}
                   strokeWidth={1}
                 />
               ))}
@@ -365,10 +379,10 @@ function HistoryCard({ sku, theme, isPremium, window, setWindow, loading, error 
 
             {/* Axis labels */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
-              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: '#545e76' }}>
+              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: theme.faint }}>
                 {windowLabel}
               </Text>
-              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: '#545e76' }}>
+              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: theme.faint }}>
                 today
               </Text>
             </View>
@@ -392,6 +406,7 @@ export default function SKUDetailScreen() {
   const toggleWatchlist = useAppStore((s) => s.toggleWatchlist);
   const isPremium = useAppStore((s) => s.isPremium);
   const hotSkus = useAppStore((s) => s.hotSkus);
+  const stickerCatalog = useAppStore((s) => s.stickerCatalog);
   const watching = useAppStore((s) => s.watchlist.includes(id ?? ''));
   const collectionItem = useAppStore((s) => s.collection.find((c) => c.skuId === (id ?? '')));
   const inCollection = !!collectionItem;
@@ -428,12 +443,13 @@ export default function SKUDetailScreen() {
 
   useEffect(() => {
     if (!id) return;
-    if (storeBaseSku) { setFetchedSku(null); return; }
+    // Always fetch fresh so admin changes (sticker_keys, etc.) are reflected immediately.
+    // storeBaseSku is used as a visible placeholder while this is in flight.
     setFetchedSku(undefined);
     fetchSkuById(id)
       .then((s) => setFetchedSku(s ?? null))
       .catch(() => setFetchedSku(null));
-  }, [id, storeBaseSku]);
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -449,12 +465,13 @@ export default function SKUDetailScreen() {
       .finally(() => setHistoryLoading(false));
   }, [id]);
 
-  const baseSku = storeBaseSku ?? (fetchedSku ?? undefined);
+  // Prefer fresh fetch; fall back to store copy so the screen renders immediately
+  const baseSku = fetchedSku != null ? fetchedSku : (storeBaseSku ?? undefined);
   const sku: SKU | undefined = baseSku
     ? { ...baseSku, history, listingsHist, priceHist }
     : undefined;
 
-  const stillFetching = !storeBaseSku && fetchedSku === undefined;
+  const stillFetching = fetchedSku === undefined && !storeBaseSku;
 
   const cat = sku ? catById(sku.category) : undefined;
   const fandom = sku ? fandomById(sku.fandom) : undefined;
@@ -606,7 +623,9 @@ export default function SKUDetailScreen() {
             opacity: heroImgOpacity,
           }}>
             {(() => {
-              const stickers = resolveStickerKeys(sku.stickerKeys);
+              const stickers = (sku.stickerKeys ?? []).slice(0, 3)
+                .map((k) => stickerCatalog[k] ?? STICKERS[k])
+                .filter(Boolean) as StickerDef[];
               if (stickers.length === 0) {
                 return (
                   <ProductPlaceholder
@@ -680,11 +699,10 @@ export default function SKUDetailScreen() {
             {cat && (
               <View style={{
                 borderRadius: 9, paddingHorizontal: 9, paddingVertical: 5,
-                backgroundColor: isDark ? 'rgba(128,113,246,0.16)' : 'rgba(0,0,0,0.08)',
-                borderWidth: 1, borderColor: isDark ? 'rgba(128,113,246,0.40)' : 'rgba(0,0,0,0.10)',
+                backgroundColor: isDark ? '#E1E4E6' : '#15171A',
               }}>
                 <Text style={{
-                  fontFamily: 'Inter_700Bold', fontSize: 12, color: isDark ? C.purple : '#6B46C1',
+                  fontFamily: 'Inter_700Bold', fontSize: 12, color: isDark ? '#0D0D0D' : '#FFFFFF',
                   letterSpacing: 1.4, textTransform: 'uppercase',
                 }}>
                   {cat.short}
@@ -693,7 +711,7 @@ export default function SKUDetailScreen() {
             )}
             <Text
               style={{
-                fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#808aa1',
+                fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.muted,
                 letterSpacing: 1.0, textTransform: 'uppercase', flexShrink: 1,
               }}
               numberOfLines={1}
@@ -702,7 +720,7 @@ export default function SKUDetailScreen() {
             </Text>
           </View>
           <Text style={{
-            fontFamily: 'Fraunces_700Bold', fontSize: 31, color: '#efece2',
+            fontFamily: 'Fraunces_700Bold', fontSize: 31, color: theme.text,
             letterSpacing: -0.6, lineHeight: 33,
           }}>
             {sku.name}
@@ -718,8 +736,8 @@ export default function SKUDetailScreen() {
             )}
             {sku.exclusiveType && (() => {
               const BADGE: Record<string, { label: string; bg: string }> = {
-                chase:        { label: 'Chase',           bg: '#F97316' },
-                grail:        { label: 'Grail',           bg: '#F97316' },
+                chase:        { label: 'Chase',           bg: '#FF5500' },
+                grail:        { label: 'Grail',           bg: '#FF5500' },
                 gitd:         { label: 'GITD',            bg: '#16A34A' },
                 flocked:      { label: 'Flocked',         bg: '#78350F' },
                 sdcc:         { label: 'SDCC',            bg: '#7C3AED' },
@@ -728,7 +746,7 @@ export default function SKUDetailScreen() {
                 rare_variant: { label: 'Rare Variant',    bg: '#4338CA' },
                 vaulted:      { label: 'Vaulted',         bg: '#E11D48' },
                 htf:          { label: 'HTF',             bg: '#E11D48' },
-                retailer:     { label: 'Store Exclusive', bg: '#1D4ED8' },
+                retailer:     { label: 'Store Exclusive', bg: '#A82200' },
                 signed:       { label: 'Signed',          bg: '#475569' },
               };
               const b = BADGE[sku.exclusiveType];
@@ -753,42 +771,49 @@ export default function SKUDetailScreen() {
             {/* Header row */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <Text style={{
-                fontFamily: 'Inter_700Bold', fontSize: 11, color: '#808aa1',
+                fontFamily: 'Inter_700Bold', fontSize: 11, color: theme.muted,
                 letterSpacing: 1.3, textTransform: 'uppercase',
               }}>
                 Hot Score
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Text style={{
-                  fontFamily: 'Inter_700Bold', fontSize: 11, color: '#808aa1',
+                  fontFamily: 'Inter_700Bold', fontSize: 11, color: theme.muted,
                   letterSpacing: 1.0, textTransform: 'uppercase',
                 }}>
                   24H
                 </Text>
                 <Svg width={22} height={13} viewBox="0 0 22 13" fill="none">
-                  <Path d="M5 9V2M5 2L2.5 4.5M5 2l2.5 2.5" stroke="#808aa1" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
-                  <Path d="M14 4v7M14 11l2.5-2.5M14 11l-2.5-2.5" stroke="#808aa1" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+                  <Path d="M5 9V2M5 2L2.5 4.5M5 2l2.5 2.5" stroke={theme.muted} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+                  <Path d="M14 4v7M14 11l2.5-2.5M14 11l-2.5-2.5" stroke={theme.muted} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
                 </Svg>
               </View>
             </View>
-            {/* Body row: sparkline | TierPill | spacer | delta */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-              <Sparkline
-                data={sku.history}
-                theme={theme}
-                w={84}
-                h={34}
-                color={theme.accent}
-              />
-              <TierPill score={sku.hot} direction={sku.direction} />
-              <View style={{ flex: 1 }} />
-              <Text style={{
-                fontFamily: 'JetBrainsMono_700Bold', fontSize: 28, color: deltaColor,
-                letterSpacing: -0.56, fontVariant: ['tabular-nums'], lineHeight: 30,
-              }}>
-                {deltaLabel}
-              </Text>
-            </View>
+            {/* Body row: sparkline (if available) | TierPill | spacer | delta */}
+            {(() => {
+              const hasHistory = sku.history.filter((v) => v > 0).length >= 2;
+              return (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                  {hasHistory && (
+                    <Sparkline
+                      data={sku.history}
+                      theme={theme}
+                      w={84}
+                      h={34}
+                      color={theme.accent}
+                    />
+                  )}
+                  <TierPill score={sku.hot} direction={sku.direction} isDark={isDark} />
+                  <View style={{ flex: 1 }} />
+                  <Text style={{
+                    fontFamily: 'JetBrainsMono_700Bold', fontSize: 28, color: deltaColor,
+                    letterSpacing: -0.56, fontVariant: ['tabular-nums'], lineHeight: 30,
+                  }}>
+                    {deltaLabel}
+                  </Text>
+                </View>
+              );
+            })()}
           </Card>
         </View>
 
@@ -807,6 +832,30 @@ export default function SKUDetailScreen() {
               <StatBox label="Days Tracked" value={`${sku.age}d`} isDark={isDark} />
             )}
           </View>
+          {/* Row 3: Community prices — PPG (Funko only) and/or Retail — only shown when available */}
+          {(sku.ppgPrice != null || sku.retailPrice != null) && (
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {sku.ppgPrice != null && (
+                <View style={{ flex: 1 }}>
+                  <StatBox label="PPG Price" value={fmtPrice(sku.ppgPrice)} isDark={isDark} />
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 10, color: C.gold, marginTop: 3, paddingHorizontal: 2, letterSpacing: 0.3 }}>
+                    ⚡ community
+                  </Text>
+                </View>
+              )}
+              {sku.retailPrice != null && (
+                <View style={{ flex: 1 }}>
+                  <StatBox label="Retail Price" value={fmtPrice(sku.retailPrice)} isDark={isDark} />
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 10, color: C.gold, marginTop: 3, paddingHorizontal: 2, letterSpacing: 0.3 }}>
+                    ⚡ community
+                  </Text>
+                </View>
+              )}
+              {/* Fill remaining space so layout stays balanced */}
+              {sku.ppgPrice != null && sku.retailPrice == null && <View style={{ flex: 1 }} />}
+              {sku.retailPrice != null && sku.ppgPrice == null && <View style={{ flex: 1 }} />}
+            </View>
+          )}
         </View>
 
         {/* ── Condition breakdown ── */}
@@ -819,7 +868,7 @@ export default function SKUDetailScreen() {
                 borderBottomWidth: 0.5, borderBottomColor: C.cardBorder,
               }}>
                 <Text style={{
-                  fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#808aa1',
+                  fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.muted,
                   letterSpacing: 1.1, textTransform: 'uppercase',
                 }}>
                   Condition breakdown
@@ -832,17 +881,17 @@ export default function SKUDetailScreen() {
                   borderBottomWidth: sku.priceLoose != null && (sku.priceLooseCount ?? 0) >= 2 ? 0.5 : 0,
                   borderBottomColor: C.cardBorder,
                 }}>
-                  <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: '#efece2' }}>
+                  <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: theme.text }}>
                     Mint / Complete
                   </Text>
                   <View style={{ alignItems: 'flex-end' }}>
                     <Text style={{
-                      fontFamily: 'JetBrainsMono_700Bold', fontSize: 15, color: '#efece2',
+                      fontFamily: 'JetBrainsMono_700Bold', fontSize: 15, color: theme.text,
                       fontVariant: ['tabular-nums'],
                     }}>
                       {fmtPrice(sku.priceMint)}
                     </Text>
-                    <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: '#808aa1' }}>
+                    <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: theme.muted }}>
                       {sku.priceMintCount} sales
                     </Text>
                   </View>
@@ -853,17 +902,17 @@ export default function SKUDetailScreen() {
                   flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
                   paddingHorizontal: 16, paddingVertical: 13,
                 }}>
-                  <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: '#808aa1' }}>
+                  <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: theme.muted }}>
                     Loose / OOB
                   </Text>
                   <View style={{ alignItems: 'flex-end' }}>
                     <Text style={{
-                      fontFamily: 'JetBrainsMono_700Bold', fontSize: 15, color: '#808aa1',
+                      fontFamily: 'JetBrainsMono_700Bold', fontSize: 15, color: theme.muted,
                       fontVariant: ['tabular-nums'],
                     }}>
                       {fmtPrice(sku.priceLoose)}
                     </Text>
-                    <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: '#545e76' }}>
+                    <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: theme.faint }}>
                       {sku.priceLooseCount} sales
                     </Text>
                   </View>
@@ -890,7 +939,7 @@ export default function SKUDetailScreen() {
                   flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
                   borderBottomWidth: 0.5, borderBottomColor: C.cardBorder,
                 }}>
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: '#808aa1', letterSpacing: 1.1, textTransform: 'uppercase' }}>
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.muted, letterSpacing: 1.1, textTransform: 'uppercase' }}>
                     Your position
                   </Text>
                   {myTotalCost > 0 && (
@@ -909,15 +958,15 @@ export default function SKUDetailScreen() {
                 {/* Qty / Paid / Value grid */}
                 <View style={{ flexDirection: 'row', padding: 14, gap: 10 }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10.5, color: '#808aa1', letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6 }}>Qty</Text>
-                    <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 23, color: '#efece2', fontVariant: ['tabular-nums'] }}>×{myQty}</Text>
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10.5, color: theme.muted, letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6 }}>Qty</Text>
+                    <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 23, color: theme.text, fontVariant: ['tabular-nums'] }}>×{myQty}</Text>
                   </View>
-                  <View style={{ flex: 1, borderLeftWidth: 0.5, borderLeftColor: C.cardBorder, paddingLeft: 14 }}>
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10.5, color: '#808aa1', letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6 }}>Paid</Text>
-                    <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 23, color: '#efece2', fontVariant: ['tabular-nums'] }}>${Math.round(myTotalCost).toLocaleString()}</Text>
+                  <View style={{ flex: 1, borderLeftWidth: 0.5, borderLeftColor: theme.hairline, paddingLeft: 14 }}>
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10.5, color: theme.muted, letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6 }}>Paid</Text>
+                    <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 23, color: theme.text, fontVariant: ['tabular-nums'] }}>${Math.round(myTotalCost).toLocaleString()}</Text>
                   </View>
-                  <View style={{ flex: 1, borderLeftWidth: 0.5, borderLeftColor: C.cardBorder, paddingLeft: 14 }}>
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10.5, color: '#808aa1', letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6 }}>Value</Text>
+                  <View style={{ flex: 1, borderLeftWidth: 0.5, borderLeftColor: theme.hairline, paddingLeft: 14 }}>
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10.5, color: theme.muted, letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6 }}>Value</Text>
                     <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 23, color: C.amber, fontVariant: ['tabular-nums'] }}>${Math.round(myCurrentValue).toLocaleString()}</Text>
                   </View>
                 </View>
@@ -927,14 +976,14 @@ export default function SKUDetailScreen() {
                     onPress={() => updateCollectionItem(collectionItem.skuId, { forSale: !collectionItem.forSale })}
                     style={({ pressed }) => ({
                       flex: 1, height: 52, borderRadius: 13,
-                      backgroundColor: collectionItem.forSale ? 'rgba(241,194,76,0.08)' : 'rgba(255,255,255,0.04)',
+                      backgroundColor: collectionItem.forSale ? 'rgba(241,194,76,0.08)' : (isDark ? 'rgba(255,255,255,0.04)' : 'rgba(21,23,26,0.04)'),
                       alignItems: 'center', justifyContent: 'center',
                       borderWidth: 1,
                       borderColor: collectionItem.forSale ? 'rgba(241,194,76,0.40)' : C.cardBorder,
                       opacity: pressed ? 0.7 : 1,
                     })}
                   >
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: collectionItem.forSale ? C.gold : '#c8cee0' }}>
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: collectionItem.forSale ? C.gold : theme.text }}>
                       {collectionItem.forSale ? '✓ For sale' : 'List for sale'}
                     </Text>
                   </Pressable>
@@ -947,13 +996,13 @@ export default function SKUDetailScreen() {
                     }
                     style={({ pressed }) => ({
                       flex: 1, height: 52, borderRadius: 13,
-                      backgroundColor: 'rgba(255,255,255,0.04)',
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(21,23,26,0.04)',
                       alignItems: 'center', justifyContent: 'center',
-                      borderWidth: 1, borderColor: C.cardBorder,
+                      borderWidth: 1, borderColor: theme.hairline,
                       opacity: pressed ? 0.7 : 1,
                     })}
                   >
-                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#c8cee0' }}>
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: theme.text }}>
                       Mark as sold
                     </Text>
                   </Pressable>
@@ -966,9 +1015,9 @@ export default function SKUDetailScreen() {
                     }
                     style={({ pressed }) => ({
                       width: 52, height: 52, borderRadius: 13,
-                      backgroundColor: 'rgba(255,255,255,0.04)',
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(21,23,26,0.04)',
                       alignItems: 'center', justifyContent: 'center',
-                      borderWidth: 1, borderColor: C.cardBorder,
+                      borderWidth: 1, borderColor: theme.hairline,
                       opacity: pressed ? 0.7 : 1,
                     })}
                     accessibilityLabel="Remove from collection"
@@ -984,20 +1033,25 @@ export default function SKUDetailScreen() {
         })()}
 
         {/* ── Why it's hot ── */}
-        <SectionHeader title="Why it's hot" />
-
         {/* WhyCard — blockquote with purple left bar, NO card wrapper */}
         {(() => {
-          const insight = insightData?.insight;
-          const showInsight = isPremium && insight && insight.narrationLong;
-          const prose = showInsight ? insight.narrationLong! : (sku.narrative ?? insightData?.fallbackDescription ?? '');
+          if (insightData === null) return null; // still loading
+          const insight = insightData.insight;
+          const hasRealInsight = !!insight && insight.insightType !== 'low_data' && insight.insightType !== 'steady_state';
+          const showInsight = isPremium && hasRealInsight && !!insight.narrationLong;
+          const prose = showInsight
+            ? insight.narrationLong!
+            : (sku.narrative || insightData.fallbackDescription ||
+               'Market data for this item is still building — check back in a few days for a full analysis.');
           if (!prose) return null;
           return (
+            <>
+            <SectionHeader title="Why it's hot" isDark={isDark} />
             <View style={{ marginHorizontal: 18 }}>
               {showInsight && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <InsightTypePill insightType={insight.insightType} theme={theme} />
-                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: '#808aa1' }}>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.muted }}>
                     {formatFiredAt(insight.firedAt)}
                   </Text>
                 </View>
@@ -1010,7 +1064,7 @@ export default function SKUDetailScreen() {
                 <Text style={{
                   fontFamily: 'Fraunces_400Regular_Italic', fontStyle: 'italic',
                   fontSize: 18.5, lineHeight: 27.75,
-                  color: '#c8cee0',
+                  color: theme.text,
                 }}>
                   {showInsight ? prose : `"${prose}"`}
                 </Text>
@@ -1027,18 +1081,47 @@ export default function SKUDetailScreen() {
                     borderRadius: 6, padding: 14, marginTop: 16,
                   }}>
                     <Text style={{
-                      fontFamily: 'Inter_600SemiBold', fontSize: 10, color: '#808aa1',
+                      fontFamily: 'Inter_600SemiBold', fontSize: 10, color: theme.muted,
                       letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6,
                     }}>
                       FOR YOUR POSITION
                     </Text>
-                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: '#efece2', lineHeight: 20 }}>
+                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: theme.text, lineHeight: 20 }}>
                       {action}
                     </Text>
                   </View>
                 );
               })()}
+
+              {/* Premium tease — only when there's a real (non-low_data, non-steady_state) insight available */}
+              {!isPremium && hasRealInsight && insight!.narrationLong && (
+                <Pressable
+                  onPress={() => setUpgradeContext('feature')}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row', alignItems: 'center', gap: 10,
+                    backgroundColor: 'rgba(241,194,76,0.08)',
+                    borderWidth: 1, borderColor: 'rgba(241,194,76,0.28)',
+                    borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14,
+                    marginTop: 16,
+                    opacity: pressed ? 0.75 : 1,
+                  })}
+                >
+                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <Path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4" />
+                  </Svg>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: C.gold, letterSpacing: 0.3 }}>
+                      Premium insight available
+                    </Text>
+                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginTop: 2, lineHeight: 17 }}>
+                      Read the full breakdown and see what to do with this signal.
+                    </Text>
+                  </View>
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: C.gold }}>→</Text>
+                </Pressable>
+              )}
             </View>
+            </>
           );
         })()}
 
@@ -1046,7 +1129,7 @@ export default function SKUDetailScreen() {
         <View style={{ marginHorizontal: 18, marginTop: 20 }}>
           <Card isDark={isDark} style={{ padding: 18 }}>
             <Text style={{
-              fontFamily: 'Inter_700Bold', fontSize: 11, color: '#808aa1',
+              fontFamily: 'Inter_700Bold', fontSize: 11, color: theme.muted,
               letterSpacing: 1.3, textTransform: 'uppercase', marginBottom: 18,
             }}>
               Score breakdown
@@ -1056,34 +1139,38 @@ export default function SKUDetailScreen() {
               value={sku.score.velocity}
               hint={sku.score.velocity === 0 ? 'Listings stable — no new supply detected' : 'Listing count is growing'}
               color={C.scoreBars[0]}
+              isDark={isDark}
             />
             <ScoreBar
               label="Volume"
               value={sku.score.volume}
               hint="Active listing count"
               color={C.scoreBars[1]}
+              isDark={isDark}
             />
             <ScoreBar
               label="Confirmation"
               value={sku.score.confirmation}
               hint="Price momentum vs 7-day avg"
               color={C.scoreBars[2]}
+              isDark={isDark}
             />
             <ScoreBar
               label="Freshness"
               value={sku.score.freshness}
               hint="Recent appearance"
               color={C.scoreBars[3]}
+              isDark={isDark}
             />
           </Card>
         </View>
 
         {/* ── Where to buy ── */}
-        <SectionHeader title="Where to buy" />
+        <SectionHeader title="Where to buy" isDark={isDark} />
         <View style={{ marginHorizontal: 18, gap: 8 }}>
           {marketplaces.length === 0 ? (
             <Card isDark={isDark} style={{ padding: 20, alignItems: 'center' }}>
-              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: '#545e76', textAlign: 'center' }}>
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.muted, textAlign: 'center' }}>
                 No marketplace links set yet.{'\n'}Check back after the next pipeline run.
               </Text>
             </Card>
@@ -1095,7 +1182,7 @@ export default function SKUDetailScreen() {
               onPress={() => Linking.openURL(mp.url).catch(() => {})}
               style={({ pressed }) => ({
                 backgroundColor: mp.primary
-                  ? (isDark ? `rgba(45,100,235,0.07)` : 'rgba(37,99,235,0.05)')
+                  ? (isDark ? `rgba(255,85,0,0.07)` : 'rgba(255,85,0,0.05)')
                   : (isDark ? C.cardBg : '#fff'),
                 borderRadius: 20,
                 padding: 14,
@@ -1112,37 +1199,37 @@ export default function SKUDetailScreen() {
               }}>
                 <Text style={{
                   fontFamily: 'Fraunces_700Bold', fontSize: 17,
-                  color: mp.primary ? theme.accent : '#efece2', letterSpacing: -0.2,
+                  color: mp.primary ? theme.accent : theme.text, letterSpacing: -0.2,
                 }}>
                   {mp.name.slice(0, 2)}
                 </Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: 'Fraunces_700Bold', fontSize: 19, color: '#efece2', letterSpacing: -0.2 }}>
+                <Text style={{ fontFamily: 'Fraunces_700Bold', fontSize: 19, color: theme.text, letterSpacing: -0.2 }}>
                   {mp.name}
                 </Text>
                 {mp.listings != null && mp.median != null ? (
-                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13.5, color: '#808aa1', marginTop: 2 }}>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13.5, color: theme.muted, marginTop: 2 }}>
                     {mp.listings} listings · median{' '}
                     <Text style={{ fontFamily: 'JetBrainsMono_700Bold', color: C.amber }}>
                       {fmtPrice(mp.median)}
                     </Text>
                   </Text>
                 ) : (
-                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13.5, color: '#808aa1', marginTop: 2 }}>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13.5, color: theme.muted, marginTop: 2 }}>
                     View listings
                   </Text>
                 )}
               </View>
               <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
-                <Path d="M4 10l6-6M5 4h5v5" stroke="#545e76" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
+                <Path d="M4 10l6-6M5 4h5v5" stroke={theme.muted} strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
             </Pressable>
           ))}
         </View>
 
         {/* ── History ── */}
-        <SectionHeader title="History" />
+        <SectionHeader title="History" isDark={isDark} />
         <HistoryCard
           sku={sku}
           theme={theme}
@@ -1166,7 +1253,7 @@ export default function SKUDetailScreen() {
         }}>
           {/* Dark top fade so buttons are visible over the hero image */}
           <LinearGradient
-            colors={['rgba(10,15,30,0.72)', 'rgba(10,15,30,0.40)', 'transparent']}
+            colors={['rgba(13,13,13,0.72)', 'rgba(13,13,13,0.40)', 'transparent']}
             locations={[0, 0.6, 1]}
             style={StyleSheet.absoluteFillObject}
             pointerEvents="none"
@@ -1175,7 +1262,7 @@ export default function SKUDetailScreen() {
           <Animated.View
             pointerEvents="none"
             style={[StyleSheet.absoluteFillObject, {
-              backgroundColor: isDark ? '#0A0F1E' : theme.navBg,
+              backgroundColor: isDark ? '#0D0D0D' : theme.navBg,
               opacity: navBgOpacity,
             }]}
           />
@@ -1215,12 +1302,12 @@ export default function SKUDetailScreen() {
                     opacity: filterIdx > 0 ? (pressed ? 0.5 : 1) : 0.3,
                   })}
                 >
-                  <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#efece2" strokeWidth={2.5} strokeLinecap="round">
+                  <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#E1E4E6" strokeWidth={2.5} strokeLinecap="round">
                     <Path d="M15 18l-6-6 6-6" />
                   </Svg>
                 </Pressable>
                 <Text style={{
-                  fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#efece2', letterSpacing: -0.1,
+                  fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#E1E4E6', letterSpacing: -0.1,
                 }} numberOfLines={1}>
                   {filterLabel ?? filterId ?? ''} {filterIdx >= 0 ? filterIdx + 1 : 1}/{filterTotal}
                 </Text>
@@ -1234,7 +1321,7 @@ export default function SKUDetailScreen() {
                     opacity: filterIdx < filterTotal - 1 ? (pressed ? 0.5 : 1) : 0.3,
                   })}
                 >
-                  <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#efece2" strokeWidth={2.5} strokeLinecap="round">
+                  <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#E1E4E6" strokeWidth={2.5} strokeLinecap="round">
                     <Path d="M9 18l6-6-6-6" />
                   </Svg>
                 </Pressable>
@@ -1266,7 +1353,7 @@ export default function SKUDetailScreen() {
         <Animated.View style={{
           height: tickerHeight,
           overflow: 'hidden',
-          backgroundColor: isDark ? 'rgba(15,23,48,0.97)' : theme.navBg,
+          backgroundColor: isDark ? 'rgba(13,13,13,0.97)' : theme.navBg,
           borderBottomWidth: 0.5,
           borderBottomColor: C.cardBorder,
         }}>
@@ -1278,13 +1365,13 @@ export default function SKUDetailScreen() {
             <ProductThumb sku={sku} theme={theme} size={34} radius={5} />
             <Text style={{
               flex: 1, fontFamily: 'Fraunces_700Bold', fontSize: 15,
-              color: '#efece2', letterSpacing: -0.2,
+              color: theme.text, letterSpacing: -0.2,
             }} numberOfLines={1}>
               {sku.short || sku.name}
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <View style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: C.gold }} />
-              <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 16, color: '#efece2' }}>
+              <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 16, color: theme.text }}>
                 {sku.hot}
               </Text>
             </View>
@@ -1304,7 +1391,7 @@ export default function SKUDetailScreen() {
         paddingTop: 12, paddingBottom: insets.bottom + 12,
         paddingHorizontal: 14,
         flexDirection: 'row', gap: 10, alignItems: 'stretch',
-        backgroundColor: isDark ? 'rgba(8,11,22,0.96)' : theme.navBg,
+        backgroundColor: isDark ? 'rgba(13,13,13,0.96)' : theme.navBg,
         borderTopWidth: 0.5, borderTopColor: C.cardBorder,
       }}>
         {/* Watch button */}
@@ -1321,7 +1408,7 @@ export default function SKUDetailScreen() {
             borderWidth: 1.5,
             borderColor: watching ? theme.accent : (isDark ? 'rgba(255,255,255,0.13)' : theme.hairline),
             backgroundColor: watching
-              ? (isDark ? `rgba(37,99,235,0.12)` : `rgba(37,99,235,0.08)`)
+              ? (isDark ? `rgba(255,85,0,0.12)` : `rgba(255,85,0,0.08)`)
               : 'transparent',
             borderRadius: 15,
             alignItems: 'center', justifyContent: 'center',
@@ -1330,12 +1417,12 @@ export default function SKUDetailScreen() {
           })}
         >
           <Svg width={20} height={14} viewBox="0 0 20 14" fill="none">
-            <Path d="M1 7s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z" stroke={watching ? theme.accent : '#808aa1'} strokeWidth={1.8} />
-            <Circle cx="10" cy="7" r="2.6" stroke={watching ? theme.accent : '#808aa1'} strokeWidth={1.8} fill={watching ? theme.accent : 'none'} />
+            <Path d="M1 7s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z" stroke={watching ? theme.accent : '#8A9296'} strokeWidth={1.8} />
+            <Circle cx="10" cy="7" r="2.6" stroke={watching ? theme.accent : '#8A9296'} strokeWidth={1.8} fill={watching ? theme.accent : 'none'} />
           </Svg>
           <Text style={{
             fontFamily: 'Inter_700Bold', fontSize: 15.5,
-            color: watching ? theme.accent : '#808aa1',
+            color: watching ? theme.accent : '#8A9296',
           }}>
             {watching ? 'Watching' : 'Watch'}
           </Text>
@@ -1358,8 +1445,8 @@ export default function SKUDetailScreen() {
             })}
           >
             <Svg width={18} height={20} viewBox="0 0 18 20" fill="none">
-              <Path d="M4 8a5 5 0 0 1 10 0c0 4 1.5 6 1.5 6h-13S4 12 4 8Z" stroke={activeAlertCount > 0 ? C.gold : '#808aa1'} strokeWidth={1.8} strokeLinejoin="round" />
-              <Path d="M7.5 17a1.8 1.8 0 0 0 3 0" stroke={activeAlertCount > 0 ? C.gold : '#808aa1'} strokeWidth={1.8} strokeLinecap="round" />
+              <Path d="M4 8a5 5 0 0 1 10 0c0 4 1.5 6 1.5 6h-13S4 12 4 8Z" stroke={activeAlertCount > 0 ? C.gold : '#8A9296'} strokeWidth={1.8} strokeLinejoin="round" />
+              <Path d="M7.5 17a1.8 1.8 0 0 0 3 0" stroke={activeAlertCount > 0 ? C.gold : '#8A9296'} strokeWidth={1.8} strokeLinecap="round" />
             </Svg>
             {activeAlertCount > 0 && (
               <View style={{
@@ -1367,7 +1454,7 @@ export default function SKUDetailScreen() {
                 width: 22, height: 22, borderRadius: 999,
                 backgroundColor: C.gold,
                 alignItems: 'center', justifyContent: 'center',
-                borderWidth: 2, borderColor: isDark ? '#08101f' : theme.bg,
+                borderWidth: 2, borderColor: isDark ? '#0D0D0D' : theme.bg,
               }}>
                 <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 12, color: '#1a1505' }}>
                   {activeAlertCount}
@@ -1392,18 +1479,18 @@ export default function SKUDetailScreen() {
           {inCollection ? (
             <>
               <Svg width={18} height={14} viewBox="0 0 18 14" fill="none">
-                <Path d="M2 7.5L6.5 12 16 2" stroke="#efece2" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
+                <Path d="M2 7.5L6.5 12 16 2" stroke="#E1E4E6" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
               </Svg>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15.5, color: '#efece2' }}>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15.5, color: '#E1E4E6' }}>
                 In Collection
               </Text>
             </>
           ) : (
             <>
               <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
-                <Path d="M8 2v12M2 8h12" stroke="#08101f" strokeWidth={2.2} strokeLinecap="round" />
+                <Path d="M8 2v12M2 8h12" stroke="#FFFFFF" strokeWidth={2.2} strokeLinecap="round" />
               </Svg>
-              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15.5, color: '#08101f' }}>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15.5, color: '#FFFFFF' }}>
                 Add to Collection
               </Text>
             </>
