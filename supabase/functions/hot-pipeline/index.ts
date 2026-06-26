@@ -283,13 +283,15 @@ serve(async (req) => {
 
         const delta = Math.round(scores.hot - (prevHotRow?.hot_score ?? scores.hot));
 
+        // Only write price fields when we have real listings — don't overwrite a
+        // seeded price (from promote_candidate_to_sku) with zero when eBay returns nothing.
         await supabase.from('daily_snapshots').upsert({
           sku_id:            sku.id,
           snapshot_date:     today,
           listing_count:     listingCount,
-          price_low:         priceLow,
-          price_median:      priceMedian,
-          price_high:        priceHigh,
+          ...(priceLow    > 0 && { price_low:    priceLow }),
+          ...(priceMedian > 0 && { price_median: priceMedian }),
+          ...(priceHigh   > 0 && { price_high:   priceHigh }),
           velocity_score:    scores.velocity,
           hot_score:         scores.hot,
           price_mint:        null,
@@ -340,8 +342,11 @@ serve(async (req) => {
           });
         }
 
-        // Mark zero-price/no-listing SKUs for auto-deactivation
-        if (priceMedian === 0 && listingCount === 0) {
+        // Mark zero-price/no-listing SKUs for auto-deactivation.
+        // Grace period: skip SKUs newer than 3 days — their eBay query may need
+        // a few pipeline runs to warm up before we declare them dead.
+        const skuAgeDays = (Date.now() - new Date(sku.created_at).getTime()) / 86400000;
+        if (priceMedian === 0 && listingCount === 0 && skuAgeDays >= 3) {
           zeroPriceSkuIds.push(sku.id);
         }
 
@@ -436,9 +441,9 @@ serve(async (req) => {
               sku_id:            sku.id,
               snapshot_date:     today,
               listing_count:     listingCount,
-              price_low:         priceLow,
-              price_median:      priceMedian,
-              price_high:        priceHigh,
+              ...(priceLow    > 0 && { price_low:    priceLow }),
+              ...(priceMedian > 0 && { price_median: priceMedian }),
+              ...(priceHigh   > 0 && { price_high:   priceHigh }),
               velocity_score:    scores.velocity,
               hot_score:         scores.hot,
               price_mint:        null,
