@@ -188,6 +188,10 @@ serve(async (req) => {
       }
     }
 
+    // ── Build a price map from the mover snapshots (already fetched) ──────────
+    const priceBySkuId: Record<string, number> = {};
+    for (const [id, d] of Object.entries(moverDeltas)) priceBySkuId[id] = d.price;
+
     // ── FLIPS: load all currently active insights from last 24h ───────────────
     // We dedupe via notification_history so we won't repeat-fire on the same
     // direction within DEDUP_WINDOW_HOURS.
@@ -198,6 +202,31 @@ serve(async (req) => {
       .eq('is_current', true)
       .gte('created_at', insightCutoff);
     const insights = (insightRaw ?? []) as InsightRow[];
+
+    // ── Fetch prices for low_data / steady_state insights not yet in priceMap ─
+    // We need a real price to show context ("Holding at $147") instead of
+    // the generic "no signal" copy that adds no value.
+    const needPrice = [...new Set(
+      insights
+        .filter((i) => (i.insight_type === 'low_data' || i.insight_type === 'steady_state') && !(i.sku_id in priceBySkuId))
+        .map((i) => i.sku_id)
+    )];
+    if (needPrice.length > 0) {
+      const since4d = new Date(Date.now() - 4 * 86_400_000).toISOString().split('T')[0];
+      const { data: extraSnaps } = await supabase
+        .from('daily_snapshots')
+        .select('sku_id, price_median')
+        .in('sku_id', needPrice)
+        .gte('snapshot_date', since4d)
+        .order('snapshot_date', { ascending: false });
+      const seen = new Set<string>();
+      for (const row of (extraSnaps ?? []) as SnapshotRow[]) {
+        if (!seen.has(row.sku_id) && Number(row.price_median) > 0) {
+          priceBySkuId[row.sku_id] = Number(row.price_median);
+          seen.add(row.sku_id);
+        }
+      }
+    }
 
     // ── Load SKU metadata for any SKU we might notify about ──────────────────
     const candidateSkuIds = new Set<string>([
@@ -302,10 +331,12 @@ serve(async (req) => {
           const name = skuDisplayName(sku);
           const emoji = DIRECTION_EMOJI[ins.direction] ?? '⚪';
           const label = DIRECTION_LABEL[ins.direction] ?? ins.direction;
+          const currentPrice = priceBySkuId[ins.sku_id];
+          const priceStr = currentPrice ? `$${Math.round(currentPrice)}` : null;
           const body = ins.insight_type === 'low_data'
-            ? 'Price patterns are still developing — we\'ll alert you when a signal fires.'
+            ? (priceStr ? `Tracking at ${priceStr} — building signal history` : 'Still building price history — check back soon.')
             : ins.insight_type === 'steady_state'
-            ? 'Market holding steady — we\'re watching for any price moves.'
+            ? (priceStr ? `Holding at ${priceStr} — no breakout yet` : 'Market holding steady — watching for a move.')
             : (ins.narration_short ?? `Signal just turned ${label}.`);
 
           // Prioritize owned > watched > followed match

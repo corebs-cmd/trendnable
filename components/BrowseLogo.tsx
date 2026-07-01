@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, Image } from 'react-native';
+import React, { useRef } from 'react';
+import { Animated, View, Text, Image } from 'react-native';
 import Svg, {
   Path, Circle, Rect, G, Ellipse, Line, Polygon, Text as SvgText,
 } from 'react-native-svg';
@@ -536,16 +536,16 @@ const LOGOS: Record<string, LogoEntry> = {
 // ── Static fandom images (require paths must be literals) ─────────────────────
 
 const FANDOM_IMAGES: Record<string, any> = {
-  anime:    require('../assets/fandoms/anime.png'),
-  demon:    require('../assets/fandoms/demon.png'),
-  labubu:   require('../assets/fandoms/labubu.png'),
-  marvel:   require('../assets/fandoms/marvel.png'),
-  onepiece: require('../assets/fandoms/onepiece.png'),
-  pokemon:  require('../assets/fandoms/pokemon.png'),
-  popcult:  require('../assets/fandoms/popcult.png'),
-  starwars: require('../assets/fandoms/starwars.png'),
-  tmnt:     require('../assets/fandoms/tmnt.png'),
-  disney:   require('../assets/fandoms/disney.png'),
+  anime:    require('../assets/fandoms/anime.jpg'),
+  demon:    require('../assets/fandoms/demon.jpg'),
+  labubu:   require('../assets/fandoms/labubu.jpg'),
+  marvel:   require('../assets/fandoms/marvel.jpg'),
+  onepiece: require('../assets/fandoms/onepiece.jpg'),
+  pokemon:  require('../assets/fandoms/pokemon.jpg'),
+  popcult:  require('../assets/fandoms/popcult.jpg'),
+  starwars: require('../assets/fandoms/starwars.jpg'),
+  tmnt:     require('../assets/fandoms/tmnt.jpg'),
+  disney:   require('../assets/fandoms/disney.jpg'),
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -559,14 +559,18 @@ export default function BrowseLogo({ id, label }: BrowseLogoProps) {
   const image = FANDOM_IMAGES[id];
   const entry = LOGOS[id];
   const bg = entry?.bg ?? '#1E2D45';
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   if (image) {
     return (
       <View style={{ width: '100%', aspectRatio: 1, backgroundColor: bg }}>
-        <Image
+        <Animated.Image
           source={image}
-          style={{ width: '100%', height: '100%' }}
+          style={{ width: '100%', height: '100%', opacity: fadeAnim }}
           resizeMode="cover"
+          onLoad={() =>
+            Animated.timing(fadeAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start()
+          }
         />
       </View>
     );

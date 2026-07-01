@@ -6,7 +6,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { titlePassesTier1, catalogFingerprint, exclusiveTypeToVariantType } from '../_shared/pipeline-utils.ts';
+import { titlePassesTier1, catalogFingerprint, exclusiveTypeToVariantType, tokenOverlapFraction } from '../_shared/pipeline-utils.ts';
 
 const SUPABASE_URL              = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -257,9 +257,6 @@ serve(async (req) => {
     }
 
     // Pre-filter: Tier 1 keywords, price floor, existing-name dedup, existing pop-number dedup
-    const existingTokens = existingNames.map((n) =>
-      n.toLowerCase().replace(/\[#\d+\]/g, '').trim().split(' ').slice(0, 3).join(' ')
-    );
     // Drop signed/autographed titles upstream — saves Claude tokens since they'd be rejected anyway.
     const SIGNED_KEYWORDS = /\b(signed|autograph(ed)?|coa|certificate of authenticity|jsa|beckett auth|psa auth|sgc auth)\b/i;
     const filtered = allItems.filter((item) => {
@@ -268,13 +265,15 @@ serve(async (req) => {
       if (SIGNED_KEYWORDS.test(title)) return false;
       const price = parseFloat(item.price?.value ?? '0');
       if (price < 5) return false;
-      const lowerTitle = title.toLowerCase();
-      if (existingTokens.some((token) => token.length > 4 && lowerTitle.includes(token))) return false;
-      const popMatch = lowerTitle.match(/#?(\d{3,5})\b/);
+      const popMatch = title.toLowerCase().match(/#?(\d{3,5})\b/);
       if (popMatch) {
         const n = parseInt(popMatch[1]);
         if (existingPopNumbers.has(n)) return false;
       }
+      // Skip if the eBay listing title is semantically too close to an existing name.
+      // Threshold 0.65 (looser than the SKU gate's 0.70) to catch pre-Claude duplicates
+      // without over-filtering at the raw title level.
+      if (existingNames.some((existing) => tokenOverlapFraction(title, existing) >= 0.65)) return false;
       return true;
     });
 

@@ -8,7 +8,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { titlePassesTier1, tcgMultiQty, catalogFingerprint, exclusiveTypeToVariantType } from '../_shared/pipeline-utils.ts';
+import { titlePassesTier1, tcgMultiQty, catalogFingerprint, exclusiveTypeToVariantType, tokenOverlapFraction } from '../_shared/pipeline-utils.ts';
 
 const SUPABASE_URL              = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -241,9 +241,6 @@ serve(async (req) => {
     }
 
     // Pre-filter: Tier 1 keywords, TCG multi-quantity, price floor, existing-SKU dedup
-    const existingTokens = existingNames.map((n) =>
-      n.toLowerCase().split(' ').slice(0, 2).join(' ')
-    );
     const filtered: any[] = [];
     for (const item of allItems) {
       const title = item.title ?? '';
@@ -267,8 +264,10 @@ serve(async (req) => {
       const price = parseFloat(effectiveItem.price?.value ?? '0');
       if (price < 5) continue;
 
-      const lowerTitle = title.toLowerCase();
-      if (existingTokens.some((token) => lowerTitle.includes(token))) continue;
+      // Semantic dedup: skip if title is ≥65% similar to an existing SKU name.
+      // Uses brand-stripped token overlap — safe to compare eBay titles against
+      // structured SKU names because it only checks meaningful tokens (≥4 chars).
+      if (existingNames.some((existing) => tokenOverlapFraction(title, existing) >= 0.65)) continue;
 
       filtered.push(effectiveItem);
     }
@@ -317,10 +316,10 @@ serve(async (req) => {
 
       const meetsThreshold =
         Number(c.price_median ?? 0) >= 25 &&
-        !!c.fandom_id &&
         !!c.category_id &&
         !missingTcgVariant &&
-        !missingPopNumber;
+        !(c.category_id === 'funko' && missingPopNumber) &&
+        !(c.category_id === 'funko' && !c.fandom_id);
 
       const { data, error } = await supabase
         .from('discovery_candidates')
@@ -401,7 +400,9 @@ serve(async (req) => {
 
         if (promoteError) {
           console.error('Auto-promote error:', promoteError.message);
-        } else if (typeof result === 'string' && !result.startsWith('ERROR')) {
+        } else if (typeof result === 'string' && result.startsWith('ERROR')) {
+          console.log('Auto-promote rejected by gate:', result);
+        } else if (typeof result === 'string') {
           autoPromoted++;
           console.log('Auto-promoted:', result);
 

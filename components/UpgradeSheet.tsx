@@ -25,7 +25,7 @@ const CONTEXT_MAP: Record<UpgradeContext, ContextData> = {
   feature:       { title: 'Trendnable Premium',     sub: 'The full picture of your collection.' },
   priceAlerts:   { title: 'Set price alerts',       sub: 'Get notified the moment a watched item hits your target price.' },
   sellability:   { title: 'Unlock Sellability Score', sub: 'See sell-through rate, demand tier, and how quickly an item is likely to sell.' },
-  scanQuota:     { title: 'Scan without limits',    sub: 'Free scans reset daily. Unlock unlimited scanning with Premium.' },
+  scanQuota:     { title: 'Scan without limits',    sub: 'You get 1 free scan per day — resets at midnight. Go unlimited with Premium.' },
   visionScan:    { title: 'Visual Scan is Premium', sub: 'Point your camera at any collectable and we\'ll identify it — price, trends, and all. Premium only.' },
 };
 
@@ -34,15 +34,15 @@ const FEATURES = [
   '90-day and 1-year history charts',
   'Category breakdown of your portfolio',
   'Unlimited watchlist (free is capped at 20)',
-  'Unlimited scans (free is capped at 5/day)',
+  'Unlimited scans (free gets 1 per day)',
   'Price alerts with instant notifications',
 ];
 
 type Plan = 'monthly' | 'annual';
 
 const PLAN_PRICE: Record<Plan, string> = {
-  monthly: '$2.99',
-  annual:  '$21.49',
+  monthly: '$1.99',
+  annual:  '$14.99',
 };
 const PLAN_PERIOD: Record<Plan, string> = {
   monthly: 'per month',
@@ -65,7 +65,7 @@ function PlanCard({
     <Pressable
       onPress={onSelect}
       accessibilityRole="radio"
-      accessibilityLabel={isAnnual ? 'Annual plan, $21.49 per year, save 40%' : 'Monthly plan, $2.99 per month'}
+      accessibilityLabel={isAnnual ? 'Annual plan, $14.99 per year, save 37%' : 'Monthly plan, $1.99 per month'}
       accessibilityState={{ checked: selected }}
       style={({ pressed }) => ({
         flex: 1,
@@ -86,7 +86,7 @@ function PlanCard({
           paddingHorizontal: 8, paddingVertical: 3,
         }}>
           <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: theme.premiumInk, letterSpacing: 0.06 * 10, textTransform: 'uppercase' }}>
-            Save 40%
+            Save 37%
           </Text>
         </View>
       )}
@@ -180,7 +180,7 @@ export default function UpgradeSheet({ open, context, theme, onClose, onConfirm 
     }
   };
 
-  const planLabel = plan === 'annual' ? 'Trendnable Premium Annual ($21.49 / year)' : 'Trendnable Premium Monthly ($2.99 / month)';
+  const planLabel = plan === 'annual' ? 'Trendnable Premium Annual ($14.99 / year)' : 'Trendnable Premium Monthly ($1.99 / month)';
 
   return (
     <Sheet open={open} onClose={onClose} theme={theme}>

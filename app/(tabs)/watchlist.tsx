@@ -162,7 +162,8 @@ export default function WatchlistScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
               <Text style={{
                 fontFamily: theme.fontDispBold, fontSize: 24,
-                color: theme.text, letterSpacing: -0.02 * 24,
+                color: (!isPremium && totalWatchCount >= 15) ? theme.neg : theme.text,
+                letterSpacing: -0.02 * 24,
               }}>
                 {totalWatchCount}
               </Text>
@@ -177,6 +178,11 @@ export default function WatchlistScreen() {
                 </Text>
               )}
             </View>
+            {!isPremium && totalWatchCount >= 15 && (
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.neg, marginTop: 3 }}>
+                {`${FREE_CAP - totalWatchCount} slot${FREE_CAP - totalWatchCount === 1 ? '' : 's'} left — upgrade for unlimited`}
+              </Text>
+            )}
           </View>
           {!isPremium && (
             <Pressable

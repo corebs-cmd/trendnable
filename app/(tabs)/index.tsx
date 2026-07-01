@@ -48,7 +48,9 @@ export default function HotScreen() {
   const user = useAppStore((s) => s.user);
   const unreadCount = useAppStore((s) => s.unreadCount);
   const isPremium = useAppStore((s) => s.isPremium);
+  const scanQuota = useAppStore((s) => s.scanQuota);
   const theme = buildTheme(isDark);
+  const remainingScans = scanQuota ? Math.max(0, scanQuota.limit - scanQuota.used) : null;
 
   const [sortBy, setSortBy]       = useState<SortBy>('hot');
   const [activeCat, setActiveCat] = useState<string>(
@@ -312,7 +314,9 @@ export default function HotScreen() {
                       Scan Barcode
                     </Text>
                     <Text style={{ color: 'rgba(255,255,255,0.78)', fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 }}>
-                      Product barcode
+                      {!isPremium && remainingScans !== null
+                        ? (remainingScans === 0 ? 'No scans left today' : `${remainingScans} scan${remainingScans === 1 ? '' : 's'} left today`)
+                        : 'Product barcode'}
                     </Text>
                   </View>
                 </Pressable>

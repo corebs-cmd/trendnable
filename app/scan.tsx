@@ -647,7 +647,7 @@ export default function ScanScreen() {
                 flexDirection: 'row', alignItems: 'center', gap: 6,
                 paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999,
                 backgroundColor: scanMode === 'visual' ? '#FF5500' : 'transparent',
-                opacity: pressed ? 0.8 : 1,
+                opacity: pressed ? 0.8 : (isPremium ? 1 : 0.55),
               })}
             >
               <Svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke={scanMode === 'visual' ? '#FFF' : 'rgba(225,228,230,0.65)'} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">

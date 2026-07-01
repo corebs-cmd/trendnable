@@ -641,9 +641,22 @@ export default function CollectionScreen() {
                           </Text>
                         )}
                         {item.cost > 0 && !isPremium && (
-                          <Text style={{ fontFamily: theme.fontMono, fontSize: 12, color: theme.premium, fontVariant: ['tabular-nums'] }}>
-                            +$••• 🔒
-                          </Text>
+                          <Pressable
+                            onPress={() => setUpgradeContext('pl')}
+                            style={({ pressed }) => ({ alignItems: 'flex-end', opacity: pressed ? 0.7 : 1 })}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                              <Text style={{ fontFamily: theme.fontMono, fontSize: 12, color: theme.premium, fontVariant: ['tabular-nums'] }}>
+                                +$•••
+                              </Text>
+                              <Svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke={theme.premium} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                                <Path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4" />
+                              </Svg>
+                            </View>
+                            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 9, color: theme.premium, marginTop: 2, letterSpacing: 0.3 }}>
+                              TAP TO UNLOCK
+                            </Text>
+                          </Pressable>
                         )}
                       </View>
                       <Pressable

@@ -1,6 +1,12 @@
-// price-alert-checker — runs daily at 6 PM UTC via pg_cron
-// Checks all active price alerts against latest daily_snapshots.price_median.
-// For triggered alerts: writes in_app_notifications + sends APNs push directly.
+// price-alert-checker — runs daily after hot-pipeline (recommended 19:00 UTC)
+// to push a notification when a user's price alert target is crossed.
+//
+// Flow:
+//   1. Load all active price_alerts
+//   2. Get latest daily_snapshot price for each alerted SKU (4-day window for gaps)
+//   3. Find alerts where price crossed the threshold
+//   4. Mark triggered alerts (is_active=false, triggered_at=now)
+//   5. Write in_app_notifications + notification_history + send APNs push
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -22,129 +28,134 @@ serve(async (req) => {
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Fetch all active alerts, join SKU names for notification copy
-    const { data: alerts, error: alertsErr } = await supabase
+    // ── 1. Load all active price alerts with SKU name via join ───────────────
+    const { data: alertsRaw, error: alertsErr } = await supabase
       .from('price_alerts')
       .select('id, user_id, sku_id, direction, target_price, skus(name, short)')
       .eq('is_active', true);
-
     if (alertsErr) throw alertsErr;
 
-    if (!alerts?.length) {
-      return new Response(
-        JSON.stringify({ ok: true, checked: 0, triggered: 0 }),
-        { headers: { ...cors, 'Content-Type': 'application/json' } },
-      );
+    const alerts = (alertsRaw ?? []) as Array<{
+      id: string; user_id: string; sku_id: string;
+      direction: 'above' | 'below'; target_price: number;
+      skus: { name: string; short: string | null } | null;
+    }>;
+
+    if (!alerts.length) {
+      return ok({ checked: 0, triggered: 0, note: 'no active alerts' });
     }
 
-    // Fetch latest price snapshot for every affected SKU (last 2 days as buffer)
+    // ── 2. Get latest snapshot price for each alerted SKU ────────────────────
+    // 4-day window so weekend pipeline gaps don't prevent triggers.
     const skuIds = [...new Set(alerts.map((a) => a.sku_id))];
-    const since  = new Date(Date.now() - 2 * 86_400_000).toISOString().split('T')[0];
+    const since4d = new Date(Date.now() - 4 * 86_400_000).toISOString().split('T')[0];
 
-    const { data: snapshots } = await supabase
+    const { data: snapsRaw } = await supabase
       .from('daily_snapshots')
-      .select('sku_id, price_median, snapshot_date')
+      .select('sku_id, price_median')
       .in('sku_id', skuIds)
-      .gte('snapshot_date', since)
+      .gte('snapshot_date', since4d)
       .order('snapshot_date', { ascending: false });
 
-    // Build latest-price map: skuId → price_median
     const latestPrice: Record<string, number> = {};
-    for (const snap of snapshots ?? []) {
-      if (!(snap.sku_id in latestPrice)) {
-        latestPrice[snap.sku_id] = Number(snap.price_median);
+    for (const row of (snapsRaw ?? []) as Array<{ sku_id: string; price_median: number }>) {
+      if (!(row.sku_id in latestPrice) && Number(row.price_median) > 0) {
+        latestPrice[row.sku_id] = Number(row.price_median);
       }
     }
 
-    // Determine which alerts crossed their threshold
-    const triggered = alerts.filter((alert) => {
-      const price = latestPrice[alert.sku_id];
-      if (price == null) return false;
-      return alert.direction === 'above'
-        ? price >= Number(alert.target_price)
-        : price <= Number(alert.target_price);
+    // ── 3. Find alerts where price crossed the threshold ─────────────────────
+    const triggered = alerts.filter((a) => {
+      const price = latestPrice[a.sku_id];
+      if (!price) return false;
+      return a.direction === 'above'
+        ? price >= Number(a.target_price)
+        : price <= Number(a.target_price);
     });
 
     if (!triggered.length) {
-      return new Response(
-        JSON.stringify({ ok: true, checked: alerts.length, triggered: 0 }),
-        { headers: { ...cors, 'Content-Type': 'application/json' } },
-      );
+      return ok({ checked: alerts.length, triggered: 0 });
     }
 
-    // Fetch push tokens for all affected users in one query
+    // ── 4. Fetch push tokens for affected users ───────────────────────────────
     const userIds = [...new Set(triggered.map((a) => a.user_id))];
-    const { data: userRows } = await supabase
+    const { data: usersRaw } = await supabase
       .from('users')
       .select('id, push_token')
       .in('id', userIds);
 
     const pushTokenMap: Record<string, string | null> = {};
-    for (const u of userRows ?? []) {
+    for (const u of (usersRaw ?? []) as Array<{ id: string; push_token: string | null }>) {
       pushTokenMap[u.id] = u.push_token ?? null;
     }
 
-    // Build in-app notification rows + send APNs pushes
-    const now           = new Date().toISOString();
-    const notifications = triggered.map((alert) => {
-      const price    = latestPrice[alert.sku_id];
-      const skuData  = alert.skus as { name?: string; short?: string } | null;
-      const skuName  = skuData?.short ?? skuData?.name ?? alert.sku_id;
-      const dirLabel = alert.direction === 'above' ? 'rose above' : 'dropped below';
-      const target   = Number(alert.target_price);
-      return {
-        user_id:  alert.user_id,
-        type:     'price_alert',
-        sku_id:   alert.sku_id,
-        title:    `${skuName} alert`,
-        body:     `Median price ${dirLabel} your $${target.toFixed(0)} target — now $${price.toFixed(0)}`,
-        metadata: {
-          alert_id:        alert.id,
-          direction:       alert.direction,
-          target_price:    target,
-          triggered_price: price,
-        },
-        is_read: false,
-      };
+    // ── 5. Build notification payloads ────────────────────────────────────────
+    type Payload = {
+      user_id: string; sku_id: string; alert_id: string;
+      title: string; body: string;
+      direction: string; target_price: number; price: number;
+    };
+
+    const payloads: Payload[] = triggered.map((alert) => {
+      const price  = latestPrice[alert.sku_id];
+      const target = Number(alert.target_price);
+      const name   = alert.skus?.short?.trim() || alert.skus?.name || alert.sku_id;
+
+      const title = `🎯 ${name}`;
+      const body  = alert.direction === 'above'
+        ? `Hit your $${target.toFixed(0)} target — now at $${Math.round(price)}`
+        : `Dropped to $${Math.round(price)} — your $${target.toFixed(0)} target triggered`;
+
+      return { user_id: alert.user_id, sku_id: alert.sku_id, alert_id: alert.id, title, body, direction: alert.direction, target_price: target, price };
     });
 
-    // Write in-app notifications
-    await supabase.from('in_app_notifications').insert(notifications);
+    const now = new Date().toISOString();
 
-    // Send APNs push to each user that has a registered device token
-    const pushResults = await Promise.allSettled(
-      triggered.map((alert) => {
-        const token = pushTokenMap[alert.user_id];
-        if (!token) return Promise.resolve(false);
-
-        const price    = latestPrice[alert.sku_id];
-        const skuData  = alert.skus as { name?: string; short?: string } | null;
-        const skuName  = skuData?.short ?? skuData?.name ?? alert.sku_id;
-        const dirLabel = alert.direction === 'above' ? 'rose above' : 'dropped below';
-        const target   = Number(alert.target_price);
-
-        return sendApnsNotification(token, {
-          title: `${skuName} alert`,
-          body:  `Median price ${dirLabel} your $${target.toFixed(0)} target — now $${price.toFixed(0)}`,
-          data:  { skuId: alert.sku_id },
-        });
-      }),
-    );
-
-    const pushSent = pushResults.filter(
-      (r) => r.status === 'fulfilled' && r.value === true,
-    ).length;
-
-    // Deactivate triggered alerts (one-shot — user must re-enable)
+    // ── 6. Mark alerts triggered (before sending so state is consistent) ──────
     await supabase
       .from('price_alerts')
       .update({ is_active: false, triggered_at: now })
       .in('id', triggered.map((a) => a.id));
 
-    return new Response(
-      JSON.stringify({ ok: true, checked: alerts.length, triggered: triggered.length, pushSent }),
-      { headers: { ...cors, 'Content-Type': 'application/json' } },
+    // ── 7. Write in_app_notifications ─────────────────────────────────────────
+    await supabase.from('in_app_notifications').insert(
+      payloads.map((p) => ({
+        user_id:  p.user_id,
+        type:     'price_alert',
+        sku_id:   p.sku_id,
+        title:    p.title,
+        body:     p.body,
+        metadata: { alert_id: p.alert_id, direction: p.direction, target_price: p.target_price, price: p.price },
+        is_read:  false,
+      }))
     );
+
+    // ── 8. Write notification_history (dedup + analytics) ─────────────────────
+    await supabase.from('notification_history').insert(
+      payloads.map((p) => ({
+        user_id:  p.user_id,
+        sku_id:   p.sku_id,
+        type:     'price_alert',
+        variant:  p.direction,
+        metadata: { alert_id: p.alert_id, direction: p.direction, target_price: p.target_price, price: p.price },
+      }))
+    );
+
+    // ── 9. Send APNs pushes ───────────────────────────────────────────────────
+    const pushResults = await Promise.allSettled(
+      payloads
+        .filter((p) => !!pushTokenMap[p.user_id])
+        .map((p) =>
+          sendApnsNotification(pushTokenMap[p.user_id]!, {
+            title: p.title,
+            body:  p.body,
+            data:  { skuId: p.sku_id, type: 'price_alert' },
+          })
+        )
+    );
+    const pushSent = pushResults.filter((r) => r.status === 'fulfilled' && r.value === true).length;
+
+    return ok({ checked: alerts.length, triggered: triggered.length, pushSent });
   } catch (err) {
     console.error('[price-alert-checker]', err);
     return new Response(
@@ -153,3 +164,10 @@ serve(async (req) => {
     );
   }
 });
+
+function ok(body: Record<string, unknown>): Response {
+  return new Response(
+    JSON.stringify({ ok: true, ...body }),
+    { headers: { ...cors, 'Content-Type': 'application/json' } },
+  );
+}

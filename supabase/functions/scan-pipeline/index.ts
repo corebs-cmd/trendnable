@@ -633,15 +633,14 @@ serve(async (req) => {
       activeTotal >= 5;
 
     if (qualityGatePassed) {
-      // Check if a candidate with this name already exists
-      const { data: existingCand } = await svc
-        .from('discovery_candidates')
-        .select('id')
-        .ilike('name', candidate.name ?? productName)
-        .limit(1)
-        .single();
+      // Check if this item already exists as a candidate OR a promoted SKU
+      const candidateName = candidate.name ?? productName;
+      const [{ data: existingCand }, { data: existingSku }] = await Promise.all([
+        svc.from('discovery_candidates').select('id').ilike('name', candidateName).limit(1).single(),
+        svc.from('skus').select('id').ilike('name', candidateName).eq('is_active', true).limit(1).single(),
+      ]);
 
-      if (!existingCand) {
+      if (!existingCand && !existingSku) {
         const popNum = finalCategoryId === 'funko'
           ? parseInt((candidate.name ?? '').match(/\[#(\d+)\]/)?.[1] ?? '') || null
           : null;

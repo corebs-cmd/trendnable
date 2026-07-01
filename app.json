@@ -20,7 +20,7 @@
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "Allow Trendnable to use the camera to scan product barcodes."
+        "NSCameraUsageDescription": "Allow Trendnable to use your camera to scan barcodes and identify collectibles with Visual Scan."
       }
     },
     "android": {
@@ -39,7 +39,10 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      ["expo-camera", { "cameraPermission": "Allow Trendnable to use the camera to scan product barcodes." }],
+      ["expo-camera", {
+        "cameraPermission": "Allow Trendnable to use your camera to scan barcodes and identify collectibles with Visual Scan.",
+        "microphonePermission": false
+      }],
       "expo-notifications",
       "expo-apple-authentication"
     ],

@@ -43,7 +43,7 @@ export default function BrowseScreen() {
   const hotSkus = useAppStore((s) => s.hotSkus);
   const theme = buildTheme(isDark);
 
-  const [mode, setMode] = useState<BrowseMode>('category');
+  const [mode, setMode] = useState<BrowseMode>('fandom');
   const [query, setQuery] = useState('');
   const [scrolled, setScrolled] = useState(false);
   const [segmentWidth, setSegmentWidth] = useState(0);
@@ -76,7 +76,7 @@ export default function BrowseScreen() {
   const switchMode = useCallback((next: BrowseMode) => {
     setMode(next);
     Animated.spring(indicatorAnim, {
-      toValue: next === 'category' ? 4 : segmentWidth / 2,
+      toValue: next === 'fandom' ? 4 : segmentWidth / 2,
       useNativeDriver: true,
       damping: 22,
       stiffness: 240,
@@ -172,14 +172,14 @@ export default function BrowseScreen() {
               backgroundColor: theme.accent, borderRadius: 10,
               transform: [{ translateX: indicatorAnim }],
             }} />
-            <Pressable onPress={() => switchMode('category')} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: mode === 'category' ? theme.accentInk : theme.text }}>
-                By category
-              </Text>
-            </Pressable>
             <Pressable onPress={() => switchMode('fandom')} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: mode === 'fandom' ? theme.accentInk : theme.text }}>
                 By fandom
+              </Text>
+            </Pressable>
+            <Pressable onPress={() => switchMode('category')} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
+              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: mode === 'category' ? theme.accentInk : theme.text }}>
+                By category
               </Text>
             </Pressable>
           </View>
@@ -189,7 +189,7 @@ export default function BrowseScreen() {
         {groups.length === 0 ? (
           <View style={{ padding: 36, alignItems: 'center', marginHorizontal: 20, backgroundColor: theme.surface, borderRadius: theme.radius }}>
             <Text style={{ fontFamily: theme.fontDispBold, fontSize: 16, color: theme.text }}>
-              No {mode === 'category' ? 'categories' : 'fandoms'}
+              No {mode === 'fandom' ? 'fandoms' : 'categories'}
             </Text>
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.muted, marginTop: 4 }}>
               Nothing matches "{query}".

@@ -197,10 +197,12 @@ function StandardCard({ sku, theme, rank, onPress, onLongPress }: SKUCardProps) 
   );
 }
 
-export default function SKUCard(props: SKUCardProps) {
+const SKUCard = React.memo(function SKUCard(props: SKUCardProps) {
   if (props.density === 'hero') return <HeroCard {...props} />;
   return <StandardCard {...props} />;
-}
+});
+
+export default SKUCard;
 export type { SKUCardProps };
 
 const styles = StyleSheet.create({

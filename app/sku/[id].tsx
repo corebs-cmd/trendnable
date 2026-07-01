@@ -942,7 +942,7 @@ export default function SKUDetailScreen() {
                   <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.muted, letterSpacing: 1.1, textTransform: 'uppercase' }}>
                     Your position
                   </Text>
-                  {myTotalCost > 0 && (
+                  {myTotalCost > 0 && isPremium && (
                     <View style={{ alignItems: 'flex-end' }}>
                       <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 30, color: plColor, fontVariant: ['tabular-nums'], lineHeight: 32 }}>
                         {myPLPos ? '+' : '−'}${Math.abs(Math.round(myPL)).toLocaleString()}
@@ -951,6 +951,27 @@ export default function SKUDetailScreen() {
                         {myPLPos ? '+' : ''}{myPLPct.toFixed(1)}%
                       </Text>
                     </View>
+                  )}
+                  {myTotalCost > 0 && !isPremium && (
+                    <Pressable
+                      onPress={() => setUpgradeContext('pl')}
+                      style={({ pressed }) => ({
+                        alignItems: 'flex-end',
+                        opacity: pressed ? 0.7 : 1,
+                      })}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 2 }}>
+                        <Svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke={C.gold} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                          <Path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4" />
+                        </Svg>
+                        <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 30, color: C.gold, fontVariant: ['tabular-nums'], lineHeight: 32 }}>
+                          +$•••
+                        </Text>
+                      </View>
+                      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 10, color: C.gold, letterSpacing: 0.6, textTransform: 'uppercase' }}>
+                        TAP TO UNLOCK
+                      </Text>
+                    </Pressable>
                   )}
                 </View>
                 {/* Divider */}

@@ -8,7 +8,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { catalogFingerprint } from '../_shared/pipeline-utils.ts';
+import { catalogFingerprint, tokenOverlapFraction } from '../_shared/pipeline-utils.ts';
 
 const SUPABASE_URL              = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -249,16 +249,12 @@ serve(async (req) => {
     }
 
     // Pre-filter: require authentication keyword in title + price floor + dedup
-    const existingTokens = existingNames.map((n) =>
-      n.toLowerCase().replace(/\[#\d+\]/g, '').trim().split(' ').slice(0, 3).join(' ')
-    );
     const filtered = allItems.filter((item) => {
       const title = item.title ?? '';
       if (!AUTHENTICATORS.test(title)) return false;
       const price = parseFloat(item.price?.value ?? '0');
       if (price < 50) return false;
-      const lowerTitle = title.toLowerCase();
-      if (existingTokens.some((token) => token.length > 4 && lowerTitle.includes(token))) return false;
+      if (existingNames.some((existing) => tokenOverlapFraction(title, existing) >= 0.65)) return false;
       return true;
     });
 
@@ -380,7 +376,9 @@ serve(async (req) => {
 
         if (promoteError) {
           console.error('Auto-promote error:', promoteError.message);
-        } else if (typeof result === 'string' && !result.startsWith('ERROR')) {
+        } else if (typeof result === 'string' && result.startsWith('ERROR')) {
+          console.log('Auto-promote rejected by gate:', result);
+        } else if (typeof result === 'string') {
           autoPromoted++;
           const skuId = result.match(/sku-\d+/)?.[0];
           if (skuId && c.reasoning) {

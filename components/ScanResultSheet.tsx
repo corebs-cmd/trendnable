@@ -328,7 +328,7 @@ export default function ScanResultSheet({
       ppgPrice:    ppgNum    != null && !isNaN(ppgNum)    ? ppgNum    : null,
       retailPrice: retailNum != null && !isNaN(retailNum) ? retailNum : null,
     });
-  }, [ppgPriceText, retailPriceEnabled, retailPriceText]);
+  }, [ppgPriceText, retailPriceEnabled, retailPriceText, onCommunityData]);
 
   if (!result) return null;
 

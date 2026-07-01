@@ -124,6 +124,46 @@ export function normalizeTcgName(name: string): string {
     .trim();
 }
 
+// ── Semantic dedup helpers ────────────────────────────────────────────────────
+// Mirror of strip_sku_brand / token_overlap_fraction SQL functions in migration 047.
+// Used by discovery pipelines to pre-filter candidates before DB insertion.
+
+// Ordered longest-first to prevent partial prefix matches.
+const BRAND_PREFIXES = [
+  'thrilljoy pic', 'thrilljoy pix', 'thrilljoy',
+  'hot toys', 'pop mart', 'hot wheels', 'funko pop', 'neca',
+];
+
+export function brandStripName(name: string): string {
+  const lower = name.toLowerCase().trim();
+  for (const brand of BRAND_PREFIXES) {
+    if (lower.startsWith(brand + ' ')) {
+      return lower.slice(brand.length).trim();
+    }
+  }
+  return lower;
+}
+
+export function coreTokens(name: string, minLen = 4): string[] {
+  return brandStripName(name)
+    .replace(/[^a-z0-9 ]/g, '')
+    .split(/\s+/)
+    .filter((t) => t.length >= minLen);
+}
+
+// Returns the fraction of `candidate`'s tokens that appear (as substrings) in `existing`.
+// 0.70+ → near-duplicate.  Excludes Funko (uses pop_number) and TCG (structured names).
+export function tokenOverlapFraction(candidate: string, existing: string): number {
+  const tokens = coreTokens(candidate);
+  if (tokens.length === 0) return 0;
+  const existStripped = brandStripName(existing).replace(/[^a-z0-9 ]/g, '');
+  let matches = 0;
+  for (const token of tokens) {
+    if (existStripped.includes(token)) matches++;
+  }
+  return matches / tokens.length;
+}
+
 // ── Catalog fingerprint + variant helpers ─────────────────────────────────────
 
 export function catalogFingerprint(
@@ -154,7 +194,9 @@ export function catalogFingerprint(
     return `tcg-${namePart}-${variantPart}${graderPart}${gradePart}`;
   }
 
-  return `${category}-${slug(name)}`;
+  // Non-Funko/TCG: brand-strip the name before slugging so that
+  // "NECA RoboCop Ultra Deluxe" and "RoboCop Ultra Deluxe" share a fingerprint.
+  return `${category}-${slug(brandStripName(name))}`;
 }
 
 // Maps funko-pipeline exclusive_type values to catalog variant_type.
