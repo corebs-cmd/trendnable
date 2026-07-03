@@ -4,7 +4,6 @@
 // runs Claude classification, and returns a preview — NO DB writes.
 // The admin reviews the preview and confirms via a separate action.
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const EBAY_CLIENT_ID            = Deno.env.get('EBAY_CLIENT_ID') ?? '';

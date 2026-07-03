@@ -3,7 +3,6 @@
 // classifies with Claude Haiku, upserts to product_catalog only.
 // Pass ?batch=a (default) or ?batch=b to alternate query sets across runs.
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { titlePassesTier1, tcgMultiQty, catalogFingerprint } from '../_shared/pipeline-utils.ts';
 

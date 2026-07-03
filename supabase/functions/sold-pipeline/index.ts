@@ -8,7 +8,6 @@
 // Concurrency: processes CONCURRENCY SKUs in parallel so total runtime stays
 // well under Supabase's 150s timeout regardless of catalog size.
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { titlePassesTier1, isLooseCondition, tcgMultiQty, effectivePrice, iqrMedian, soldTitleMatchesQuery } from '../_shared/pipeline-utils.ts';
 
