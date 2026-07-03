@@ -26,6 +26,7 @@ import { ProductThumb } from '@/components/ProductPlaceholder';
 import AddToCollectionSheet from '@/components/AddToCollectionSheet';
 import CatalogItemSheet from '@/components/CatalogItemSheet';
 import PriceAlertSheet from '@/components/PriceAlertSheet';
+import CollectionPulseSection from '@/components/CollectionPulseSection';
 
 const VALUE_HISTORY_BASE = [0.72, 0.74, 0.75, 0.77, 0.79, 0.81, 0.83, 0.86, 0.89, 0.92, 0.94, 0.96, 0.98, 1.0];
 
@@ -71,7 +72,7 @@ function CategoryBreakdown({ rows, total, theme, isDark, isPremium, onUnlock }: 
       <View style={{ gap: 12 }}>
         {visibleRows.map((row) => {
           const pct = total > 0 ? (row.value / total) * 100 : 0;
-          const tint = categoryColor(row.categoryId, isDark);
+          const { ink } = categoryColor(row.categoryId, isDark);
           const cat = catById(row.categoryId);
           return (
             <View key={row.categoryId}>
@@ -91,8 +92,8 @@ function CategoryBreakdown({ rows, total, theme, isDark, isPremium, onUnlock }: 
                   </Text>
                 </View>
               </View>
-              <View style={{ height: 6, borderRadius: 999, backgroundColor: tint + '22', overflow: 'hidden' }}>
-                <View style={{ width: `${pct}%`, height: '100%', backgroundColor: tint }} />
+              <View style={{ height: 6, borderRadius: 999, backgroundColor: ink + '28', overflow: 'hidden' }}>
+                <View style={{ width: `${pct}%`, height: '100%', backgroundColor: ink }} />
               </View>
             </View>
           );
@@ -142,6 +143,9 @@ export default function CollectionScreen() {
   const mergeSkuIntoHot          = useAppStore((s) => s.mergeSkuIntoHot);
   const loadUserData = useAppStore((s) => s.loadUserData);
   const userId = useAppStore((s) => s.user?.id);
+  const collectionPulse = useAppStore((s) => s.collectionPulse);
+  const collectionPulseLoading = useAppStore((s) => s.collectionPulseLoading);
+  const loadCollectionPulse = useAppStore((s) => s.loadCollectionPulse);
   const theme = buildTheme(isDark);
 
   useFocusEffect(useCallback(() => {
@@ -150,6 +154,7 @@ export default function CollectionScreen() {
     const run = async () => {
       await loadUserData(userId);
       if (!active) return;
+      loadCollectionPulse();
 
       // Recover storeCollection items whose SKU isn't in hotSkus.
       // This happens when a scan-created SKU (is_active:false) is not in v_hot_skus.
@@ -524,6 +529,15 @@ export default function CollectionScreen() {
             onUnlock={() => setUpgradeContext('breakdown')}
           />
         )}
+
+        {/* Collection Pulse */}
+        <CollectionPulseSection
+          pulse={collectionPulse}
+          loading={collectionPulseLoading}
+          isPremium={isPremium}
+          theme={theme}
+          onUpgrade={(ctx) => setUpgradeContext(ctx)}
+        />
 
         {/* Filter chips */}
         <ScrollView

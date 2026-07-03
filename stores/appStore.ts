@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CollectionItem, DBUser, SKU, PriceAlert, AppNotification, CatalogWatchlistItem, CatalogCollectionItem } from '../lib/types';
+import { CollectionItem, DBUser, SKU, PriceAlert, AppNotification, CatalogWatchlistItem, CatalogCollectionItem, CollectionPulse } from '../lib/types';
 import type { StickerDef } from '../lib/stickers';
 import type { ScanQuota } from '../lib/api';
 import * as api from '../lib/api';
@@ -45,6 +45,10 @@ interface AppState {
 
   // Free-tier scan quota (null until loaded)
   scanQuota: ScanQuota | null;
+
+  // Collection Pulse (AI-generated insight for the user's collection)
+  collectionPulse: CollectionPulse | null;
+  collectionPulseLoading: boolean;
 
   // Preferences
   followedFandoms: string[];
@@ -111,6 +115,10 @@ interface AppState {
   loadScanQuota: (userId: string) => Promise<void>;
   incrementScanLocal: () => void;
 
+  // Collection Pulse
+  loadCollectionPulse: () => Promise<void>;
+  invalidateCollectionPulse: () => void;
+
   // Notification preferences (mirrored from user row for optimistic toggles)
   setNotifyMovers:   (value: boolean) => void;
   setNotifyInsights: (value: boolean) => void;
@@ -136,6 +144,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   notifications: [],
   unreadCount: 0,
   scanQuota: null,
+  collectionPulse: null,
+  collectionPulseLoading: false,
   followedFandoms: [],
   followedCategories: [],
 
@@ -227,9 +237,10 @@ export const useAppStore = create<AppState>((set, get) => ({
           collection: state.collection.map((c) =>
             c.skuId === item.skuId ? { ...c, qty: c.qty + item.qty } : c
           ),
+          collectionPulse: null,
         };
       }
-      return { collection: [...state.collection, item] };
+      return { collection: [...state.collection, item], collectionPulse: null };
     });
     const userId = get().user?.id;
     if (userId) {
@@ -241,6 +252,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   removeFromCollection: (skuId) => {
     set((state) => ({
       collection: state.collection.filter((c) => c.skuId !== skuId),
+      collectionPulse: null,
     }));
     const userId = get().user?.id;
     if (userId) api.deleteCollectionItem(userId, skuId).catch(console.error);
@@ -450,4 +462,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => state.user ? { user: { ...state.user, notify_insights: value } } : {});
     if (userId) api.updateNotificationPrefs(userId, { notifyInsights: value }).catch(console.error);
   },
+
+  loadCollectionPulse: async () => {
+    set({ collectionPulseLoading: true });
+    try {
+      const pulse = await api.getCollectionPulse();
+      set({ collectionPulse: pulse, collectionPulseLoading: false });
+    } catch (e) {
+      console.error('loadCollectionPulse failed:', e);
+      set({ collectionPulseLoading: false });
+    }
+  },
+
+  invalidateCollectionPulse: () => set({ collectionPulse: null }),
 }));

@@ -25,6 +25,7 @@ import Sheet from '@/components/Sheet';
 import FilterGroup from '@/components/FilterGroup';
 import PrimaryButton from '@/components/PrimaryButton';
 import NotificationsSheet from '@/components/NotificationsSheet';
+import { CollectionPulseCompactCard } from '@/components/CollectionPulseSection';
 
 type SortBy = 'hot' | 'velocity' | 'price';
 
@@ -49,6 +50,8 @@ export default function HotScreen() {
   const unreadCount = useAppStore((s) => s.unreadCount);
   const isPremium = useAppStore((s) => s.isPremium);
   const scanQuota = useAppStore((s) => s.scanQuota);
+  const collectionPulse = useAppStore((s) => s.collectionPulse);
+  const loadCollectionPulse = useAppStore((s) => s.loadCollectionPulse);
   const theme = buildTheme(isDark);
   const remainingScans = scanQuota ? Math.max(0, scanQuota.limit - scanQuota.used) : null;
 
@@ -64,6 +67,13 @@ export default function HotScreen() {
       setActiveCat('all');
     }
   }, [followedCategories]);
+
+  // Load collection pulse on mount (if not already loaded)
+  useEffect(() => {
+    if (!collectionPulse && user) {
+      loadCollectionPulse();
+    }
+  }, [user?.id]);
 
   const toggleFollowedCat = (catId: string) => {
     let next: string[];
@@ -362,6 +372,13 @@ export default function HotScreen() {
                   </View>
                 </Pressable>
               </View>
+
+              {/* ── Collection Pulse compact card ── */}
+              {collectionPulse && collectionPulse.eligible && (
+                <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
+                  <CollectionPulseCompactCard pulse={collectionPulse} onPress={() => router.push('/(tabs)/collection')} theme={theme} isPremium={isPremium} />
+                </View>
+              )}
 
               {/* ── New Today card ── */}
               {newCount > 0 && (

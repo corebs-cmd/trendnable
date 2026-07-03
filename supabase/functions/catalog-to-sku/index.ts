@@ -66,6 +66,30 @@ Deno.serve(async (req) => {
       return json({ ok: true, sku_id: cat.sku_id, already_existed: true });
     }
 
+    // ── Sanitize fields with DB CHECK constraints ─────────────────────────────
+    // card_variant has CHECK (in ('raw','graded')) — null anything else out.
+    if (cat.card_variant && !['raw', 'graded'].includes(cat.card_variant)) {
+      cat.card_variant = null;
+    }
+    // pop_number must be an integer or null.
+    if (cat.pop_number != null) {
+      const n = parseInt(String(cat.pop_number), 10);
+      cat.pop_number = isNaN(n) ? null : n;
+    }
+    // category_id must reference a valid categories row.
+    if (cat.category_id) {
+      const { data: catRow } = await svc.from('categories').select('id').eq('id', cat.category_id).maybeSingle();
+      if (!catRow) cat.category_id = null;
+    }
+    if (!cat.category_id) {
+      return json({ error: 'invalid_category_id' }, 422);
+    }
+    // fandom_id must reference a valid fandoms row (or be null).
+    if (cat.fandom_id) {
+      const { data: fandomRow } = await svc.from('fandoms').select('id').eq('id', cat.fandom_id).maybeSingle();
+      if (!fandomRow) cat.fandom_id = null;
+    }
+
     // ── Check if a matching SKU already exists (same name + category) ─────────
     // Prevents duplicates when the item was already discovered by a pipeline.
     const { data: existingSku } = await svc
@@ -127,8 +151,8 @@ Deno.serve(async (req) => {
     });
 
     if (skuErr) {
-      console.error('SKU insert failed:', skuErr.message);
-      return json({ error: 'sku_insert_failed', detail: skuErr.message }, 500);
+      console.error('SKU insert failed:', skuErr.message, '| code:', skuErr.code);
+      return json({ error: 'sku_insert_failed', detail: skuErr.message, code: skuErr.code }, 500);
     }
 
     const today = new Date().toISOString().split('T')[0];

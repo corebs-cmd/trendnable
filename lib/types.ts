@@ -236,6 +236,43 @@ export interface InsightResponse {
   fallbackDescription: string;
 }
 
+// ── Collection Pulse ──────────────────────────────────────────────────────────
+
+export interface FlaggedItem {
+  sku_id: string;
+  name: string;
+  image_url: string | null;
+  reason: 'near_peak' | 'declining';
+  urgency: number;
+  price_median: number;
+  peak_90d: number | null;
+  avg_30d: number | null;
+  down_days: number;
+}
+
+// Individual owned SKU ranked by hot_score for the demand breakdown table
+export interface DemandRow {
+  sku_id:    string;
+  name:      string;
+  image_url: string | null;
+  hot_score: number;
+}
+
+export interface CollectionPulse {
+  eligible: boolean;
+  heat_score: number;
+  verdict: 'hot' | 'warming' | 'cooling';
+  delta_24h: number;
+  summary: string | null;
+  standout: { sku_id: string; name: string; image_url: string | null; hot_score: number; delta_24h: number } | null;
+  flagged_count: number;
+  sku_count: number;
+  generated_at: string | null;
+  // Free users get name+image only — no reason/price to prevent leakage
+  flagged_preview?: { sku_id: string; name: string; image_url: string | null }[];
+  payload?: { flagged: FlaggedItem[]; hottest: DemandRow[]; coolest: DemandRow[] };
+}
+
 // ── Scan pipeline ─────────────────────────────────────────────────────────────
 
 export interface ScanResult {

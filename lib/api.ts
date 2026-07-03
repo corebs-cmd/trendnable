@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { CollectionItem, DBUser, DBCollectionItem, SKU, PriceAlert, AppNotification, ScanResult, CatalogWatchlistItem, CatalogCollectionItem, SkuInsight, InsightResponse, InsightDirection, RewardSummary } from './types';
+import { CollectionItem, DBUser, DBCollectionItem, SKU, PriceAlert, AppNotification, ScanResult, CatalogWatchlistItem, CatalogCollectionItem, SkuInsight, InsightResponse, InsightDirection, RewardSummary, CollectionPulse } from './types';
 import type { StickerDef } from './stickers';
 
 // ── Sticker catalog ───────────────────────────────────────────────────────────
@@ -984,4 +984,22 @@ export async function claimRewardPremium(userId: string): Promise<{ success: boo
     is_premium: true,
   }).eq('id', userId);
   return { success: true, expiresAt };
+}
+
+export async function getCollectionPulse(): Promise<CollectionPulse | null> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return null;
+  const res = await fetch(
+    `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/collection-pulse`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+  if (!res.ok) return null;
+  const json = await res.json();
+  return json as CollectionPulse;
 }
