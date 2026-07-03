@@ -9,7 +9,7 @@
 //   confirmation(0-25): external trend signal (reserved for future data source)
 //   freshness   (0-15): penalty for old SKUs (>90 days drops score)
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { titlePassesTier1, effectivePrice, iqrMedian } from '../_shared/pipeline-utils.ts';
 
@@ -170,7 +170,7 @@ ${batch.map((s, idx) =>
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const startTime = Date.now();
 
   const authHeader = req.headers.get('Authorization');

@@ -4,7 +4,7 @@
 //
 // Auth: user JWT (Bearer). Premium users only — no quota, hard gate.
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   catalogFingerprint,
@@ -343,7 +343,7 @@ function json(body: ScanResponse, status = 200): Response {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   // ── Auth ──────────────────────────────────────────────────────────────────────
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {

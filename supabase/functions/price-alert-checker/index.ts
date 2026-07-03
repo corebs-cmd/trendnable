@@ -8,7 +8,7 @@
 //   4. Mark triggered alerts (is_active=false, triggered_at=now)
 //   5. Write in_app_notifications + notification_history + send APNs push
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { sendApnsNotification } from '../_shared/apns.ts';
 
@@ -20,7 +20,7 @@ const cors = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: cors });
   }

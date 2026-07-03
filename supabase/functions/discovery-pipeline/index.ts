@@ -6,7 +6,7 @@
 // Run manually or on a weekly cron. Candidates must be promoted via
 // the promote_candidate_to_sku() SQL function before the hot-pipeline tracks them.
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { titlePassesTier1, tcgMultiQty, catalogFingerprint, exclusiveTypeToVariantType, tokenOverlapFraction } from '../_shared/pipeline-utils.ts';
 
@@ -177,7 +177,7 @@ ${items.map((item, i) =>
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const startTime = Date.now();
 
   const authHeader = req.headers.get('Authorization');

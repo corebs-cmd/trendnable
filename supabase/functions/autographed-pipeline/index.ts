@@ -6,7 +6,7 @@
 // Diverse search queries ensure the Autographed category is balanced — NOT
 // dominated by any one item type. Feeds discovery_candidates with category_id='autographed'.
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { catalogFingerprint, tokenOverlapFraction } from '../_shared/pipeline-utils.ts';
 
@@ -191,7 +191,7 @@ ${items.map((item, i) =>
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const startTime = Date.now();
 
   const authHeader = req.headers.get('Authorization');

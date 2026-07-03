@@ -4,7 +4,7 @@
 // Pop number accuracy and catch exclusive/chase/GITD finds.
 // Feeds the same discovery_candidates table so the hot pipeline picks up promoted SKUs.
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { titlePassesTier1, catalogFingerprint, exclusiveTypeToVariantType, tokenOverlapFraction } from '../_shared/pipeline-utils.ts';
 
@@ -189,7 +189,7 @@ ${items.map((item, i) =>
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const startTime = Date.now();
 
   const authHeader = req.headers.get('Authorization');

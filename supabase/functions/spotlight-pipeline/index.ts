@@ -185,7 +185,7 @@ Return ONLY valid JSON. No markdown, no explanation.`;
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {

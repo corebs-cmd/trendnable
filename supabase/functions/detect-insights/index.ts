@@ -399,7 +399,7 @@ Return ONLY valid JSON: {"short":"...","long":"..."}`;
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   const startTime = Date.now();
 
   const authHeader = req.headers.get('Authorization');
