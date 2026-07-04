@@ -594,53 +594,59 @@ export default function ScanScreen() {
         </>
       )}
 
-      {/* ── Loading overlay ── */}
-      {scanning && (
-        <View style={[StyleSheet.absoluteFill, {
+      {/* ── Loading overlay — always mounted, opacity-driven.
+          Conditional rendering adds ~10 native views in one Fabric commit,
+          which blocks the JS event loop waiting for main-thread UIKit layout.
+          Pre-mounting and toggling opacity is a trivial property update that
+          completes between camera frames. ── */}
+      <View
+        pointerEvents={scanning ? 'box-none' : 'none'}
+        style={[StyleSheet.absoluteFill, {
           backgroundColor: 'rgba(13,13,13,0.94)',
           alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32,
-        }]}>
-          <View style={{
-            backgroundColor: '#181818', borderRadius: 20, padding: 32,
-            width: '100%', alignItems: 'center',
-            borderWidth: 0.5, borderColor: 'rgba(225,228,230,0.1)',
-          }}>
-            <ActivityIndicator color="#FF5500" size="large" style={{ marginBottom: 24 }} />
-            {(['reading', 'identifying', 'analyzing'] as ScanStep[]).map((s, i) => {
-              const steps: ScanStep[] = ['reading', 'identifying', 'analyzing'];
-              const currentIdx = steps.indexOf(step);
-              const isDone   = i < currentIdx;
-              const isActive = s === step;
-              return (
-                <View key={s} style={{
-                  flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6,
-                  opacity: isDone ? 0.5 : isActive ? 1 : 0.28,
+          opacity: scanning ? 1 : 0,
+        }]}
+      >
+        <View style={{
+          backgroundColor: '#181818', borderRadius: 20, padding: 32,
+          width: '100%', alignItems: 'center',
+          borderWidth: 0.5, borderColor: 'rgba(225,228,230,0.1)',
+        }}>
+          <ActivityIndicator color="#FF5500" size="large" style={{ marginBottom: 24 }} />
+          {(['reading', 'identifying', 'analyzing'] as ScanStep[]).map((s, i) => {
+            const steps: ScanStep[] = ['reading', 'identifying', 'analyzing'];
+            const currentIdx = steps.indexOf(step);
+            const isDone   = i < currentIdx;
+            const isActive = s === step;
+            return (
+              <View key={s} style={{
+                flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6,
+                opacity: isDone ? 0.5 : isActive ? 1 : 0.28,
+              }}>
+                <View style={{
+                  width: 20, height: 20, borderRadius: 10,
+                  backgroundColor: isDone ? '#3DD68C' : isActive ? '#FF5500' : 'rgba(225,228,230,0.12)',
+                  alignItems: 'center', justifyContent: 'center',
                 }}>
-                  <View style={{
-                    width: 20, height: 20, borderRadius: 10,
-                    backgroundColor: isDone ? '#3DD68C' : isActive ? '#FF5500' : 'rgba(225,228,230,0.12)',
-                    alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    {isDone && (
-                      <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#0D0D0D" strokeWidth={3} strokeLinecap="round">
-                        <Path d="M20 6L9 17l-5-5" />
-                      </Svg>
-                    )}
-                    {isActive && <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#fff' }} />}
-                  </View>
-                  <Text style={{
-                    color: isActive ? '#E1E4E6' : 'rgba(225,228,230,0.7)',
-                    fontFamily: isActive ? 'Inter_600SemiBold' : 'Inter_400Regular',
-                    fontSize: 14,
-                  }}>
-                    {stepLabels[s]}
-                  </Text>
+                  {isDone && (
+                    <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#0D0D0D" strokeWidth={3} strokeLinecap="round">
+                      <Path d="M20 6L9 17l-5-5" />
+                    </Svg>
+                  )}
+                  {isActive && <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#fff' }} />}
                 </View>
-              );
-            })}
-          </View>
+                <Text style={{
+                  color: isActive ? '#E1E4E6' : 'rgba(225,228,230,0.7)',
+                  fontFamily: isActive ? 'Inter_600SemiBold' : 'Inter_400Regular',
+                  fontSize: 14,
+                }}>
+                  {stepLabels[s]}
+                </Text>
+              </View>
+            );
+          })}
         </View>
-      )}
+      </View>
 
       {/* ── Debug panel ── */}
       {dbgRef.current.length > 0 && (
