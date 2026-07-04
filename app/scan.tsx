@@ -497,14 +497,16 @@ export default function ScanScreen() {
   return (
     <View style={[styles.fill, { backgroundColor: '#000' }]}>
 
-      {/* Camera — always mounted, paused during scanning.
-          active=false suspends the camera session without teardown, freeing the
-          iOS main thread so Fabric can commit the loading overlay uncontested. */}
+      {/* Camera — always mounted, always active.
+          active={!scanning} caused a JSI deadlock: expo-camera dispatches
+          onStatusChange callbacks back to JS synchronously when the session
+          stops, but JS is mid-Fabric-commit at that point — each side waits
+          for the other. Keeping the camera always streaming avoids the
+          deadlock; the overlay (opacity=1) hides the feed during scanning. */}
       <CameraView
         ref={cameraRef}
         style={StyleSheet.absoluteFill}
         facing="back"
-        active={!scanning}
         {...(scanMode === 'barcode' && !scanning ? {
           barcodeScannerSettings: { barcodeTypes: ACCEPTED_TYPES as unknown as any[] },
           onBarcodeScanned: handleBarcodeScanned,
