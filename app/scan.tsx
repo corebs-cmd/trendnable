@@ -152,7 +152,11 @@ export default function ScanScreen() {
         dbg('EFF api done name=' + data.name.slice(0, 20));
         if (!isPremium && isBarcode) incrementScanLocal();
         setScanResult(data);
-        setScanning(false);
+        // Open result sheet WITHOUT calling setScanning(false) here.
+        // Reactivating the camera (active=true) in the same Fabric commit as
+        // opening the sheet can cause another main-thread block. The sheet is
+        // a Modal that renders on top; the overlay behind it is invisible.
+        // Camera resumes only when the sheet is dismissed via resetScan().
         setSheetOpen(true);
       })
       .catch((err: any) => {
