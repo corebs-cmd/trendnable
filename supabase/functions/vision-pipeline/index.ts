@@ -158,32 +158,44 @@ Return ONLY this JSON:
 If you cannot identify a collectable at all, return:
 {"identified": false, "candidate_name": "", "category": "other", "ebay_query": "", "confidence": "low", "visible_text": ""}`;
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 512,
-      messages: [{
-        role: 'user',
-        content: [
-          {
-            type: 'image',
-            source: {
-              type: 'base64',
-              media_type: 'image/jpeg',
-              data: imageBase64,
+  const visionController = new AbortController();
+  const visionTimeout = setTimeout(() => visionController.abort(), 30_000);
+
+  let res: Response;
+  try {
+    res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 512,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: 'image/jpeg',
+                data: imageBase64,
+              },
             },
-          },
-          { type: 'text', text: prompt },
-        ],
-      }],
-    }),
-  });
+            { type: 'text', text: prompt },
+          ],
+        }],
+      }),
+      signal: visionController.signal,
+    });
+  } catch (err: any) {
+    clearTimeout(visionTimeout);
+    console.error('Claude Vision fetch error:', err?.message);
+    return { identified: false, candidate_name: '', category: 'other', ebay_query: '', confidence: 'low', visible_text: '', inputTokens: 0, outputTokens: 0 };
+  }
+  clearTimeout(visionTimeout);
 
   const inputTokens  = 0;
   const outputTokens = 0;
@@ -515,7 +527,7 @@ Deno.serve(async (req) => {
     const skuId     = upsertedRows.sku_id as string | null;
 
     // ── Step 7: Log to pipeline_runs ─────────────────────────────────────────
-    const visionCost   = (vision.inputTokens * SONNET_INPUT_RATE) + (vision.outputTokens * SONNET_OUTPUT_RATE);
+    const visionCost   = (vision.inputTokens * HAIKU_INPUT_RATE) + (vision.outputTokens * HAIKU_OUTPUT_RATE);
     const classifyCost = (iT * HAIKU_INPUT_RATE) + (oT * HAIKU_OUTPUT_RATE);
     const costUsd = visionCost + classifyCost;
 

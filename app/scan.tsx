@@ -14,6 +14,8 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 
+import * as ImageManipulator from 'expo-image-manipulator';
+
 import { buildTheme } from '@/lib/theme';
 import { useAppStore } from '@/stores/appStore';
 import { callScanPipeline, callVisionPipeline, promoteCatalogToSku, fetchSkuById, submitCommunityPrice } from '@/lib/api';
@@ -76,6 +78,15 @@ export default function ScanScreen() {
   const lockRef   = useRef(false);
   const cameraRef = useRef<CameraView>(null);
 
+  const dbgRef = useRef<string[]>([]);
+  const [, dbgTick] = useState(0);
+  const dbg = (msg: string) => {
+    const ts = new Date().toISOString().slice(14, 23);
+    dbgRef.current = [`${ts} ${msg}`, ...dbgRef.current].slice(0, 8);
+    dbgTick((n) => n + 1);
+    console.log('[SCAN]', ts, msg);
+  };
+
   useEffect(() => {
     if (permission && !permission.granted && permission.canAskAgain) {
       requestPermission();
@@ -117,6 +128,7 @@ export default function ScanScreen() {
   const handleBarcodeScanned = async (result: BarcodeScanningResult) => {
     if (lockRef.current || scanMode !== 'barcode') return;
     lockRef.current = true;
+    dbg('B1 barcode=' + result.data.slice(0, 12));
 
     if (quotaExhausted) {
       setUpgradeContext('scanQuota');
@@ -126,28 +138,38 @@ export default function ScanScreen() {
 
     setScanning(true);
     setStep('reading');
-    await new Promise((r) => setTimeout(r, 300));
-    setStep('identifying');
-    const analyzeTimer = setTimeout(() => setStep('analyzing'), 1500);
+    // Same pattern as visual scan — never await a timer after a Fabric state update.
+    const identTimer   = setTimeout(() => setStep('identifying'), 300);
+    const analyzeTimer = setTimeout(() => setStep('analyzing'), 1800);
+    dbg('B2 api start');
 
     try {
+      dbg('B3 getSession');
       const { data: { session } } = user ? await supabase.auth.getSession() : { data: { session: null } };
+      dbg('B4 session ok=' + !!session?.access_token);
       if (!session?.access_token) {
+        clearTimeout(identTimer);
         clearTimeout(analyzeTimer);
         Alert.alert('Not signed in', 'Please sign in to scan products.');
         resetScan();
         return;
       }
 
+      dbg('B5 api call');
       const data = await callScanPipeline(result.data, session.access_token);
+      dbg('B6 api done name=' + data.name.slice(0, 20));
+      clearTimeout(identTimer);
       clearTimeout(analyzeTimer);
       if (!isPremium) incrementScanLocal();
       setScanResult(data);
       setScanning(false);
       setSheetOpen(true);
+      dbg('B7 sheet open');
     } catch (err: any) {
+      clearTimeout(identTimer);
       clearTimeout(analyzeTimer);
       setScanning(false);
+      dbg('B_ERR code=' + (err?.errorCode ?? err?.message ?? 'unknown'));
 
       const code: string = err?.errorCode ?? '';
       if (code === 'quota_exceeded') {
@@ -175,6 +197,8 @@ export default function ScanScreen() {
             { text: 'Dismiss', style: 'cancel', onPress: resetScan },
           ]
         );
+      } else if (code === 'timeout') {
+        Alert.alert('Taking too long', 'The server is busy. Please try again in a moment.', [{ text: 'OK', onPress: resetScan }]);
       } else {
         Alert.alert('Scan failed', err?.message ?? 'Something went wrong. Please try again.', [{ text: 'OK', onPress: resetScan }]);
       }
@@ -186,40 +210,65 @@ export default function ScanScreen() {
   const handleVisualCapture = async () => {
     if (lockRef.current) return;
     lockRef.current = true;
+    dbg('1 tap');
 
     try {
+      dbg('2 takePic start');
       const photo = await cameraRef.current?.takePictureAsync({
         base64: true,
         quality: 0.7,
         exif: false,
       });
+      dbg('3 takePic done b64=' + (photo?.base64?.length ?? 0));
 
-      if (!photo?.base64) {
+      if (!photo?.base64 || !photo?.uri) {
+        lockRef.current = false;
+        return;
+      }
+
+      // Compress before sending — 2MB base64 → ~100KB. The vision pipeline
+      // sends this to Claude which charges per image token; smaller = faster + cheaper.
+      dbg('4 compress start');
+      const compressed = await ImageManipulator.manipulateAsync(
+        photo.uri,
+        [{ resize: { width: 512 } }],
+        { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+      );
+      dbg('5 compress done b64=' + (compressed.base64?.length ?? 0));
+
+      if (!compressed.base64) {
         lockRef.current = false;
         return;
       }
 
       setScanning(true);
       setStep('reading');
-      await new Promise((r) => setTimeout(r, 400));
-      setStep('identifying');
-      const analyzeTimer = setTimeout(() => setStep('analyzing'), 1800);
+      const identTimer  = setTimeout(() => setStep('identifying'), 500);
+      const analyzeTimer = setTimeout(() => setStep('analyzing'), 2000);
+      dbg('6 api start');
 
       try {
         const { data: { session } } = user ? await supabase.auth.getSession() : { data: { session: null } };
+        dbg('7 session ok=' + !!session?.access_token);
         if (!session?.access_token) {
+          clearTimeout(identTimer);
           clearTimeout(analyzeTimer);
           Alert.alert('Not signed in', 'Please sign in to use Visual Scan.');
           resetScan();
           return;
         }
 
-        const data = await callVisionPipeline(photo.base64, session.access_token);
+        dbg('8 api call');
+        const data = await callVisionPipeline(compressed.base64, session.access_token);
+        dbg('9 api done');
+        clearTimeout(identTimer);
         clearTimeout(analyzeTimer);
         setScanResult(data);
         setScanning(false);
         setSheetOpen(true);
+        dbg('10 sheet open');
       } catch (err: any) {
+        clearTimeout(identTimer);
         clearTimeout(analyzeTimer);
         setScanning(false);
 
@@ -233,6 +282,8 @@ export default function ScanScreen() {
         } else if (code === 'premium_required') {
           setUpgradeContext('visionScan');
           lockRef.current = false;
+        } else if (code === 'timeout') {
+          Alert.alert('Taking too long', 'The server is busy. Please try again in a moment.', [{ text: 'OK', onPress: resetScan }]);
         } else {
           Alert.alert('Scan failed', err?.message ?? 'Something went wrong. Please try again.', [{ text: 'OK', onPress: resetScan }]);
         }
@@ -452,18 +503,16 @@ export default function ScanScreen() {
   return (
     <View style={[styles.fill, { backgroundColor: '#000' }]}>
 
-      {/* Camera — always mounted when not scanning */}
-      {!scanning && (
-        <CameraView
-          ref={cameraRef}
-          style={StyleSheet.absoluteFill}
-          facing="back"
-          {...(scanMode === 'barcode' ? {
-            barcodeScannerSettings: { barcodeTypes: ACCEPTED_TYPES as unknown as any[] },
-            onBarcodeScanned: handleBarcodeScanned,
-          } : {})}
-        />
-      )}
+      {/* Camera — always mounted; unmounting during async ops blocks iOS main thread */}
+      <CameraView
+        ref={cameraRef}
+        style={StyleSheet.absoluteFill}
+        facing="back"
+        {...(scanMode === 'barcode' && !scanning ? {
+          barcodeScannerSettings: { barcodeTypes: ACCEPTED_TYPES as unknown as any[] },
+          onBarcodeScanned: handleBarcodeScanned,
+        } : {})}
+      />
 
       {/* ── Barcode mode overlay ── */}
       {scanMode === 'barcode' && !scanning && (
@@ -587,6 +636,18 @@ export default function ScanScreen() {
               );
             })}
           </View>
+        </View>
+      )}
+
+      {/* ── Debug panel ── */}
+      {dbgRef.current.length > 0 && (
+        <View pointerEvents="none" style={{
+          position: 'absolute', top: insets.top + 60, left: 8, right: 8,
+          padding: 8, backgroundColor: 'rgba(0,0,0,0.82)', borderRadius: 6,
+        }}>
+          {dbgRef.current.map((line, i) => (
+            <Text key={i} style={{ color: '#0F0', fontFamily: 'Menlo', fontSize: 10 }}>{line}</Text>
+          ))}
         </View>
       )}
 

@@ -197,6 +197,36 @@ export async function removeWatchlistItem(userId: string, skuId: string): Promis
 
 // ── Hot SKUs ─────────────────────────────────────────────────────────────────
 
+export async function fetchOnboardingPreview(
+  categoryIds: string[],
+  _fandomIds: string[],
+): Promise<SKU[]> {
+  const runQuery = async (filtered: boolean) => {
+    let q = supabase
+      .from('v_hot_skus')
+      .select('*')
+      .order('hot_score', { ascending: false })
+      .limit(3);
+    if (filtered && categoryIds.length > 0) {
+      q = q.in('category_id', categoryIds);
+    }
+    const { data } = await q;
+    return (data ?? []).map(rowToSku) as SKU[];
+  };
+
+  const filtered = await runQuery(true);
+  if (filtered.length >= 2) return filtered;
+
+  const top = await runQuery(false);
+  const seen = new Set(filtered.map((s) => s.id));
+  const merged = [...filtered];
+  for (const s of top) {
+    if (!seen.has(s.id)) merged.push(s);
+    if (merged.length >= 3) break;
+  }
+  return merged;
+}
+
 export async function fetchHotSkus(): Promise<SKU[]> {
   const { data, error } = await supabase
     .from('v_hot_skus')
@@ -582,14 +612,30 @@ export type ScanError = Error & {
 
 export async function callScanPipeline(barcode: string, accessToken: string): Promise<ScanResult> {
   const url = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/scan-pipeline`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({ barcode }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 50_000);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ barcode }),
+      signal: controller.signal,
+    });
+  } catch (fetchErr: any) {
+    clearTimeout(timeout);
+    if (fetchErr?.name === 'AbortError') {
+      const err = new Error('Scan timed out. Please try again.') as ScanError;
+      err.errorCode = 'timeout';
+      throw err;
+    }
+    throw fetchErr;
+  }
+  clearTimeout(timeout);
 
   const data = await response.json();
 
@@ -637,14 +683,30 @@ export async function callScanPipeline(barcode: string, accessToken: string): Pr
 
 export async function callVisionPipeline(imageBase64: string, accessToken: string): Promise<ScanResult> {
   const url = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/vision-pipeline`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify({ imageBase64 }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 50_000);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ imageBase64 }),
+      signal: controller.signal,
+    });
+  } catch (fetchErr: any) {
+    clearTimeout(timeout);
+    if (fetchErr?.name === 'AbortError') {
+      const err = new Error('Scan timed out. Please try again.') as ScanError;
+      err.errorCode = 'timeout';
+      throw err;
+    }
+    throw fetchErr;
+  }
+  clearTimeout(timeout);
 
   const data = await response.json();
 
