@@ -503,11 +503,14 @@ export default function ScanScreen() {
   return (
     <View style={[styles.fill, { backgroundColor: '#000' }]}>
 
-      {/* Camera — always mounted; unmounting during async ops blocks iOS main thread */}
+      {/* Camera — always mounted, paused during scanning.
+          active=false suspends the camera session without teardown, freeing the
+          iOS main thread so Fabric can commit the loading overlay uncontested. */}
       <CameraView
         ref={cameraRef}
         style={StyleSheet.absoluteFill}
         facing="back"
+        active={!scanning}
         {...(scanMode === 'barcode' && !scanning ? {
           barcodeScannerSettings: { barcodeTypes: ACCEPTED_TYPES as unknown as any[] },
           onBarcodeScanned: handleBarcodeScanned,
