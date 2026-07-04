@@ -78,6 +78,17 @@ export default function ScanScreen() {
   const lockRef   = useRef(false);
   const cameraRef = useRef<CameraView>(null);
 
+  // Pending work is stored here by the handler and consumed by the useEffect
+  // that fires AFTER Fabric commits scanning=true. This is the fix for the
+  // Fabric deadlock: any await inside the handler after setScanning(true) never
+  // resumes because the JS event loop is blocked by the UIKit commit waiting for
+  // the main thread. useEffect runs after the commit, so the event loop is free.
+  const pendingWork = useRef<
+    | { type: 'visual'; base64: string; token: string }
+    | { type: 'barcode'; barcode: string; token: string }
+    | null
+  >(null);
+
   const dbgRef = useRef<string[]>([]);
   const [, dbgTick] = useState(0);
   const dbg = (msg: string) => {
@@ -110,10 +121,77 @@ export default function ScanScreen() {
   const stepLabels = scanMode === 'visual' ? VISION_STEP_LABELS : BARCODE_STEP_LABELS;
 
   const resetScan = () => {
+    pendingWork.current = null;
     lockRef.current = false;
     setScanning(false);
     setStep('reading');
   };
+
+  // ── Scan executor — runs AFTER Fabric commits scanning=true ──────────────────
+  // useEffect fires after the commit phase, guaranteeing the JS event loop is
+  // free. Timers, Promise callbacks, and fetch responses all work normally here.
+  useEffect(() => {
+    if (!scanning || !pendingWork.current) return;
+
+    const work = pendingWork.current;
+    pendingWork.current = null;
+
+    const isBarcode = work.type === 'barcode';
+    const identTimer  = setTimeout(() => setStep('identifying'), isBarcode ? 300 : 500);
+    const analyzeTimer = setTimeout(() => setStep('analyzing'),   isBarcode ? 1800 : 2000);
+    dbg('EFF api call type=' + work.type);
+
+    const apiCall = isBarcode
+      ? callScanPipeline((work as any).barcode, work.token)
+      : callVisionPipeline((work as any).base64, work.token);
+
+    apiCall
+      .then((data) => {
+        clearTimeout(identTimer);
+        clearTimeout(analyzeTimer);
+        dbg('EFF api done name=' + data.name.slice(0, 20));
+        if (!isPremium && isBarcode) incrementScanLocal();
+        setScanResult(data);
+        setScanning(false);
+        setSheetOpen(true);
+      })
+      .catch((err: any) => {
+        clearTimeout(identTimer);
+        clearTimeout(analyzeTimer);
+        setScanning(false);
+        dbg('EFF err=' + (err?.errorCode ?? err?.message ?? 'unknown'));
+
+        const code: string = err?.errorCode ?? '';
+        if (code === 'quota_exceeded') {
+          if (isBarcode && user?.id) loadScanQuota(user.id).catch(() => {});
+          setUpgradeContext('scanQuota');
+          lockRef.current = false;
+        } else if (code === 'tcg_excluded') {
+          Alert.alert('TCG cards excluded', "TCG cards can't be scanned — use search instead.", [{ text: 'OK', onPress: resetScan }]);
+        } else if (code === 'not_found') {
+          if (isBarcode) {
+            Alert.alert(
+              'No barcode match',
+              "We couldn't find this barcode. Try Visual Scan — point your camera at the item and we'll identify it from the image.",
+              [
+                { text: 'Try Visual Scan', onPress: () => { resetScan(); if (isPremium) setScanMode('visual'); else setUpgradeContext('visionScan'); } },
+                { text: 'Dismiss', style: 'cancel', onPress: resetScan },
+              ]
+            );
+          } else {
+            Alert.alert("Couldn't identify item", "Try a clearer angle showing the front of the box or figure. Make sure the item fills the frame.", [{ text: 'Try Again', onPress: resetScan }]);
+          }
+        } else if (code === 'premium_required') {
+          setUpgradeContext('visionScan');
+          lockRef.current = false;
+        } else if (code === 'timeout') {
+          Alert.alert('Taking too long', 'The server is busy. Please try again in a moment.', [{ text: 'OK', onPress: resetScan }]);
+        } else {
+          Alert.alert('Scan failed', err?.message ?? 'Something went wrong. Please try again.', [{ text: 'OK', onPress: resetScan }]);
+        }
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanning]);
 
   const handleModeToggle = (mode: ScanMode) => {
     if (mode === 'visual' && !isPremium) {
@@ -124,6 +202,9 @@ export default function ScanScreen() {
   };
 
   // ── Barcode scan ─────────────────────────────────────────────────────────────
+  // Handler only prepares data and sets scanning=true. All async work (API call,
+  // timers, error handling) runs in the useEffect above, which fires after Fabric
+  // commits the loading overlay — guaranteeing the JS event loop is unblocked.
 
   const handleBarcodeScanned = async (result: BarcodeScanningResult) => {
     if (lockRef.current || scanMode !== 'barcode') return;
@@ -136,73 +217,18 @@ export default function ScanScreen() {
       return;
     }
 
+    const { data: { session } } = user ? await supabase.auth.getSession() : { data: { session: null } };
+    dbg('B2 session ok=' + !!session?.access_token);
+    if (!session?.access_token) {
+      Alert.alert('Not signed in', 'Please sign in to scan products.');
+      lockRef.current = false;
+      return;
+    }
+
+    pendingWork.current = { type: 'barcode', barcode: result.data, token: session.access_token };
     setScanning(true);
     setStep('reading');
-    // Same pattern as visual scan — never await a timer after a Fabric state update.
-    const identTimer   = setTimeout(() => setStep('identifying'), 300);
-    const analyzeTimer = setTimeout(() => setStep('analyzing'), 1800);
-    dbg('B2 api start');
-
-    try {
-      dbg('B3 getSession');
-      const { data: { session } } = user ? await supabase.auth.getSession() : { data: { session: null } };
-      dbg('B4 session ok=' + !!session?.access_token);
-      if (!session?.access_token) {
-        clearTimeout(identTimer);
-        clearTimeout(analyzeTimer);
-        Alert.alert('Not signed in', 'Please sign in to scan products.');
-        resetScan();
-        return;
-      }
-
-      dbg('B5 api call');
-      const data = await callScanPipeline(result.data, session.access_token);
-      dbg('B6 api done name=' + data.name.slice(0, 20));
-      clearTimeout(identTimer);
-      clearTimeout(analyzeTimer);
-      if (!isPremium) incrementScanLocal();
-      setScanResult(data);
-      setScanning(false);
-      setSheetOpen(true);
-      dbg('B7 sheet open');
-    } catch (err: any) {
-      clearTimeout(identTimer);
-      clearTimeout(analyzeTimer);
-      setScanning(false);
-      dbg('B_ERR code=' + (err?.errorCode ?? err?.message ?? 'unknown'));
-
-      const code: string = err?.errorCode ?? '';
-      if (code === 'quota_exceeded') {
-        if (user?.id) loadScanQuota(user.id).catch(() => {});
-        setUpgradeContext('scanQuota');
-        lockRef.current = false;
-      } else if (code === 'tcg_excluded') {
-        Alert.alert('TCG cards excluded', "TCG cards can't be scanned — use search instead.", [{ text: 'OK', onPress: resetScan }]);
-      } else if (code === 'not_found') {
-        Alert.alert(
-          'No barcode match',
-          "We couldn't find this barcode. Try Visual Scan — point your camera at the item and we'll identify it from the image.",
-          [
-            {
-              text: 'Try Visual Scan',
-              onPress: () => {
-                resetScan();
-                if (isPremium) {
-                  setScanMode('visual');
-                } else {
-                  setUpgradeContext('visionScan');
-                }
-              },
-            },
-            { text: 'Dismiss', style: 'cancel', onPress: resetScan },
-          ]
-        );
-      } else if (code === 'timeout') {
-        Alert.alert('Taking too long', 'The server is busy. Please try again in a moment.', [{ text: 'OK', onPress: resetScan }]);
-      } else {
-        Alert.alert('Scan failed', err?.message ?? 'Something went wrong. Please try again.', [{ text: 'OK', onPress: resetScan }]);
-      }
-    }
+    dbg('B3 scanning=true → effect will run after commit');
   };
 
   // ── Visual scan ──────────────────────────────────────────────────────────────
@@ -226,8 +252,6 @@ export default function ScanScreen() {
         return;
       }
 
-      // Compress before sending — 2MB base64 → ~100KB. The vision pipeline
-      // sends this to Claude which charges per image token; smaller = faster + cheaper.
       dbg('4 compress start');
       const compressed = await ImageManipulator.manipulateAsync(
         photo.uri,
@@ -241,53 +265,19 @@ export default function ScanScreen() {
         return;
       }
 
+      const { data: { session } } = user ? await supabase.auth.getSession() : { data: { session: null } };
+      dbg('6 session ok=' + !!session?.access_token);
+      if (!session?.access_token) {
+        Alert.alert('Not signed in', 'Please sign in to use Visual Scan.');
+        lockRef.current = false;
+        return;
+      }
+
+      pendingWork.current = { type: 'visual', base64: compressed.base64, token: session.access_token };
       setScanning(true);
       setStep('reading');
-      const identTimer  = setTimeout(() => setStep('identifying'), 500);
-      const analyzeTimer = setTimeout(() => setStep('analyzing'), 2000);
-      dbg('6 api start');
+      dbg('7 scanning=true → effect will run after commit');
 
-      try {
-        const { data: { session } } = user ? await supabase.auth.getSession() : { data: { session: null } };
-        dbg('7 session ok=' + !!session?.access_token);
-        if (!session?.access_token) {
-          clearTimeout(identTimer);
-          clearTimeout(analyzeTimer);
-          Alert.alert('Not signed in', 'Please sign in to use Visual Scan.');
-          resetScan();
-          return;
-        }
-
-        dbg('8 api call');
-        const data = await callVisionPipeline(compressed.base64, session.access_token);
-        dbg('9 api done');
-        clearTimeout(identTimer);
-        clearTimeout(analyzeTimer);
-        setScanResult(data);
-        setScanning(false);
-        setSheetOpen(true);
-        dbg('10 sheet open');
-      } catch (err: any) {
-        clearTimeout(identTimer);
-        clearTimeout(analyzeTimer);
-        setScanning(false);
-
-        const code: string = err?.errorCode ?? '';
-        if (code === 'not_found') {
-          Alert.alert(
-            "Couldn't identify item",
-            "Try a clearer angle showing the front of the box or figure. Make sure the item fills the frame.",
-            [{ text: 'Try Again', onPress: resetScan }]
-          );
-        } else if (code === 'premium_required') {
-          setUpgradeContext('visionScan');
-          lockRef.current = false;
-        } else if (code === 'timeout') {
-          Alert.alert('Taking too long', 'The server is busy. Please try again in a moment.', [{ text: 'OK', onPress: resetScan }]);
-        } else {
-          Alert.alert('Scan failed', err?.message ?? 'Something went wrong. Please try again.', [{ text: 'OK', onPress: resetScan }]);
-        }
-      }
     } catch {
       lockRef.current = false;
     }
