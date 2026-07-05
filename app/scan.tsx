@@ -34,7 +34,7 @@ import {
   useCodeScanner,
 } from 'react-native-vision-camera';
 import { runOnJS } from 'react-native-reanimated';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 
@@ -63,6 +63,15 @@ export default function ScanScreen() {
 
   const lockedRef = useRef(false);
   const cameraRef = useRef<Camera>(null);
+
+  // Reset the lock every time this screen gains focus. When the user returns
+  // from scan-processing via "Done", back, or an error alert dismissal, the
+  // ref is still true from the previous scan — silently blocking all new taps.
+  useFocusEffect(
+    useCallback(() => {
+      lockedRef.current = false;
+    }, [])
+  );
 
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice('back');
