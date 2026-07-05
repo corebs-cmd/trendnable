@@ -64,8 +64,8 @@ const CAT_LABEL: Record<string, string> = {
   thrilljoy:   'THRILLJOY BOX',
 };
 
-const DEFAULT_CATS    = ['funko', 'tcg'];
-const DEFAULT_FANDOMS = ['pokemon', 'starwars', 'marvel'];
+const DEFAULT_CATS    = [] as string[];
+const DEFAULT_FANDOMS = [] as string[];
 
 // ── Diagonal stripe photo area ─────────────────────────────────────────────────
 
@@ -523,7 +523,7 @@ export default function OnboardingScreen() {
                 selected={selectedCats.includes(cat.id)}
                 onToggle={toggleCat}
                 cardWidth={CARD_W}
-                isDefault={DEFAULT_CATS.includes(cat.id)}
+                isDefault={false}
               />
             ))}
           </View>
