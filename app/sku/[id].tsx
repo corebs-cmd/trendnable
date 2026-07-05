@@ -404,6 +404,7 @@ export default function SKUDetailScreen() {
   const storeBaseSku = id ? hotSkus.find((s) => s.id === id) : undefined;
   const [fetchedSku, setFetchedSku] = useState<SKU | null | undefined>(undefined);
 
+  const [historyWindow, setHistoryWindow]   = useState<HistoryWindow>('7D');
   const [history, setHistory] = useState<number[]>([]);
   const [listingsHist, setListingsHist] = useState<number[]>([]);
   const [priceHist, setPriceHist] = useState<number[]>([]);
@@ -422,9 +423,10 @@ export default function SKUDetailScreen() {
 
   useEffect(() => {
     if (!id) return;
+    const days = historyWindow === '7D' ? 7 : historyWindow === '30D' ? 30 : 90;
     setHistoryLoading(true);
     setHistoryError(null);
-    fetchSkuHistory(id)
+    fetchSkuHistory(id, days)
       .then(({ history: h, listingsHist: l, priceHist: p }) => {
         setHistory(h);
         setListingsHist(l);
@@ -432,7 +434,7 @@ export default function SKUDetailScreen() {
       })
       .catch(() => setHistoryError('Could not load history. Try again.'))
       .finally(() => setHistoryLoading(false));
-  }, [id]);
+  }, [id, historyWindow]);
 
   // Prefer fresh fetch; fall back to store copy so the screen renders immediately
   const baseSku = fetchedSku != null ? fetchedSku : (storeBaseSku ?? undefined);
@@ -449,7 +451,6 @@ export default function SKUDetailScreen() {
   const [shareOpen, setShareOpen]           = useState(false);
   const [addOpen, setAddOpen]               = useState(false);
   const [alertOpen, setAlertOpen]           = useState(false);
-  const [historyWindow, setHistoryWindow]   = useState<HistoryWindow>('7D');
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
   const [insightData, setInsightData]       = useState<InsightResponse | null>(null);
 
