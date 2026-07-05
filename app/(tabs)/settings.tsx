@@ -87,7 +87,6 @@ export default function SettingsScreen() {
   const setFollowedCategories = useAppStore((s) => s.setFollowedCategories);
   const user = useAppStore((s) => s.user);
   const watchlistCount = useAppStore((s) => s.watchlist.length + s.catalogWatchlist.length);
-  const scanQuota = useAppStore((s) => s.scanQuota);
   const setNotifyMovers = useAppStore((s) => s.setNotifyMovers);
   const setNotifyInsights = useAppStore((s) => s.setNotifyInsights);
   const theme = buildTheme(isDark);
@@ -514,13 +513,6 @@ export default function SettingsScreen() {
                 label="Watchlist"
                 used={watchlistCount}
                 limit={20}
-                theme={theme}
-                isDark={isDark}
-              />
-              <UsageMeter
-                label="Scans today"
-                used={scanQuota?.used ?? 0}
-                limit={scanQuota?.limit ?? 5}
                 theme={theme}
                 isDark={isDark}
               />

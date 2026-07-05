@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CollectionItem, DBUser, SKU, PriceAlert, AppNotification, CatalogWatchlistItem, CatalogCollectionItem, CollectionPulse } from '../lib/types';
 import type { StickerDef } from '../lib/stickers';
-import type { ScanQuota } from '../lib/api';
 import * as api from '../lib/api';
 import { supabase } from '../lib/supabase';
 
@@ -42,9 +41,6 @@ interface AppState {
   priceAlerts: PriceAlert[];
   notifications: AppNotification[];
   unreadCount: number;
-
-  // Free-tier scan quota (null until loaded)
-  scanQuota: ScanQuota | null;
 
   // Collection Pulse (AI-generated insight for the user's collection)
   collectionPulse: CollectionPulse | null;
@@ -111,10 +107,6 @@ interface AppState {
   markNotificationRead: (notificationId: string) => void;
   reactivatePriceAlert: (alertId: string, notificationId: string) => void;
 
-  // Scan quota
-  loadScanQuota: (userId: string) => Promise<void>;
-  incrementScanLocal: () => void;
-
   // Collection Pulse
   loadCollectionPulse: () => Promise<void>;
   invalidateCollectionPulse: () => void;
@@ -143,7 +135,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   priceAlerts: [],
   notifications: [],
   unreadCount: 0,
-  scanQuota: null,
   collectionPulse: null,
   collectionPulseLoading: false,
   followedFandoms: [],
@@ -196,14 +187,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   loadUserData: async (userId) => {
-    const [collection, watchlist, priceAlerts, notifications, catalogWatchlist, catalogCollection, scanQuota, rewardData] = await Promise.all([
+    const [collection, watchlist, priceAlerts, notifications, catalogWatchlist, catalogCollection, rewardData] = await Promise.all([
       api.fetchCollection(userId),
       api.fetchWatchlist(userId),
       api.fetchPriceAlerts(userId),
       api.fetchNotifications(userId),
       api.fetchCatalogWatchlist(userId),
       api.fetchCatalogCollection(userId),
-      api.fetchScanQuota(userId),
       supabase.from('users').select('reward_units, premium_reward_expires_at').eq('id', userId).single(),
     ]);
     const rewardRow = (rewardData as any)?.data;
@@ -217,7 +207,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       unreadCount: notifications.filter((n) => !n.isRead).length,
       catalogWatchlist,
       catalogCollection,
-      scanQuota,
       rewardUnits,
     });
     // If reward-based premium is active but isPremium is false, activate it
@@ -437,18 +426,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
     api.reactivatePriceAlert(alertId).catch(console.error);
     api.markNotificationRead(notificationId).catch(console.error);
-  },
-
-  loadScanQuota: async (userId) => {
-    const scanQuota = await api.fetchScanQuota(userId);
-    set({ scanQuota });
-  },
-
-  incrementScanLocal: () => {
-    set((state) => state.scanQuota
-      ? { scanQuota: { ...state.scanQuota, used: state.scanQuota.used + 1 } }
-      : {}
-    );
   },
 
   setNotifyMovers: (value) => {

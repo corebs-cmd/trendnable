@@ -24,6 +24,17 @@ export const FANDOMS: Fandom[] = [
   { id: 'popcult',   label: 'Pop Culture' },
 ];
 
+export const CATEGORY_FANDOM_MAP: Record<string, string[]> = {
+  funko:       ['marvel', 'starwars', 'onepiece', 'demon'],
+  tcg:         ['pokemon'],
+  popmart:     ['labubu', 'disney'],
+  hottoys:     ['marvel', 'starwars'],
+  neca:        ['marvel', 'starwars', 'tmnt'],
+  hwheels:     ['popcult'],
+  autographed: ['marvel', 'starwars', 'popcult'],
+  thrilljoy:   ['popcult'],
+};
+
 export const catById = (id: string): Category | undefined =>
   CATEGORIES.find((c) => c.id === id);
 

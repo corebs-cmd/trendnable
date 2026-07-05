@@ -1,131 +1,253 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  View, Text, Pressable, StyleSheet, ScrollView,
+  View, Text, Pressable, ScrollView, Animated, useWindowDimensions,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useAppStore } from '../../stores/appStore';
-import { buildTheme } from '../../lib/theme';
-import { CATEGORIES, FANDOMS } from '../../lib/appConfig';
+import { buildTheme, Theme, categoryColor } from '../../lib/theme';
+import { CATEGORIES, FANDOMS, CATEGORY_FANDOM_MAP, catById, fandomById, fmtPrice } from '../../lib/appConfig';
+import { SKU } from '../../lib/types';
 import * as api from '../../lib/api';
-import BrowseLogo from '../../components/BrowseLogo';
-import FeatureGuide from '../../components/FeatureGuide';
+import { ProductThumb } from '../../components/ProductPlaceholder';
+import { HotScoreBadge } from '../../components/HotScore';
+import DeltaPill from '../../components/DeltaPill';
 
-type Step = 'welcome' | 'categories' | 'fandoms' | 'guide';
-const STEPS: Step[] = ['welcome', 'categories', 'fandoms', 'guide'];
+const BG = '#0D0D0D';
+const ACCENT = '#FF5500';
+const MUTED = '#8A9296';
+const HEADING = '#EDEFF0';
+const CAT_TILE_BG = '#141414';
+const CHIP_BG = '#202020';
 
-export default function OnboardingScreen() {
-  const insets = useSafeAreaInsets();
-  const isDark = useAppStore((s) => s.isDark);
-  const theme = buildTheme(isDark);
-  const { setHasOnboarded, setFollowedCategories, setFollowedFandoms } = useAppStore();
+const DEFAULT_CATS = ['funko', 'tcg'];
 
-  const [stepIdx, setStepIdx] = useState(0);
-  const [selectedCats, setSelectedCats] = useState<string[]>([]);
-  const [selectedFandoms, setSelectedFandoms] = useState<string[]>([]);
+function deriveFandoms(cats: string[]): string[] {
+  return [...new Set(cats.flatMap((c) => CATEGORY_FANDOM_MAP[c] ?? []))];
+}
 
-  const step = STEPS[stepIdx];
+// ── Shimmer block ─────────────────────────────────────────────────────────────
 
-  const toggleCat = (id: string) => {
-    setSelectedCats((cur) =>
-      cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
-    );
-  };
-
-  const toggleFandom = (id: string) => {
-    setSelectedFandoms((cur) =>
-      cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
-    );
-  };
-
-  const handleNext = async () => {
-    if (stepIdx < STEPS.length - 1) {
-      setStepIdx((i) => i + 1);
-    } else {
-      if (selectedCats.length > 0) setFollowedCategories(selectedCats);
-      if (selectedFandoms.length > 0) setFollowedFandoms(selectedFandoms);
-
-      const { user } = useAppStore.getState();
-      if (user) {
-        await api.updateUserPreferences(user.id, {
-          followedCategories: selectedCats.length > 0 ? selectedCats : undefined,
-          followedFandoms: selectedFandoms.length > 0 ? selectedFandoms : undefined,
-        });
-      }
-
-      setHasOnboarded(true);
-      router.replace('/');
-    }
-  };
-
-  const handleSkip = () => {
-    setHasOnboarded(true);
-    router.replace('/');
-  };
-
-  const nextLabel =
-    step === 'welcome' ? 'Get started' :
-    step === 'guide'   ? 'Open Trendnable' : 'Continue';
+function ShimmerBlock({ w, h, r = 4 }: { w: number | string; h: number; r?: number }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [anim]);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      {/* Progress dots */}
-      <View style={[styles.progressRow, { paddingTop: insets.top + 16 }]}>
-        {STEPS.map((_, i) => (
-          <View
-            key={i}
-            style={[
-              styles.progressDot,
-              { backgroundColor: i <= stepIdx ? theme.accent : theme.hotBarTrack },
-            ]}
-          />
-        ))}
+    <View style={{ width: w as number, height: h, borderRadius: r, backgroundColor: '#252525', overflow: 'hidden' }}>
+      <Animated.View
+        style={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: '#fff',
+          opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.07] }),
+        }}
+      />
+    </View>
+  );
+}
+
+// ── Category tile ─────────────────────────────────────────────────────────────
+
+function CategoryTile({
+  catId, label, selected, onToggle, tileWidth,
+}: {
+  catId: string; label: string; selected: boolean; onToggle: (id: string) => void; tileWidth: number;
+}) {
+  const c = categoryColor(catId, true);
+  const cat = catById(catId);
+  const typeLabel = cat?.type === 'card' ? 'CARD' : cat?.type === 'box' ? 'BOX' : cat?.type === 'car' ? 'CAR' : 'FIGURE';
+
+  return (
+    <Pressable
+      onPress={() => onToggle(catId)}
+      style={[
+        {
+          width: tileWidth,
+          backgroundColor: CAT_TILE_BG,
+          borderRadius: 18,
+          borderWidth: 2,
+          borderColor: selected ? ACCENT : 'rgba(255,255,255,0.06)',
+          padding: 7,
+        },
+        selected && {
+          shadowColor: ACCENT,
+          shadowOffset: { width: 0, height: 0 },
+          shadowRadius: 8,
+          shadowOpacity: 0.22,
+        },
+      ]}
+    >
+      {/* Image area */}
+      <View style={{
+        height: 52,
+        borderRadius: 12,
+        backgroundColor: c.tint,
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 9, color: c.ink, letterSpacing: 1, textTransform: 'uppercase', opacity: 0.7 }}>
+          {typeLabel}
+        </Text>
+        {selected && (
+          <View style={{
+            position: 'absolute', top: 5, right: 5,
+            width: 22, height: 22, borderRadius: 11,
+            backgroundColor: ACCENT,
+            alignItems: 'center', justifyContent: 'center',
+            shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowRadius: 6, shadowOpacity: 0.5,
+          }}>
+            <Text style={{ color: '#fff', fontSize: 12, fontFamily: 'Inter_700Bold', lineHeight: 14 }}>✓</Text>
+          </View>
+        )}
       </View>
 
-      {/* Skip button */}
-      {step !== 'guide' && (
+      {/* Label */}
+      <Text style={{
+        fontFamily: 'Inter_600SemiBold',
+        fontSize: 14,
+        color: '#E1E4E6',
+        marginTop: 7,
+        textAlign: 'center',
+      }}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+// ── Preview item card ─────────────────────────────────────────────────────────
+
+function PreviewItemCard({ sku, theme }: { sku: SKU; theme: Theme }) {
+  const cat = catById(sku.category);
+  const fandom = fandomById(sku.fandom);
+  const subLine = [fandom?.label, cat?.label].filter(Boolean).join(' · ');
+
+  return (
+    <View style={{
+      flexDirection: 'row',
+      gap: 14,
+      backgroundColor: '#171717',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.06)',
+      borderRadius: 18,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      alignItems: 'center',
+    }}>
+      <ProductThumb sku={sku} theme={theme} size={58} radius={14} />
+
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text numberOfLines={1} style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15.5, color: '#E1E4E6' }}>
+          {sku.name}
+        </Text>
+        {!!subLine && (
+          <Text numberOfLines={1} style={{ fontFamily: 'Inter_400Regular', fontSize: 12.5, color: '#8A9296', marginTop: 2 }}>
+            {subLine}
+          </Text>
+        )}
+        <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 12.5, marginTop: 3 }}>
+          <Text style={{ color: '#B9BDBF' }}>{fmtPrice(sku.price.median)}</Text>
+          <Text style={{ color: '#8A9296' }}> median</Text>
+        </Text>
+      </View>
+
+      <View style={{ alignItems: 'flex-end', gap: 6 }}>
+        <HotScoreBadge sku={sku} theme={theme} size="sm" showSpark={false} />
+        <DeltaPill delta={sku.delta} theme={theme} size="sm" />
+      </View>
+    </View>
+  );
+}
+
+// ── Skeleton card ─────────────────────────────────────────────────────────────
+
+function SkeletonCard() {
+  return (
+    <View style={{
+      flexDirection: 'row',
+      gap: 14,
+      backgroundColor: '#171717',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.06)',
+      borderRadius: 18,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      alignItems: 'center',
+    }}>
+      <ShimmerBlock w={58} h={58} r={14} />
+      <View style={{ flex: 1, gap: 6 }}>
+        <ShimmerBlock w="72%" h={14} r={6} />
+        <ShimmerBlock w="46%" h={11} r={5} />
+        <ShimmerBlock w="30%" h={11} r={5} />
+      </View>
+      <ShimmerBlock w={50} h={26} r={13} />
+    </View>
+  );
+}
+
+// ── Footer ────────────────────────────────────────────────────────────────────
+
+function Footer({
+  onBack, onAction, actionLabel, disabled, insets,
+}: {
+  onBack: () => void;
+  onAction: () => void;
+  actionLabel: string;
+  disabled?: boolean;
+  insets: ReturnType<typeof useSafeAreaInsets>;
+}) {
+  return (
+    <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}>
+      <LinearGradient
+        colors={['rgba(13,13,13,0)', 'rgba(13,13,13,1)']}
+        style={{ height: 32 }}
+        pointerEvents="none"
+      />
+      <View style={{
+        flexDirection: 'row',
+        gap: 10,
+        paddingHorizontal: 24,
+        paddingBottom: insets.bottom + 16,
+        backgroundColor: BG,
+      }}>
         <Pressable
-          onPress={handleSkip}
-          style={[styles.skipBtn, { top: insets.top + 14 }]}
+          onPress={onBack}
+          style={{
+            width: 54, height: 54, borderRadius: 16,
+            backgroundColor: CHIP_BG,
+            alignItems: 'center', justifyContent: 'center',
+          }}
         >
-          <Text style={[styles.skipText, { color: theme.muted, fontFamily: 'Inter_400Regular' }]}>Skip</Text>
+          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 20, color: '#E1E4E6', lineHeight: 26 }}>←</Text>
         </Pressable>
-      )}
 
-      {/* Content */}
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 40, paddingBottom: 24 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {step === 'welcome' && <WelcomeStep theme={theme} />}
-        {step === 'categories' && (
-          <CategoriesStep theme={theme} selected={selectedCats} onToggle={toggleCat} />
-        )}
-        {step === 'fandoms' && (
-          <FandomsStep theme={theme} selected={selectedFandoms} onToggle={toggleFandom} />
-        )}
-        {step === 'guide' && (
-          <GuideStep theme={theme} isDark={isDark} cats={selectedCats} fandoms={selectedFandoms} />
-        )}
-      </ScrollView>
-
-      {/* Footer actions */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 16, borderTopColor: theme.hairline }]}>
-        {stepIdx > 0 && (
-          <Pressable
-            onPress={() => setStepIdx((i) => i - 1)}
-            style={[styles.backBtn, { backgroundColor: theme.surface2 }]}
-          >
-            <Text style={[styles.backBtnText, { color: theme.text, fontFamily: 'Inter_400Regular' }]}>←</Text>
-          </Pressable>
-        )}
         <Pressable
-          onPress={handleNext}
-          style={[styles.nextBtn, { backgroundColor: theme.accent, flex: 1 }]}
+          onPress={disabled ? undefined : onAction}
+          style={{
+            flex: 1, height: 54, borderRadius: 16,
+            backgroundColor: disabled ? 'rgba(255,85,0,0.4)' : ACCENT,
+            alignItems: 'center', justifyContent: 'center',
+            shadowColor: ACCENT,
+            shadowOffset: { width: 0, height: 8 },
+            shadowRadius: 16,
+            shadowOpacity: disabled ? 0 : 0.5,
+          }}
         >
-          <Text style={[styles.nextBtnText, { color: theme.accentInk, fontFamily: 'Inter_600SemiBold' }]}>
-            {nextLabel}
+          <Text style={{
+            fontFamily: 'Inter_700Bold',
+            fontSize: 16.5,
+            color: disabled ? 'rgba(255,255,255,0.75)' : '#fff',
+          }}>
+            {actionLabel}
           </Text>
         </Pressable>
       </View>
@@ -133,241 +255,317 @@ export default function OnboardingScreen() {
   );
 }
 
-function WelcomeStep({ theme }: { theme: any }) {
-  return (
-    <View>
-      <View style={[styles.welcomeLogo, { backgroundColor: theme.accent }]}>
-        <Text style={[styles.welcomeLogoText, { color: theme.accentInk, fontFamily: 'Inter_700Bold' }]}>T</Text>
-      </View>
-      <Text style={[styles.welcomeEyebrow, { color: theme.accent, fontFamily: 'JetBrainsMono_400Regular' }]}>
-        Welcome to
-      </Text>
-      <Text style={[styles.welcomeTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
-        Trendnable
-      </Text>
-      <Text style={[styles.welcomeSub, { color: theme.muted, fontFamily: 'Inter_400Regular' }]}>
-        Daily trend intelligence for collectors. Track what's moving across your fandoms — and what's moving in your collection.
-      </Text>
+// ── Screen 1 — Personalize ────────────────────────────────────────────────────
 
-      <View style={{ marginTop: 36, gap: 20 }}>
-        {[
-          { g: '◯', t: 'Daily hot list', s: "See what's actually trending today — not last month." },
-          { g: '◍', t: 'Cross-category', s: 'Funko, TCG, Pop Mart, Hot Toys, NECA, diecast — all in one feed.' },
-          { g: '◎', t: 'Your collection', s: 'Track value and trends in the items you own.' },
-        ].map(({ g, t, s }) => (
-          <View key={t} style={styles.featureRow}>
-            <View style={[styles.featureIcon, { backgroundColor: theme.surface2 }]}>
-              <Text style={[styles.featureGlyph, { color: theme.accent }]}>{g}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.featureTitle, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>{t}</Text>
-              <Text style={[styles.featureSub, { color: theme.muted, fontFamily: 'Inter_400Regular' }]}>{s}</Text>
-            </View>
-          </View>
+function PersonalizeStep({
+  tileWidth, theme, selectedCats, selectedFandoms, onToggleCat, onToggleFandom, onBack, onContinue, insets,
+}: {
+  tileWidth: number;
+  theme: Theme;
+  selectedCats: string[];
+  selectedFandoms: string[];
+  onToggleCat: (id: string) => void;
+  onToggleFandom: (id: string) => void;
+  onBack: () => void;
+  onContinue: () => void;
+  insets: ReturnType<typeof useSafeAreaInsets>;
+}) {
+  return (
+    <>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 28, paddingBottom: 160 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={{
+          fontFamily: 'Fraunces_600SemiBold',
+          fontSize: 30,
+          lineHeight: 32,
+          letterSpacing: -0.5,
+          color: HEADING,
+          marginBottom: 8,
+        }}>
+          What do you collect?
+        </Text>
+        <Text style={{
+          fontFamily: 'Inter_400Regular',
+          fontSize: 14.5,
+          lineHeight: 21,
+          color: MUTED,
+          marginBottom: 24,
+        }}>
+          Pick anything you actively follow. You can change this later.
+        </Text>
+
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9 }}>
+          {CATEGORIES.map((cat) => (
+            <CategoryTile
+              key={cat.id}
+              catId={cat.id}
+              label={cat.label}
+              selected={selectedCats.includes(cat.id)}
+              onToggle={onToggleCat}
+              tileWidth={tileWidth}
+            />
+          ))}
+        </View>
+
+        {/* Fandoms section label */}
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginTop: 28, marginBottom: 14 }}>
+          <Text style={{
+            fontFamily: 'Inter_700Bold',
+            fontSize: 11.5,
+            letterSpacing: 0.09 * 11.5,
+            textTransform: 'uppercase',
+            color: '#9a9fa2',
+          }}>
+            FANDOMS
+          </Text>
+          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12.5, color: '#6d7376' }}>
+            · optional · auto-picked from your categories
+          </Text>
+        </View>
+
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9 }}>
+          {FANDOMS.map((fandom) => {
+            const active = selectedFandoms.includes(fandom.id);
+            return (
+              <Pressable
+                key={fandom.id}
+                onPress={() => onToggleFandom(fandom.id)}
+                style={{
+                  backgroundColor: active ? ACCENT : CHIP_BG,
+                  borderWidth: 1,
+                  borderColor: active ? ACCENT : 'rgba(255,255,255,0.07)',
+                  borderRadius: 12,
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                }}
+              >
+                <Text style={{
+                  fontFamily: active ? 'Inter_600SemiBold' : 'Inter_500Medium',
+                  fontSize: 14,
+                  color: active ? '#fff' : '#A9AEB1',
+                }}>
+                  {fandom.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </ScrollView>
+
+      <Footer
+        onBack={onBack}
+        onAction={onContinue}
+        actionLabel="Continue"
+        insets={insets}
+      />
+    </>
+  );
+}
+
+// ── Screen 2 — Live preview ───────────────────────────────────────────────────
+
+function PreviewStep({
+  theme, items, loading, pickCount, onBack, onOpen, insets,
+}: {
+  theme: Theme;
+  items: SKU[];
+  loading: boolean;
+  pickCount: number;
+  onBack: () => void;
+  onOpen: () => void;
+  insets: ReturnType<typeof useSafeAreaInsets>;
+}) {
+  return (
+    <>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 28, paddingBottom: 160 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={{
+          fontFamily: 'Fraunces_600SemiBold',
+          fontSize: 29,
+          lineHeight: 32,
+          letterSpacing: -0.4,
+          color: HEADING,
+          marginBottom: 10,
+        }}>
+          Here's what's hot in your fandoms today
+        </Text>
+
+        {/* Tuned-to flourish */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 24 }}>
+          <View style={{
+            width: 7, height: 7, borderRadius: 4,
+            backgroundColor: ACCENT,
+            shadowColor: ACCENT, shadowOffset: { width: 0, height: 0 }, shadowRadius: 6, shadowOpacity: 0.9,
+          }} />
+          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13.5, color: '#B0B4B6' }}>
+            Tuned to your{' '}
+            <Text style={{ fontFamily: 'Inter_700Bold', color: ACCENT }}>{pickCount}</Text>
+            {' '}picks
+          </Text>
+        </View>
+
+        <View style={{ gap: 12 }}>
+          {loading ? (
+            <>
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+            </>
+          ) : items.length > 0 ? (
+            items.map((sku) => (
+              <PreviewItemCard key={sku.id} sku={sku} theme={theme} />
+            ))
+          ) : (
+            <>
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+            </>
+          )}
+        </View>
+      </ScrollView>
+
+      <Footer
+        onBack={onBack}
+        onAction={onOpen}
+        actionLabel="Open Trendnable"
+        disabled={loading}
+        insets={insets}
+      />
+    </>
+  );
+}
+
+// ── Root ──────────────────────────────────────────────────────────────────────
+
+export default function OnboardingScreen() {
+  const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  const isDark = useAppStore((s) => s.isDark);
+  const theme = buildTheme(isDark);
+  const { setHasOnboarded, setFollowedCategories, setFollowedFandoms } = useAppStore();
+
+  const [step, setStep] = useState<0 | 1>(0);
+  const [selectedCats, setSelectedCats] = useState<string[]>(DEFAULT_CATS);
+  const [selectedFandoms, setSelectedFandoms] = useState<string[]>(() => deriveFandoms(DEFAULT_CATS));
+  const [previewItems, setPreviewItems] = useState<SKU[]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  const toggleCat = useCallback((id: string) => {
+    setSelectedCats((cur) => {
+      if (cur.includes(id)) return cur.filter((x) => x !== id);
+      const next = [...cur, id];
+      const mapped = CATEGORY_FANDOM_MAP[id] ?? [];
+      setSelectedFandoms((prev) => {
+        const toAdd = mapped.filter((f) => !prev.includes(f));
+        return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
+      });
+      return next;
+    });
+  }, []);
+
+  const toggleFandom = useCallback((id: string) => {
+    setSelectedFandoms((cur) =>
+      cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
+    );
+  }, []);
+
+  const handleContinue = async () => {
+    setPreviewLoading(true);
+    setStep(1);
+    try {
+      const items = await api.fetchOnboardingPreview(selectedCats, selectedFandoms);
+      setPreviewItems(items);
+    } catch {
+      // render empty → skeleton fallback in PreviewStep
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleOpen = async () => {
+    setFollowedCategories(selectedCats);
+    setFollowedFandoms(selectedFandoms);
+    const { user } = useAppStore.getState();
+    if (user) {
+      api.updateUserPreferences(user.id, {
+        followedCategories: selectedCats,
+        followedFandoms: selectedFandoms,
+      }).catch(() => {});
+    }
+    setHasOnboarded(true);
+    router.replace('/');
+  };
+
+  const handleSkip = () => {
+    setHasOnboarded(true);
+    router.replace('/');
+  };
+
+  const tileWidth = (screenWidth - 48 - 9) / 2;
+
+  return (
+    <View style={{ flex: 1, backgroundColor: BG }}>
+      {/* Progress bar */}
+      <View style={{
+        flexDirection: 'row',
+        gap: 8,
+        paddingHorizontal: 24,
+        paddingTop: insets.top + 16,
+        marginBottom: 0,
+      }}>
+        {[0, 1].map((i) => (
+          <View
+            key={i}
+            style={{
+              flex: 1,
+              height: 4,
+              borderRadius: 2,
+              backgroundColor: i <= step ? ACCENT : 'rgba(255,255,255,0.13)',
+            }}
+          />
         ))}
       </View>
+
+      {/* Skip — only on step 0 */}
+      {step === 0 && (
+        <Pressable
+          onPress={handleSkip}
+          style={{ position: 'absolute', top: insets.top + 14, right: 24, padding: 6, zIndex: 10 }}
+        >
+          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: MUTED }}>Skip</Text>
+        </Pressable>
+      )}
+
+      {step === 0 ? (
+        <PersonalizeStep
+          tileWidth={tileWidth}
+          theme={theme}
+          selectedCats={selectedCats}
+          selectedFandoms={selectedFandoms}
+          onToggleCat={toggleCat}
+          onToggleFandom={toggleFandom}
+          onBack={handleSkip}
+          onContinue={handleContinue}
+          insets={insets}
+        />
+      ) : (
+        <PreviewStep
+          theme={theme}
+          items={previewItems}
+          loading={previewLoading}
+          pickCount={selectedCats.length + selectedFandoms.length}
+          onBack={() => setStep(0)}
+          onOpen={handleOpen}
+          insets={insets}
+        />
+      )}
     </View>
   );
 }
-
-function CategoriesStep({ theme, selected, onToggle }: { theme: any; selected: string[]; onToggle: (id: string) => void }) {
-  return (
-    <View>
-      <Text style={[styles.stepTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>What do you collect?</Text>
-      <Text style={[styles.stepSub, { color: theme.muted, fontFamily: 'Inter_400Regular' }]}>
-        Pick anything you actively follow. You can change this later.
-      </Text>
-      <View style={styles.categoryGrid}>
-        {CATEGORIES.map((c) => {
-          const active = selected.includes(c.id);
-          return (
-            <Pressable
-              key={c.id}
-              onPress={() => onToggle(c.id)}
-              style={[
-                styles.categoryCard,
-                {
-                  backgroundColor: theme.surface,
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 1 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 2,
-                  borderWidth: active ? 2 : 0,
-                  borderColor: active ? theme.accent : 'transparent',
-                },
-              ]}
-            >
-              <View style={styles.categoryImagePlaceholder}>
-                <BrowseLogo id={c.id} label={c.label} />
-                {active && (
-                  <View style={[styles.checkBadge, { backgroundColor: theme.accent }]}>
-                    <Text style={{ color: theme.accentInk, fontSize: 12, fontWeight: '700' }}>✓</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={[styles.categoryLabel, { color: theme.text, fontFamily: 'Inter_600SemiBold' }]}>
-                {c.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
-function FandomsStep({ theme, selected, onToggle }: { theme: any; selected: string[]; onToggle: (id: string) => void }) {
-  return (
-    <View>
-      <Text style={[styles.stepTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>And which fandoms?</Text>
-      <Text style={[styles.stepSub, { color: theme.muted, fontFamily: 'Inter_400Regular' }]}>
-        Your Hot feed will lean into these.
-      </Text>
-      <View style={styles.fandomChips}>
-        {FANDOMS.map((f) => {
-          const active = selected.includes(f.id);
-          return (
-            <Pressable
-              key={f.id}
-              onPress={() => onToggle(f.id)}
-              style={[
-                styles.fandomChip,
-                {
-                  backgroundColor: active ? theme.text : theme.surface2,
-                  height: 40,
-                  paddingHorizontal: 16,
-                  borderRadius: 4,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.fandomChipText,
-                  {
-                    color: active ? theme.surface : theme.text,
-                    fontFamily: active ? 'Inter_600SemiBold' : 'Inter_400Regular',
-                    fontSize: 14,
-                  },
-                ]}
-              >
-                {f.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
-
-function GuideStep({
-  theme, isDark, cats, fandoms,
-}: {
-  theme: any; isDark: boolean; cats: string[]; fandoms: string[];
-}) {
-  const catLine = cats.length > 0
-    ? `${cats.length} ${cats.length === 1 ? 'category' : 'categories'}`
-    : 'all categories';
-  const fanLine = fandoms.length > 0
-    ? `${fandoms.length} ${fandoms.length === 1 ? 'fandom' : 'fandoms'}`
-    : 'all fandoms';
-
-  return (
-    <View>
-      <Text style={[styles.readyTitle, { color: theme.text, fontFamily: 'Inter_700Bold' }]}>
-        You're ready.
-      </Text>
-      <Text style={[styles.readySub, { color: theme.muted, fontFamily: 'Inter_400Regular' }]}>
-        Tuned for {catLine} · {fanLine}. Here's everything you can do and exactly where to find it.
-      </Text>
-      <FeatureGuide theme={theme} isDark={isDark} />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  progressRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 4,
-  },
-  progressDot: {
-    flex: 1,
-    height: 3,
-    borderRadius: 999,
-  },
-  skipBtn: {
-    position: 'absolute',
-    right: 20,
-    zIndex: 10,
-    padding: 4,
-  },
-  skipText: { fontSize: 13 },
-  scroll: { flex: 1 },
-  footer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    gap: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  backBtn: {
-    width: 48, height: 48, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  backBtnText: { fontSize: 18 },
-  nextBtn: {
-    height: 48, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  nextBtnText: { fontSize: 16 },
-  // Welcome
-  welcomeLogo: {
-    width: 72, height: 72, borderRadius: 16,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 28, marginTop: 40,
-  },
-  welcomeLogoText: { fontSize: 36 },
-  welcomeEyebrow: {
-    fontSize: 11, letterSpacing: 0.18, textTransform: 'uppercase', marginBottom: 8,
-  },
-  welcomeTitle: { fontSize: 52, letterSpacing: -0.03, lineHeight: 50, marginBottom: 14 },
-  welcomeSub: { fontSize: 17, lineHeight: 24 },
-  featureRow: { flexDirection: 'row', gap: 14, alignItems: 'flex-start' },
-  featureIcon: {
-    width: 36, height: 36, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-  },
-  featureGlyph: { fontSize: 18 },
-  featureTitle: { fontSize: 15, marginBottom: 3 },
-  featureSub: { fontSize: 13, lineHeight: 18 },
-  // Categories
-  stepTitle: { fontSize: 28, letterSpacing: -0.02, lineHeight: 30, marginBottom: 8 },
-  stepSub: { fontSize: 14.5, lineHeight: 20, marginBottom: 24 },
-  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  categoryCard: {
-    width: '47%', borderRadius: 6, padding: 12,
-    flexDirection: 'column', gap: 10,
-  },
-  categoryImagePlaceholder: {
-    width: '100%', aspectRatio: 1,
-    borderRadius: 4, overflow: 'hidden',
-    position: 'relative',
-  },
-  categoryGlyph: { fontSize: 36 },
-  checkBadge: {
-    position: 'absolute', top: 8, right: 8,
-    width: 24, height: 24, borderRadius: 999,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  categoryLabel: { fontSize: 14 },
-  // Fandoms
-  fandomChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 24 },
-  fandomChip: { alignItems: 'center', justifyContent: 'center' },
-  fandomChipText: {},
-  // Guide (last step — combined ready + feature walkthrough)
-  readyTitle: { fontSize: 32, letterSpacing: -0.02, marginTop: 20, marginBottom: 10 },
-  readySub: { fontSize: 14.5, lineHeight: 21, marginBottom: 20 },
-});

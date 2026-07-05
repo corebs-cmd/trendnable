@@ -49,23 +49,6 @@ const FEATURES: Feature[] = [
     where: 'Browse tab',
   },
   {
-    // Camera icon — same as scan button in app header
-    icon: (c) => (
-      <Svg width={SZ} height={SZ} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
-        <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-        <Circle cx="12" cy="13" r="4" />
-      </Svg>
-    ),
-    color:  '#10B981',
-    bg:     'rgba(16,185,129,0.12)',
-    bgDark: 'rgba(16,185,129,0.22)',
-    title: 'Barcode Scan',
-    desc:  'Point at any product barcode — instantly pull price data, trends, and insights.',
-    where: 'Camera icon · top right',
-    free:  '5 scans/day',
-    pro:   'Unlimited scans',
-  },
-  {
     // Trend line chart — represents price history on PDP
     icon: (c) => (
       <Svg width={SZ} height={SZ} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
