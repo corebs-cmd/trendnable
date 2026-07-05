@@ -424,18 +424,16 @@ export default function ScanProcessingScreen() {
             )}
           </View>
 
-          {/* Gradient bar */}
-          <View style={{ height: 10, borderRadius: 5, overflow: 'hidden', marginBottom: 4 }}>
-            <LinearGradient colors={['#EF4444', '#F59E0B', '#84CC16', '#10B981']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1 }} />
-          </View>
-          {/* Indicator */}
-          <View style={{ position: 'relative', height: 16, marginBottom: 4 }}>
+          {/* Gradient bar + indicator in one container so the dot sits on the bar */}
+          <View style={{ height: 20, justifyContent: 'center', marginBottom: 4 }}>
+            <View style={{ height: 10, borderRadius: 5, overflow: 'hidden' }}>
+              <LinearGradient colors={['#EF4444', '#F59E0B', '#84CC16', '#10B981']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1 }} />
+            </View>
             <View style={{
               position: 'absolute',
               left: `${scorePercent}%` as any,
-              transform: [{ translateX: -9 }],
-              top: -13,
-              width: 18, height: 18, borderRadius: 9,
+              transform: [{ translateX: -10 }],
+              width: 20, height: 20, borderRadius: 10,
               backgroundColor: demand.color,
               borderWidth: 2.5, borderColor: '#181818',
             }} />
