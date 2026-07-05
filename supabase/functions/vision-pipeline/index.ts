@@ -90,7 +90,9 @@ async function searchEbay(query: string, token: string): Promise<{ items: any[];
   return { items: data.itemSummaries ?? [], total: data.total ?? 0 };
 }
 
-async function searchEbaySold(query: string): Promise<number> {
+async function searchEbaySold(query: string): Promise<{
+  count: number; low: number; median: number; high: number;
+}> {
   const qs = [
     `OPERATION-NAME=findCompletedItems`,
     `SERVICE-VERSION=1.0.0`,
@@ -100,18 +102,33 @@ async function searchEbaySold(query: string): Promise<number> {
     `keywords=${encodeURIComponent(query)}`,
     `itemFilter(0).name=SoldItemsOnly`,
     `itemFilter(0).value=true`,
-    `paginationInput.entriesPerPage=5`,
+    `paginationInput.entriesPerPage=50`,
+    `paginationInput.pageNumber=1`,
+    `sortOrder=EndTimeSoonest`,
   ].join('&');
 
   try {
     const res = await fetch(`https://svcs.ebay.com/services/search/FindingService/v1?${qs}`);
-    if (!res.ok) return 0;
+    if (!res.ok) return { count: 0, low: 0, median: 0, high: 0 };
     const data = await res.json();
     const resp = data?.findCompletedItemsResponse?.[0];
-    if (resp?.ack?.[0] !== 'Success' && resp?.ack?.[0] !== 'SuccessWithWarning') return 0;
-    return parseInt(resp?.paginationOutput?.[0]?.totalEntries?.[0] ?? '0', 10) || 0;
+    if (resp?.ack?.[0] !== 'Success' && resp?.ack?.[0] !== 'SuccessWithWarning') return { count: 0, low: 0, median: 0, high: 0 };
+
+    const count = parseInt(resp?.paginationOutput?.[0]?.totalEntries?.[0] ?? '0', 10) || 0;
+    const items: any[] = resp?.searchResult?.[0]?.item ?? [];
+    const prices = items
+      .map((item: any) => parseFloat(item?.sellingStatus?.[0]?.currentPrice?.[0]?.__value__ ?? '0'))
+      .filter((p: number) => p > 1)
+      .sort((a: number, b: number) => a - b);
+
+    if (prices.length === 0) return { count, low: 0, median: 0, high: 0 };
+    const low  = prices[0];
+    const high = prices[prices.length - 1];
+    const mid  = Math.floor(prices.length / 2);
+    const median = prices.length % 2 === 0 ? (prices[mid - 1] + prices[mid]) / 2 : prices[mid];
+    return { count, low: Math.round(low), median: Math.round(median), high: Math.round(high) };
   } catch {
-    return 0;
+    return { count: 0, low: 0, median: 0, high: 0 };
   }
 }
 
@@ -453,18 +470,20 @@ Deno.serve(async (req) => {
     const ebayQuery = candidate.ebay_query ?? vision.ebay_query;
 
     // ── Step 4: Precise pricing search ───────────────────────────────────────
-    const [preciseResult, soldCount] = await Promise.all([
+    const [preciseResult, soldData] = await Promise.all([
       searchEbay(ebayQuery, ebayToken),
       searchEbaySold(ebayQuery),
     ]);
 
+    const soldCount   = soldData.count;
     const activeTotal = preciseResult.total > 0 ? preciseResult.total : ebayTotal;
     const sellabilityListings = preciseResult.items.length > 0 ? preciseResult.items : listings;
 
-    // ── Step 5: Scoring ───────────────────────────────────────────────────────
-    const priceMedian = Number(candidate.price_median ?? 0);
-    const priceLow    = Number(candidate.price_low    ?? priceMedian);
-    const priceHigh   = Number(candidate.price_high   ?? priceMedian);
+    // ── Step 5: Scoring — use actual sold prices when available ───────────────
+    const claudeMedian = Number(candidate.price_median ?? 0);
+    const priceMedian  = soldData.median > 0 ? soldData.median : claudeMedian;
+    const priceLow     = soldData.low    > 0 ? soldData.low    : Number(candidate.price_low  ?? priceMedian);
+    const priceHigh    = soldData.high   > 0 ? soldData.high   : Number(candidate.price_high ?? priceMedian);
 
     const sellabilityScore = calcSellabilityScore(soldCount, activeTotal, priceMedian, sellabilityListings);
     const { score: scoreEstimate, breakdown: scoreBreakdown } = estimateHotScore(listings);
@@ -562,6 +581,7 @@ Deno.serve(async (req) => {
       variant_type: variantType,
       pop_number: popNumber,
       price: { low: priceLow, median: priceMedian, high: priceHigh },
+      active_listings: activeTotal,
       listings: activeTotal,
       sold_count: soldCount,
       sellability_score: sellabilityScore,

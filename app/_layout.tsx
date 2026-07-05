@@ -165,6 +165,22 @@ export default function RootLayout() {
             animation: 'slide_from_right',
           }}
         />
+        <Stack.Screen
+          name="scan"
+          options={{
+            headerShown: false,
+            presentation: 'fullScreenModal',
+            animation: 'fade',
+          }}
+        />
+        <Stack.Screen
+          name="scan-processing"
+          options={{
+            headerShown: false,
+            presentation: 'fullScreenModal',
+            animation: 'fade',
+          }}
+        />
       </Stack>
     </GestureHandlerRootView>
   );

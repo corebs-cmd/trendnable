@@ -143,12 +143,12 @@ async function lookupBarcodeOnUpcItemDb(barcode: string): Promise<string | null>
 }
 
 /**
- * Step 6b: eBay Finding API — completed/sold listings count (last 90 days).
- * Uses App ID auth (same as lookupBarcodeOnEbay), no OAuth token required.
+ * eBay Finding API — completed/sold listings with actual sale prices.
+ * Returns count plus Low/Median/High from real transactions (last 90 days).
  */
-async function searchEbaySold(query: string): Promise<number> {
-  // Build URL manually — URLSearchParams encodes parentheses as %28%29 but
-  // eBay Finding API requires literal parentheses in itemFilter(n).name params.
+async function searchEbaySold(query: string): Promise<{
+  count: number; low: number; median: number; high: number;
+}> {
   const qs = [
     `OPERATION-NAME=findCompletedItems`,
     `SERVICE-VERSION=1.0.0`,
@@ -158,28 +158,45 @@ async function searchEbaySold(query: string): Promise<number> {
     `keywords=${encodeURIComponent(query)}`,
     `itemFilter(0).name=SoldItemsOnly`,
     `itemFilter(0).value=true`,
-    `paginationInput.entriesPerPage=5`,
+    `paginationInput.entriesPerPage=50`,
     `paginationInput.pageNumber=1`,
+    `sortOrder=EndTimeSoonest`,
   ].join('&');
 
   try {
     const res = await fetch(`https://svcs.ebay.com/services/search/FindingService/v1?${qs}`);
-    if (!res.ok) {
-      console.warn('eBay findCompletedItems non-OK:', res.status);
-      return 0;
-    }
+    if (!res.ok) return { count: 0, low: 0, median: 0, high: 0 };
     const data = await res.json();
     const resp = data?.findCompletedItemsResponse?.[0];
     const ack  = resp?.ack?.[0];
-    if (ack !== 'Success' && ack !== 'SuccessWithWarning') {
-      console.warn('eBay findCompletedItems ack:', ack, JSON.stringify(resp?.errorMessage?.[0]));
-      return 0;
-    }
-    const totalStr = resp?.paginationOutput?.[0]?.totalEntries?.[0];
-    return parseInt(totalStr ?? '0', 10) || 0;
+    if (ack !== 'Success' && ack !== 'SuccessWithWarning') return { count: 0, low: 0, median: 0, high: 0 };
+
+    const count = parseInt(resp?.paginationOutput?.[0]?.totalEntries?.[0] ?? '0', 10) || 0;
+    const items: any[] = resp?.searchResult?.[0]?.item ?? [];
+
+    const prices = items
+      .map((item: any) => parseFloat(item?.sellingStatus?.[0]?.currentPrice?.[0]?.__value__ ?? '0'))
+      .filter((p: number) => p > 1)
+      .sort((a: number, b: number) => a - b);
+
+    if (prices.length === 0) return { count, low: 0, median: 0, high: 0 };
+
+    const low  = prices[0];
+    const high = prices[prices.length - 1];
+    const mid  = Math.floor(prices.length / 2);
+    const median = prices.length % 2 === 0
+      ? (prices[mid - 1] + prices[mid]) / 2
+      : prices[mid];
+
+    return {
+      count,
+      low:    Math.round(low),
+      median: Math.round(median),
+      high:   Math.round(high),
+    };
   } catch (err) {
     console.warn('eBay findCompletedItems error:', err);
-    return 0;
+    return { count: 0, low: 0, median: 0, high: 0 };
   }
 }
 
@@ -603,10 +620,12 @@ Deno.serve(async (req) => {
     // ── Step 7.5: Precision sellability search with Claude's refined query ────
     // Claude's ebayQuery targets the exact variant (GITD, Chase, Exclusive etc.)
     // so these counts are far more accurate than the broad initial query.
-    const [preciseResult, soldCount] = await Promise.all([
+    const [preciseResult, soldData] = await Promise.all([
       searchEbay(ebayQuery, ebayToken),
       searchEbaySold(ebayQuery),
     ]);
+
+    const soldCount = soldData.count;
 
     // Cascade: refined query > barcode search > initial broad search
     const activeTotal = preciseResult.total > 0  ? preciseResult.total
@@ -620,9 +639,11 @@ Deno.serve(async (req) => {
     const { score: scoreEstimate, breakdown: scoreBreakdown } = estimateHotScore(listings);
 
     // ── Step 9: Quality gates + discovery_candidate insert ───────────────────
-    const priceMedian = Number(candidate.price_median ?? 0);
-    const priceLow    = Number(candidate.price_low    ?? priceMedian);
-    const priceHigh   = Number(candidate.price_high   ?? priceMedian);
+    // Use actual eBay sold prices when available; fall back to Claude's estimates.
+    const claudeMedian = Number(candidate.price_median ?? 0);
+    const priceMedian  = soldData.median > 0 ? soldData.median : claudeMedian;
+    const priceLow     = soldData.low    > 0 ? soldData.low    : Number(candidate.price_low  ?? priceMedian);
+    const priceHigh    = soldData.high   > 0 ? soldData.high   : Number(candidate.price_high ?? priceMedian);
 
     // Sellability uses precise counts + price + watch signals
     const sellabilityScore = calcSellabilityScore(soldCount, activeTotal, priceMedian, sellabilityListings);
@@ -765,6 +786,7 @@ Deno.serve(async (req) => {
       variant_type: variantType,
       pop_number: popNumber,
       price: { low: priceLow, median: priceMedian, high: priceHigh },
+      active_listings: activeTotal,
       listings: activeTotal,
       sold_count: soldCount,
       sellability_score: sellabilityScore,

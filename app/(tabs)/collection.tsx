@@ -351,6 +351,40 @@ export default function CollectionScreen() {
         onScroll={(e) => setScrolled(e.nativeEvent.contentOffset.y > 10)}
         scrollEventThrottle={16}
       >
+        {/* ── Scan buttons ── */}
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+          <Pressable
+            onPress={() => router.push('/scan?mode=barcode')}
+            accessibilityLabel="Scan barcode"
+            style={({ pressed }) => ({ flex: 1, borderRadius: theme.radius, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10, opacity: pressed ? 0.88 : 1, backgroundColor: '#FF5500' })}
+          >
+            <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth={2} strokeLinecap="round">
+                <Path d="M3 5h2M7 5h1M11 5h1M3 19h2M7 19h1M11 19h1M3 9v6M7 9v2M7 15v1M11 9v6M15 5h1M19 5h2M15 19h1M19 19h2M15 9v2M15 15v1M19 9v6" />
+              </Svg>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#FFFFFF', fontSize: 13.5, fontFamily: theme.fontDispBold, letterSpacing: -0.2 }}>Scan Barcode</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.78)', fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 }}>Product barcode</Text>
+            </View>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/scan?mode=visual')}
+            accessibilityLabel="Visual scan"
+            style={({ pressed }) => ({ flex: 1, borderRadius: theme.radius, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10, opacity: pressed ? 0.88 : 1, backgroundColor: '#2A1D08', borderWidth: 0.5, borderColor: theme.premium })}
+          >
+            <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: theme.premium, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={theme.premiumInk} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><Circle cx="12" cy="13" r="4" />
+              </Svg>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: theme.premium, fontSize: 13.5, fontFamily: theme.fontDispBold, letterSpacing: -0.2 }}>Visual Scan</Text>
+              <Text style={{ color: `${theme.premium}99`, fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: 2 }}>Point &amp; identify</Text>
+            </View>
+          </Pressable>
+        </View>
+
         {/* Hero value card */}
         <View style={{
           backgroundColor: theme.surface, borderRadius: theme.radiusLg,

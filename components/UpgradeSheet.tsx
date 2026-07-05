@@ -25,7 +25,8 @@ const CONTEXT_MAP: Record<UpgradeContext, ContextData> = {
   feature:       { title: 'Trendnable Premium',     sub: 'The full picture of your collection.' },
   priceAlerts:   { title: 'Set price alerts',       sub: 'Get notified the moment a watched item hits your target price.' },
   sellability:   { title: 'Unlock Sellability Score', sub: 'See sell-through rate, demand tier, and how quickly an item is likely to sell.' },
-  visionScan:    { title: 'Trendnable Premium',     sub: 'Unlock the full picture of your collection.' },
+  visionScan:    { title: 'Visual Scan is Premium', sub: 'Point your camera at any collectable and we\'ll identify it — price, trends, and all.' },
+  scanQuota:     { title: 'Scan without limits',    sub: 'You\'ve used your free scan for today. Upgrade for unlimited scanning.' },
 };
 
 const FEATURES = [

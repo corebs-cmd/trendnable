@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { CollectionItem, DBUser, DBCollectionItem, SKU, PriceAlert, AppNotification, CatalogWatchlistItem, CatalogCollectionItem, SkuInsight, InsightResponse, InsightDirection, RewardSummary, CollectionPulse } from './types';
+import { CollectionItem, DBUser, DBCollectionItem, SKU, PriceAlert, AppNotification, CatalogWatchlistItem, CatalogCollectionItem, SkuInsight, InsightResponse, InsightDirection, RewardSummary, CollectionPulse, ScanResult } from './types';
 import type { StickerDef } from './stickers';
 
 // ── Sticker catalog ───────────────────────────────────────────────────────────
@@ -883,4 +883,124 @@ export async function getCollectionPulse(): Promise<CollectionPulse | null> {
   if (!res.ok) return null;
   const json = await res.json();
   return json as CollectionPulse;
+}
+
+// ── Scan quota ────────────────────────────────────────────────────────────────
+
+export interface ScanQuota {
+  used: number;
+  limit: number;
+  resetsAt: string;
+}
+
+const SCAN_DAILY_LIMIT = 1;
+
+function nextUtcMidnight(): string {
+  const d = new Date();
+  d.setUTCHours(24, 0, 0, 0);
+  return d.toISOString();
+}
+
+export async function fetchScanQuota(userId: string): Promise<ScanQuota> {
+  const { data } = await supabase
+    .from('users')
+    .select('scan_count_day, scan_count_used')
+    .eq('id', userId)
+    .maybeSingle();
+  const today = new Date().toISOString().slice(0, 10);
+  const used = data?.scan_count_day === today ? ((data?.scan_count_used as number) ?? 0) : 0;
+  return { used, limit: SCAN_DAILY_LIMIT, resetsAt: nextUtcMidnight() };
+}
+
+// ── Scan pipeline ─────────────────────────────────────────────────────────────
+
+export type ScanError = Error & { errorCode?: string; quota?: { used: number; limit: number; resetsAt: string } };
+
+function mapScanResult(data: any): ScanResult {
+  return {
+    catalogId:      data.catalog_id,
+    skuId:          data.sku_id ?? null,
+    name:           data.name,
+    short:          data.short,
+    series:         data.series ?? null,
+    categoryId:     data.category_id,
+    fandomId:       data.fandom_id ?? null,
+    variantType:    data.variant_type ?? null,
+    popNumber:      data.pop_number ?? null,
+    price: {
+      low:    data.price.low,
+      median: data.price.median,
+      high:   data.price.high,
+    },
+    activeListings:    data.active_listings ?? data.listings ?? 0,
+    soldCount:         data.sold_count ?? 0,
+    sellabilityScore:  data.sellability_score ?? 0,
+    scoreEstimate:     data.score_estimate ?? 0,
+    scoreBreakdown: {
+      velocity:     data.score_breakdown?.velocity ?? 0,
+      volume:       data.score_breakdown?.volume ?? 0,
+      confirmation: data.score_breakdown?.confirmation ?? 0,
+      freshness:    data.score_breakdown?.freshness ?? 0,
+    },
+    isNewToCatalog:    data.is_new_to_catalog ?? false,
+    qualityGatePassed: data.quality_gate_passed ?? false,
+    barcode:           data.barcode ?? null,
+    ebayQuery:         data.ebay_query ?? '',
+    imageUrl:          data.image_url ?? null,
+  };
+}
+
+export async function callScanPipeline(barcode: string, accessToken: string): Promise<ScanResult> {
+  const url = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/scan-pipeline`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 55_000);
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ barcode }),
+      signal: controller.signal,
+    });
+  } catch (e: any) {
+    clearTimeout(timeout);
+    if (e?.name === 'AbortError') { const err = new Error('Scan timed out.') as ScanError; err.errorCode = 'timeout'; throw err; }
+    throw e;
+  }
+  clearTimeout(timeout);
+  const data = await response.json();
+  if (!response.ok || data.ok === false) {
+    const err = new Error(data.message ?? data.error ?? 'Scan failed') as ScanError;
+    err.errorCode = data.error;
+    if (data.error === 'quota_exceeded') err.quota = { used: data.used, limit: data.limit, resetsAt: data.resetsAt };
+    throw err;
+  }
+  return mapScanResult(data);
+}
+
+export async function callVisionPipeline(imageBase64: string, accessToken: string): Promise<ScanResult> {
+  const url = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/vision-pipeline`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 55_000);
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ imageBase64 }),
+      signal: controller.signal,
+    });
+  } catch (e: any) {
+    clearTimeout(timeout);
+    if (e?.name === 'AbortError') { const err = new Error('Scan timed out.') as ScanError; err.errorCode = 'timeout'; throw err; }
+    throw e;
+  }
+  clearTimeout(timeout);
+  const data = await response.json();
+  if (!response.ok || data.ok === false) {
+    const err = new Error(data.message ?? data.error ?? 'Vision scan failed') as ScanError;
+    err.errorCode = data.error;
+    throw err;
+  }
+  return mapScanResult(data);
 }

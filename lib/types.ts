@@ -177,7 +177,8 @@ export type UpgradeContext =
   | 'feature'
   | 'priceAlerts'
   | 'sellability'
-  | 'visionScan';
+  | 'visionScan'
+  | 'scanQuota';
 
 export interface PriceAlert {
   id: string;
@@ -270,6 +271,31 @@ export interface CollectionPulse {
   // Free users get name+image only — no reason/price to prevent leakage
   flagged_preview?: { sku_id: string; name: string; image_url: string | null }[];
   payload?: { flagged: FlaggedItem[]; hottest: DemandRow[]; coolest: DemandRow[] };
+}
+
+// ── Scan pipeline result ──────────────────────────────────────────────────────
+
+export interface ScanResult {
+  catalogId: string;
+  skuId: string | null;
+  name: string;
+  short: string;
+  series: string | null;
+  categoryId: string;
+  fandomId: string | null;
+  variantType: string | null;
+  popNumber: number | null;
+  price: { low: number; median: number; high: number };
+  activeListings: number;
+  soldCount: number;
+  sellabilityScore: number;
+  scoreEstimate: number;
+  scoreBreakdown: { velocity: number; volume: number; confirmation: number; freshness: number };
+  isNewToCatalog: boolean;
+  qualityGatePassed: boolean;
+  barcode: string | null;
+  ebayQuery: string;
+  imageUrl: string | null;
 }
 
 export interface CatalogWatchlistItem {
