@@ -206,7 +206,7 @@ export async function fetchOnboardingPreview(
       .from('v_hot_skus')
       .select('*')
       .order('hot_score', { ascending: false })
-      .limit(3);
+      .limit(6);
     if (filtered && categoryIds.length > 0) {
       q = q.in('category_id', categoryIds);
     }
@@ -215,16 +215,16 @@ export async function fetchOnboardingPreview(
   };
 
   const filtered = await runQuery(true);
-  if (filtered.length >= 2) return filtered;
+  if (filtered.length >= 4) return filtered.slice(0, 6);
 
   const top = await runQuery(false);
   const seen = new Set(filtered.map((s) => s.id));
   const merged = [...filtered];
   for (const s of top) {
     if (!seen.has(s.id)) merged.push(s);
-    if (merged.length >= 3) break;
+    if (merged.length >= 6) break;
   }
-  return merged;
+  return merged.slice(0, 6);
 }
 
 export async function fetchHotSkus(): Promise<SKU[]> {

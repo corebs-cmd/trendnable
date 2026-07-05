@@ -12,27 +12,25 @@ export const CATEGORIES: Category[] = [
 ];
 
 export const FANDOMS: Fandom[] = [
-  { id: 'onepiece',  label: 'One Piece' },
-  { id: 'demon',     label: 'Demon Slayer' },
-  { id: 'starwars',  label: 'Star Wars' },
-  { id: 'pokemon',   label: 'Pokémon' },
-  { id: 'marvel',    label: 'Marvel' },
-  { id: 'anime',     label: 'Anime' },
-  { id: 'labubu',    label: 'Labubu' },
-  { id: 'disney',    label: 'Disney' },
-  { id: 'tmnt',      label: 'TMNT' },
-  { id: 'popcult',   label: 'Pop Culture' },
+  { id: 'pokemon',    label: 'Pokémon' },
+  { id: 'starwars',   label: 'Star Wars' },
+  { id: 'marvel',     label: 'Marvel' },
+  { id: 'dc',         label: 'DC / Batman' },
+  { id: 'anime',      label: 'Anime' },
+  { id: 'sports',     label: 'Sports' },
+  { id: 'videogames', label: 'Video Games' },
+  { id: 'nostalgia',  label: 'Nostalgia' },
 ];
 
 export const CATEGORY_FANDOM_MAP: Record<string, string[]> = {
-  funko:       ['marvel', 'starwars', 'onepiece', 'demon'],
-  tcg:         ['pokemon'],
-  popmart:     ['labubu', 'disney'],
-  hottoys:     ['marvel', 'starwars'],
-  neca:        ['marvel', 'starwars', 'tmnt'],
-  hwheels:     ['popcult'],
-  autographed: ['marvel', 'starwars', 'popcult'],
-  thrilljoy:   ['popcult'],
+  funko:       ['marvel', 'dc', 'starwars', 'anime'],
+  tcg:         ['pokemon', 'anime'],
+  popmart:     ['anime', 'nostalgia'],
+  hottoys:     ['marvel', 'dc', 'starwars'],
+  neca:        ['marvel', 'dc', 'starwars'],
+  hwheels:     ['nostalgia', 'sports'],
+  autographed: ['marvel', 'starwars', 'sports'],
+  thrilljoy:   ['anime', 'nostalgia'],
 };
 
 export const catById = (id: string): Category | undefined =>
