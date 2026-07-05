@@ -423,8 +423,12 @@ Deno.serve(async (req) => {
   let totalOutputTokens = 0;
 
   try {
-    // ── Step 1: Claude Vision identification ──────────────────────────────────
-    const vision = await identifyWithVision(imageBase64);
+    // ── Step 1: Claude Vision identification + eBay token (parallel) ────────────
+    // getEbayToken() is independent of vision output — run both simultaneously.
+    const [vision, ebayToken] = await Promise.all([
+      identifyWithVision(imageBase64),
+      getEbayToken(),
+    ]);
     totalInputTokens  += vision.inputTokens;
     totalOutputTokens += vision.outputTokens;
 
@@ -437,7 +441,6 @@ Deno.serve(async (req) => {
     }
 
     // ── Step 2: eBay search ───────────────────────────────────────────────────
-    const ebayToken = await getEbayToken();
     const { items: listings, total: ebayTotal } = await searchEbay(vision.ebay_query, ebayToken);
     const imageUrl = listings.find((l: any) => l?.image?.imageUrl)?.image?.imageUrl ?? null;
 

@@ -539,14 +539,14 @@ Deno.serve(async (req) => {
   let outputTokens = 0;
 
   try {
-    // ── Step 3: eBay Finding API barcode lookup ───────────────────────────────
-    let productName: string | null = null;
-    productName = await lookupBarcodeOnEbay(barcode);
-
-    // ── Step 5: UPCitemdb fallback ────────────────────────────────────────────
-    if (!productName) {
-      productName = await lookupBarcodeOnUpcItemDb(barcode);
-    }
+    // ── Step 3+5: Barcode lookup (parallel) ──────────────────────────────────
+    // eBay Finding API and UPCitemdb are independent reads — run simultaneously.
+    // eBay result is preferred (richer signal); UPCitemdb used only as fallback.
+    const [ebayName, upcName] = await Promise.all([
+      lookupBarcodeOnEbay(barcode),
+      lookupBarcodeOnUpcItemDb(barcode),
+    ]);
+    const productName = ebayName ?? upcName;
 
     if (!productName) {
       return json({
