@@ -3,7 +3,6 @@ import {
   View, Text, Pressable, ScrollView, Animated, Easing,
   Image, StyleSheet, useWindowDimensions,
 } from 'react-native';
-import Svg, { Defs, Pattern, Rect, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
@@ -67,36 +66,27 @@ const CAT_LABEL: Record<string, string> = {
 const DEFAULT_CATS    = [] as string[];
 const DEFAULT_FANDOMS = [] as string[];
 
-// ── Diagonal stripe photo area ─────────────────────────────────────────────────
+// ── Category photo images ─────────────────────────────────────────────────────
+
+const CAT_IMAGE: Record<string, any> = {
+  funko:       require('../../assets/cat_funko.jpg'),
+  tcg:         require('../../assets/cat_tcg.jpg'),
+  popmart:     require('../../assets/cat_popmart.jpg'),
+  hottoys:     require('../../assets/cat_hottoys.jpg'),
+  neca:        require('../../assets/cat_neca.jpg'),
+  hwheels:     require('../../assets/cat_hwheels.jpg'),
+  autographed: require('../../assets/cat_autographed.jpg'),
+  thrilljoy:   require('../../assets/cat_thrilljoy.jpg'),
+};
 
 function CategoryPhotoArea({ catId }: { catId: string }) {
-  const accent = CAT_ACCENT[catId] ?? '#9A9891';
-  const label  = CAT_LABEL[catId] ?? catId.toUpperCase();
-
   return (
     <View style={{ height: 68, borderRadius: 10, overflow: 'hidden' }}>
-      <Svg width="100%" height="68">
-        <Defs>
-          <Pattern
-            id={`sp_${catId}`}
-            width="14"
-            height="14"
-            patternUnits="userSpaceOnUse"
-          >
-            <Rect width="14" height="14" fill="#17171B" />
-            {/* 45° diagonal stripe — two corner paths close the seams */}
-            <Path
-              d="M0,14 L14,0 M-3.5,3.5 L3.5,-3.5 M10.5,17.5 L17.5,10.5"
-              stroke="#1E1E23"
-              strokeWidth="7"
-            />
-          </Pattern>
-        </Defs>
-        <Rect width="100%" height="68" fill={`url(#sp_${catId})`} />
-      </Svg>
-      <View style={styles.photoOverlay}>
-        <Text style={[styles.photoLabel, { color: accent }]}>{label} SHOT</Text>
-      </View>
+      <Image
+        source={CAT_IMAGE[catId]}
+        style={{ width: '100%', height: 68 }}
+        resizeMode="cover"
+      />
     </View>
   );
 }
