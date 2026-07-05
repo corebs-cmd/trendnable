@@ -169,6 +169,12 @@ export default function ScanProcessingScreen() {
     }
   };
 
+  // Dismiss all modal screens (scan + scan-processing) then navigate to tabs.
+  const exitToTab = (path: string) => {
+    router.dismissAll();
+    router.replace(path as any);
+  };
+
   const handleWatch = async () => {
     if (!scanResult) return;
     const added = addCatalogToWatchlist({
@@ -198,9 +204,9 @@ export default function ScanProcessingScreen() {
         fetchSkuById(skuId).then((sku) => { if (sku) mergeSkuIntoHot(sku); }).catch(() => {});
       }
       Alert.alert('Added to Watchlist', `${scanResult.name} is now being tracked.`, [
-        ...(skuId ? [{ text: 'View Item', onPress: () => router.replace(`/sku/${skuId}` as any) }] : []),
-        { text: 'Go to Watchlist', onPress: () => router.replace('/(tabs)/watchlist') },
-        { text: 'Done', style: 'cancel', onPress: () => router.back() },
+        ...(skuId ? [{ text: 'View Item', onPress: () => exitToTab(`/sku/${skuId}`) }] : []),
+        { text: 'Go to Watchlist', onPress: () => exitToTab('/(tabs)/watchlist') },
+        { text: 'Done', style: 'cancel', onPress: () => router.dismissAll() },
       ]);
     }
   };
@@ -238,9 +244,9 @@ export default function ScanProcessingScreen() {
       }
       const skuId = promo?.skuId ?? scanResult.skuId;
       Alert.alert('Added to Collection', `${scanResult.name} is in your collection.`, [
-        ...(skuId ? [{ text: 'View Item', onPress: () => router.replace(`/sku/${skuId}` as any) }] : []),
-        { text: 'Go to Collection', onPress: () => router.replace('/(tabs)/collection') },
-        { text: 'Done', style: 'cancel', onPress: () => router.back() },
+        ...(skuId ? [{ text: 'View Item', onPress: () => exitToTab(`/sku/${skuId}`) }] : []),
+        { text: 'Go to Collection', onPress: () => exitToTab('/(tabs)/collection') },
+        { text: 'Done', style: 'cancel', onPress: () => router.dismissAll() },
       ]);
     }
   };
@@ -260,11 +266,11 @@ export default function ScanProcessingScreen() {
     }
   };
 
-  const handleDiscard = () => router.back();
+  const handleDiscard = () => router.dismissAll();
 
   const handleViewDetails = () => {
     if (!scanResult?.skuId) return;
-    router.replace(`/sku/${scanResult.skuId}` as any);
+    exitToTab(`/sku/${scanResult.skuId}`);
   };
 
   const isWatched = scanResult
