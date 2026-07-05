@@ -279,7 +279,7 @@ export default function HotScreen() {
             <>
               {/* TOP FIND hero — hottest SKU across all categories */}
               {hero && (
-                <View style={{ paddingHorizontal: 20, marginBottom: 32 }}>
+                <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
                   <SKUCard
                     sku={hero}
                     theme={theme}
