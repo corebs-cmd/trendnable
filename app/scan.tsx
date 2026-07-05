@@ -139,7 +139,10 @@ export default function ScanScreen() {
     const isBarcode = work.type === 'barcode';
     const identTimer  = setTimeout(() => setStep('identifying'), isBarcode ? 300 : 500);
     const analyzeTimer = setTimeout(() => setStep('analyzing'),   isBarcode ? 1800 : 2000);
-    dbg('EFF api call type=' + work.type);
+    // Use console.log here — NOT dbg(). dbg() calls dbgTick (a setState) which
+    // React 18 flushes synchronously after the effect, triggering a Fabric commit
+    // before the event loop can process any timer callbacks. That blocks timers.
+    console.log('[SCAN] EFF api call type=' + work.type);
 
     const apiCall = isBarcode
       ? callScanPipeline((work as any).barcode, work.token)
@@ -149,21 +152,16 @@ export default function ScanScreen() {
       .then((data) => {
         clearTimeout(identTimer);
         clearTimeout(analyzeTimer);
-        dbg('EFF api done name=' + data.name.slice(0, 20));
+        console.log('[SCAN] EFF api done name=' + data.name.slice(0, 20));
         if (!isPremium && isBarcode) incrementScanLocal();
         setScanResult(data);
-        // Open result sheet WITHOUT calling setScanning(false) here.
-        // Reactivating the camera (active=true) in the same Fabric commit as
-        // opening the sheet can cause another main-thread block. The sheet is
-        // a Modal that renders on top; the overlay behind it is invisible.
-        // Camera resumes only when the sheet is dismissed via resetScan().
         setSheetOpen(true);
       })
       .catch((err: any) => {
         clearTimeout(identTimer);
         clearTimeout(analyzeTimer);
         setScanning(false);
-        dbg('EFF err=' + (err?.errorCode ?? err?.message ?? 'unknown'));
+        console.log('[SCAN] EFF err=' + (err?.errorCode ?? err?.message ?? 'unknown'));
 
         const code: string = err?.errorCode ?? '';
         if (code === 'quota_exceeded') {
