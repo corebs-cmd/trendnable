@@ -397,18 +397,7 @@ export default function OnboardingScreen() {
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
   const toggleCat = useCallback((id: string) => {
-    setCats((cur) => {
-      const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
-      // Auto-suggest fandoms from the newly added category
-      if (!cur.includes(id)) {
-        const mapped = CATEGORY_FANDOM_MAP[id] ?? [];
-        setFands((prev) => {
-          const toAdd = mapped.filter((f) => !prev.includes(f));
-          return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
-        });
-      }
-      return next;
-    });
+    setCats((cur) => cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]);
   }, []);
 
   const toggleFandom = useCallback((id: string) => {
