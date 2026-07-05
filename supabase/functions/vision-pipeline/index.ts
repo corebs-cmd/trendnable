@@ -245,7 +245,7 @@ async function classifyWithClaude(
   listings: any[],
 ): Promise<{ candidate: any | null; inputTokens: number; outputTokens: number }> {
 
-  const FANDOMS = 'onepiece, demon, starwars, pokemon, marvel, anime, labubu, disney, dc, gaming, tmnt, popcult';
+  const FANDOMS = 'pokemon (Pokémon franchise), starwars (Star Wars), marvel (Marvel/MCU), dc (DC Comics — Batman, Superman, Justice League), anime (ALL anime: One Piece, Demon Slayer, Naruto, Dragon Ball, Attack on Titan, Bleach, JJK, MHA, and any other anime), sports (sports memorabilia and athlete items), videogames (video game IP — Mario, Zelda, Halo, Sonic, etc.; NOT for Pokémon), nostalgia (retro/vintage: 80s-90s pop culture, classic horror, TMNT, Ghostbusters, Stranger Things, Hot Wheels, designer toys)';
 
   const categoryRules: Record<string, string> = {
     funko: `Extract Pop number from title (e.g. #1578). Format name as "Character [#XXXX]". Identify exclusive_type: "chase"|"gitd"|"convention"|"retailer"|"vaulted"|"grail"|"rare_variant"|"signed"|"limited"|"htf"|null`,
