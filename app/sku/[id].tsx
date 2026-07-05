@@ -215,7 +215,7 @@ function ScoreBar({ label, value, max = 30, hint, color, isDark }: {
   );
 }
 
-type HistoryWindow = '30D' | '90D' | '1Y';
+type HistoryWindow = '7D' | '30D' | '90D';
 
 function WindowBtn({ label, locked, active, onPress, theme }: {
   label: string;
@@ -284,78 +284,47 @@ function HistoryCard({ sku, theme, isPremium, window, setWindow, loading, error 
   loading: boolean;
   error: string | null;
 }) {
-  const [metric, setMetric] = React.useState<'score' | 'price'>('score');
-  const data = metric === 'score' ? sku.history : sku.priceHist;
-  const color = metric === 'score' ? theme.accent : C.amber;
-  const curLabel = metric === 'score' ? 'HOT SCORE' : 'MEDIAN PRICE';
-  const curVal = metric === 'score' ? String(sku.hot) : fmtPrice(sku.price.median);
-  const gid = `hg-${metric}`;
+  const data  = sku.priceHist;
+  const color = C.amber;
   const W = SCREEN_W - 72;
-  const H = 150;
+  const H = 110;
   const { d, area, lastX, lastY } = buildChartPath(data, W, H);
-  const windowLabel = window === '1Y' ? '−1y' : window === '90D' ? '−90d' : '−30d';
+  const windowLabel = window === '90D' ? '−90d' : window === '30D' ? '−30d' : '−7d';
 
   return (
     <View style={{ marginHorizontal: 18 }}>
-      <Card isDark={theme.dark} style={{ padding: 18 }}>
-        {/* Tab row: window pills + metric toggle */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-          <View style={{ flex: 1, flexDirection: 'row', gap: 2 }}>
-            <WindowBtn label="30D" active={window === '30D'} onPress={() => setWindow('30D')} theme={theme} />
-            <WindowBtn label="90D" locked={!isPremium} active={window === '90D'} onPress={() => { if (isPremium) setWindow('90D'); }} theme={theme} />
-            <WindowBtn label="1Y"  locked={!isPremium} active={window === '1Y'}  onPress={() => { if (isPremium) setWindow('1Y'); }}  theme={theme} />
-          </View>
-          {/* Score / Price segmented toggle */}
-          <View style={{
-            flexDirection: 'row', borderRadius: 999,
-            borderWidth: 1, borderColor: C.cardBorder, overflow: 'hidden',
-          }}>
-            {(['score', 'price'] as const).map((m) => (
-              <Pressable
-                key={m}
-                onPress={() => setMetric(m)}
-                style={{
-                  paddingHorizontal: 13, paddingVertical: 7,
-                  backgroundColor: metric === m
-                    ? (m === 'score' ? theme.accent : C.amber)
-                    : 'transparent',
-                }}
-              >
-                <Text style={{
-                  fontFamily: 'Inter_600SemiBold', fontSize: 12.5,
-                  color: metric === m ? (theme.dark ? '#0D0D0D' : '#FFFFFF') : theme.muted,
-                }}>
-                  {m === 'score' ? 'Score' : 'Price'}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+      <Card isDark={theme.dark} style={{ padding: 14 }}>
+        {/* Window pills */}
+        <View style={{ flexDirection: 'row', gap: 2, marginBottom: 10 }}>
+          <WindowBtn label="7D"  active={window === '7D'}  onPress={() => setWindow('7D')}  theme={theme} />
+          <WindowBtn label="30D" active={window === '30D'} onPress={() => setWindow('30D')} theme={theme} />
+          <WindowBtn label="90D" locked={!isPremium} active={window === '90D'} onPress={() => { if (isPremium) setWindow('90D'); }} theme={theme} />
         </View>
 
         {loading ? (
-          <View style={{ alignItems: 'center', paddingVertical: 60 }}>
+          <View style={{ alignItems: 'center', paddingVertical: 40 }}>
             <ActivityIndicator color={theme.accent} />
           </View>
         ) : error ? (
-          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.neg, textAlign: 'center', paddingVertical: 30 }}>
+          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: theme.neg, textAlign: 'center', paddingVertical: 24 }}>
             {error}
           </Text>
         ) : (
           <>
             {/* Current value */}
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.muted, letterSpacing: 1.1, textTransform: 'uppercase' }}>
-                {curLabel}
+                Median Price
               </Text>
               <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 18, color, fontVariant: ['tabular-nums'] }}>
-                {curVal}
+                {fmtPrice(sku.price.median)}
               </Text>
             </View>
 
             {/* Chart */}
             <Svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'flex' }}>
               <Defs>
-                <SvgLinearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+                <SvgLinearGradient id="phg" x1="0" y1="0" x2="0" y2="1">
                   <Stop offset="0%" stopColor={color} stopOpacity={0.28} />
                   <Stop offset="100%" stopColor={color} stopOpacity={0} />
                 </SvgLinearGradient>
@@ -368,7 +337,7 @@ function HistoryCard({ sku, theme, isPremium, window, setWindow, loading, error 
                   strokeWidth={1}
                 />
               ))}
-              {area ? <Path d={area} fill={`url(#${gid})`} /> : null}
+              {area ? <Path d={area} fill="url(#phg)" /> : null}
               {d ? (
                 <Path d={d} fill="none" stroke={color} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
               ) : null}
@@ -378,7 +347,7 @@ function HistoryCard({ sku, theme, isPremium, window, setWindow, loading, error 
             </Svg>
 
             {/* Axis labels */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
               <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 11, color: theme.faint }}>
                 {windowLabel}
               </Text>
@@ -480,7 +449,7 @@ export default function SKUDetailScreen() {
   const [shareOpen, setShareOpen]           = useState(false);
   const [addOpen, setAddOpen]               = useState(false);
   const [alertOpen, setAlertOpen]           = useState(false);
-  const [historyWindow, setHistoryWindow]   = useState<HistoryWindow>('30D');
+  const [historyWindow, setHistoryWindow]   = useState<HistoryWindow>('7D');
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
   const [insightData, setInsightData]       = useState<InsightResponse | null>(null);
 
@@ -1249,8 +1218,8 @@ export default function SKUDetailScreen() {
           ))}
         </View>
 
-        {/* ── History ── */}
-        <SectionHeader title="History" isDark={isDark} />
+        {/* ── Price History ── */}
+        <SectionHeader title="Price History" isDark={isDark} />
         <HistoryCard
           sku={sku}
           theme={theme}
