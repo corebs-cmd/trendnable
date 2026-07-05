@@ -6,6 +6,7 @@ import {
   Alert,
   Linking,
   ActivityIndicator,
+  Animated,
   StyleSheet,
   Dimensions,
 } from 'react-native';
@@ -67,7 +68,6 @@ export default function ScanScreen() {
 
   const [permission, requestPermission] = useCameraPermissions();
   const [scanMode, setScanMode]         = useState<ScanMode>(modeParam === 'visual' ? 'visual' : 'barcode');
-  const [scanning, setScanning]         = useState(false);
   const [step, setStep]                 = useState<ScanStep>('reading');
   const [scanResult, setScanResult]     = useState<ScanResult | null>(null);
   const [sheetOpen, setSheetOpen]           = useState(false);
@@ -75,19 +75,16 @@ export default function ScanScreen() {
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
   const [communityData, setCommunityData]   = useState<{ ppgPrice: number | null; retailPrice: number | null } | null>(null);
 
+  // Animated overlay — opacity driven by native thread via setValue(), never via
+  // React state. Any setState() before an API call triggers a Fabric commit which
+  // permanently blocks the JS event loop (confirmed: even setTimeout(3000) never
+  // fires while a commit is pending). Animated.Value.setValue() bypasses Fabric.
+  const overlayAnim = useRef(new Animated.Value(0)).current;
+  const showOverlay = () => overlayAnim.setValue(1);
+  const hideOverlay = () => overlayAnim.setValue(0);
+
   const lockRef   = useRef(false);
   const cameraRef = useRef<CameraView>(null);
-
-  // Pending work is stored here by the handler and consumed by the useEffect
-  // that fires AFTER Fabric commits scanning=true. This is the fix for the
-  // Fabric deadlock: any await inside the handler after setScanning(true) never
-  // resumes because the JS event loop is blocked by the UIKit commit waiting for
-  // the main thread. useEffect runs after the commit, so the event loop is free.
-  const pendingWork = useRef<
-    | { type: 'visual'; base64: string; token: string }
-    | { type: 'barcode'; barcode: string; token: string }
-    | null
-  >(null);
 
   const dbgRef = useRef<string[]>([]);
   const [, dbgTick] = useState(0);
@@ -121,79 +118,10 @@ export default function ScanScreen() {
   const stepLabels = scanMode === 'visual' ? VISION_STEP_LABELS : BARCODE_STEP_LABELS;
 
   const resetScan = () => {
-    pendingWork.current = null;
+    hideOverlay();
     lockRef.current = false;
-    setScanning(false);
     setStep('reading');
   };
-
-  // ── Scan executor — runs AFTER Fabric commits scanning=true ──────────────────
-  // useEffect fires after the commit phase, guaranteeing the JS event loop is
-  // free. Timers, Promise callbacks, and fetch responses all work normally here.
-  useEffect(() => {
-    if (!scanning || !pendingWork.current) return;
-
-    const work = pendingWork.current;
-    pendingWork.current = null;
-
-    const isBarcode = work.type === 'barcode';
-    const identTimer  = setTimeout(() => setStep('identifying'), isBarcode ? 300 : 500);
-    const analyzeTimer = setTimeout(() => setStep('analyzing'),   isBarcode ? 1800 : 2000);
-    // Use console.log here — NOT dbg(). dbg() calls dbgTick (a setState) which
-    // React 18 flushes synchronously after the effect, triggering a Fabric commit
-    // before the event loop can process any timer callbacks. That blocks timers.
-    console.log('[SCAN] EFF api call type=' + work.type);
-
-    const apiCall = isBarcode
-      ? callScanPipeline((work as any).barcode, work.token)
-      : callVisionPipeline((work as any).base64, work.token);
-
-    apiCall
-      .then((data) => {
-        clearTimeout(identTimer);
-        clearTimeout(analyzeTimer);
-        console.log('[SCAN] EFF api done name=' + data.name.slice(0, 20));
-        if (!isPremium && isBarcode) incrementScanLocal();
-        setScanResult(data);
-        setSheetOpen(true);
-      })
-      .catch((err: any) => {
-        clearTimeout(identTimer);
-        clearTimeout(analyzeTimer);
-        setScanning(false);
-        console.log('[SCAN] EFF err=' + (err?.errorCode ?? err?.message ?? 'unknown'));
-
-        const code: string = err?.errorCode ?? '';
-        if (code === 'quota_exceeded') {
-          if (isBarcode && user?.id) loadScanQuota(user.id).catch(() => {});
-          setUpgradeContext('scanQuota');
-          lockRef.current = false;
-        } else if (code === 'tcg_excluded') {
-          Alert.alert('TCG cards excluded', "TCG cards can't be scanned — use search instead.", [{ text: 'OK', onPress: resetScan }]);
-        } else if (code === 'not_found') {
-          if (isBarcode) {
-            Alert.alert(
-              'No barcode match',
-              "We couldn't find this barcode. Try Visual Scan — point your camera at the item and we'll identify it from the image.",
-              [
-                { text: 'Try Visual Scan', onPress: () => { resetScan(); if (isPremium) setScanMode('visual'); else setUpgradeContext('visionScan'); } },
-                { text: 'Dismiss', style: 'cancel', onPress: resetScan },
-              ]
-            );
-          } else {
-            Alert.alert("Couldn't identify item", "Try a clearer angle showing the front of the box or figure. Make sure the item fills the frame.", [{ text: 'Try Again', onPress: resetScan }]);
-          }
-        } else if (code === 'premium_required') {
-          setUpgradeContext('visionScan');
-          lockRef.current = false;
-        } else if (code === 'timeout') {
-          Alert.alert('Taking too long', 'The server is busy. Please try again in a moment.', [{ text: 'OK', onPress: resetScan }]);
-        } else {
-          Alert.alert('Scan failed', err?.message ?? 'Something went wrong. Please try again.', [{ text: 'OK', onPress: resetScan }]);
-        }
-      });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scanning]);
 
   const handleModeToggle = (mode: ScanMode) => {
     if (mode === 'visual' && !isPremium) {
@@ -203,15 +131,48 @@ export default function ScanScreen() {
     setScanMode(mode);
   };
 
+  // ── Shared error handler ──────────────────────────────────────────────────────
+
+  const handleScanError = (err: any, isBarcode: boolean) => {
+    hideOverlay();
+    const code: string = err?.errorCode ?? '';
+    if (code === 'quota_exceeded') {
+      if (isBarcode && user?.id) loadScanQuota(user.id).catch(() => {});
+      setUpgradeContext('scanQuota');
+      lockRef.current = false;
+    } else if (code === 'tcg_excluded') {
+      Alert.alert('TCG cards excluded', "TCG cards can't be scanned — use search instead.", [{ text: 'OK', onPress: resetScan }]);
+    } else if (code === 'not_found') {
+      if (isBarcode) {
+        Alert.alert(
+          'No barcode match',
+          "We couldn't find this barcode. Try Visual Scan — point your camera at the item and we'll identify it from the image.",
+          [
+            { text: 'Try Visual Scan', onPress: () => { resetScan(); if (isPremium) setScanMode('visual'); else setUpgradeContext('visionScan'); } },
+            { text: 'Dismiss', style: 'cancel', onPress: resetScan },
+          ]
+        );
+      } else {
+        Alert.alert("Couldn't identify item", "Try a clearer angle showing the front of the box or figure. Make sure the item fills the frame.", [{ text: 'Try Again', onPress: resetScan }]);
+      }
+    } else if (code === 'premium_required') {
+      setUpgradeContext('visionScan');
+      lockRef.current = false;
+    } else if (code === 'timeout') {
+      Alert.alert('Taking too long', 'The server is busy. Please try again in a moment.', [{ text: 'OK', onPress: resetScan }]);
+    } else {
+      Alert.alert('Scan failed', err?.message ?? 'Something went wrong. Please try again.', [{ text: 'OK', onPress: resetScan }]);
+    }
+  };
+
   // ── Barcode scan ─────────────────────────────────────────────────────────────
-  // Handler only prepares data and sets scanning=true. All async work (API call,
-  // timers, error handling) runs in the useEffect above, which fires after Fabric
-  // commits the loading overlay — guaranteeing the JS event loop is unblocked.
+  // showOverlay() uses Animated.Value.setValue() — pure native thread, zero JS
+  // event loop impact, zero Fabric commit. The API call then awaits freely.
 
   const handleBarcodeScanned = async (result: BarcodeScanningResult) => {
     if (lockRef.current || scanMode !== 'barcode') return;
     lockRef.current = true;
-    dbg('B1 barcode=' + result.data.slice(0, 12));
+    console.log('[SCAN] barcode=' + result.data.slice(0, 12));
 
     if (quotaExhausted) {
       setUpgradeContext('scanQuota');
@@ -220,17 +181,30 @@ export default function ScanScreen() {
     }
 
     const { data: { session } } = user ? await supabase.auth.getSession() : { data: { session: null } };
-    dbg('B2 session ok=' + !!session?.access_token);
     if (!session?.access_token) {
       Alert.alert('Not signed in', 'Please sign in to scan products.');
       lockRef.current = false;
       return;
     }
 
-    pendingWork.current = { type: 'barcode', barcode: result.data, token: session.access_token };
-    setScanning(true);
+    // Show overlay via Animated (native thread — no Fabric, no event loop block)
+    showOverlay();
     setStep('reading');
-    dbg('B3 scanning=true → effect will run after commit');
+    const identTimer   = setTimeout(() => setStep('identifying'), 300);
+    const analyzeTimer = setTimeout(() => setStep('analyzing'), 1800);
+
+    try {
+      const data = await callScanPipeline(result.data, session.access_token);
+      clearTimeout(identTimer);
+      clearTimeout(analyzeTimer);
+      if (!isPremium) incrementScanLocal();
+      setScanResult(data);
+      setSheetOpen(true);
+    } catch (err: any) {
+      clearTimeout(identTimer);
+      clearTimeout(analyzeTimer);
+      handleScanError(err, true);
+    }
   };
 
   // ── Visual scan ──────────────────────────────────────────────────────────────
@@ -249,10 +223,7 @@ export default function ScanScreen() {
       });
       dbg('3 takePic done b64=' + (photo?.base64?.length ?? 0));
 
-      if (!photo?.base64 || !photo?.uri) {
-        lockRef.current = false;
-        return;
-      }
+      if (!photo?.base64 || !photo?.uri) { lockRef.current = false; return; }
 
       dbg('4 compress start');
       const compressed = await ImageManipulator.manipulateAsync(
@@ -262,10 +233,7 @@ export default function ScanScreen() {
       );
       dbg('5 compress done b64=' + (compressed.base64?.length ?? 0));
 
-      if (!compressed.base64) {
-        lockRef.current = false;
-        return;
-      }
+      if (!compressed.base64) { lockRef.current = false; return; }
 
       const { data: { session } } = user ? await supabase.auth.getSession() : { data: { session: null } };
       dbg('6 session ok=' + !!session?.access_token);
@@ -275,10 +243,25 @@ export default function ScanScreen() {
         return;
       }
 
-      pendingWork.current = { type: 'visual', base64: compressed.base64, token: session.access_token };
-      setScanning(true);
+      // Show overlay via Animated (native thread — no Fabric, no event loop block)
+      showOverlay();
       setStep('reading');
-      dbg('7 scanning=true → effect will run after commit');
+      const identTimer   = setTimeout(() => setStep('identifying'), 500);
+      const analyzeTimer = setTimeout(() => setStep('analyzing'), 2000);
+      console.log('[SCAN] api start');
+
+      try {
+        const data = await callVisionPipeline(compressed.base64, session.access_token);
+        console.log('[SCAN] api done name=' + data.name.slice(0, 20));
+        clearTimeout(identTimer);
+        clearTimeout(analyzeTimer);
+        setScanResult(data);
+        setSheetOpen(true);
+      } catch (err: any) {
+        clearTimeout(identTimer);
+        clearTimeout(analyzeTimer);
+        handleScanError(err, false);
+      }
 
     } catch {
       lockRef.current = false;
@@ -505,14 +488,14 @@ export default function ScanScreen() {
         ref={cameraRef}
         style={StyleSheet.absoluteFill}
         facing="back"
-        {...(scanMode === 'barcode' && !scanning ? {
+        {...(scanMode === 'barcode' && !lockRef.current ? {
           barcodeScannerSettings: { barcodeTypes: ACCEPTED_TYPES as unknown as any[] },
           onBarcodeScanned: handleBarcodeScanned,
         } : {})}
       />
 
       {/* ── Barcode mode overlay ── */}
-      {scanMode === 'barcode' && !scanning && (
+      {scanMode === 'barcode' && !lockRef.current && (
         <>
           {/* Dark strips around cutout */}
           <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: frameTop, backgroundColor: 'rgba(0,0,0,0.62)' }} />
@@ -547,7 +530,7 @@ export default function ScanScreen() {
       )}
 
       {/* ── Visual mode overlay ── */}
-      {scanMode === 'visual' && !scanning && (
+      {scanMode === 'visual' && !lockRef.current && (
         <>
           {/* Subtle corner guides to indicate full-frame capture */}
           {[
@@ -593,12 +576,12 @@ export default function ScanScreen() {
           which blocks the JS event loop waiting for main-thread UIKit layout.
           Pre-mounting and toggling opacity is a trivial property update that
           completes between camera frames. ── */}
-      <View
-        pointerEvents={scanning ? 'box-none' : 'none'}
+      <Animated.View
+        pointerEvents="none"
         style={[StyleSheet.absoluteFill, {
           backgroundColor: 'rgba(13,13,13,0.94)',
           alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32,
-          opacity: scanning ? 1 : 0,
+          opacity: overlayAnim,
         }]}
       >
         <View style={{
@@ -640,7 +623,7 @@ export default function ScanScreen() {
             );
           })}
         </View>
-      </View>
+      </Animated.View>
 
       {/* ── Debug panel ── */}
       {dbgRef.current.length > 0 && (
@@ -672,7 +655,7 @@ export default function ScanScreen() {
       </Pressable>
 
       {/* ── Mode toggle pill ── */}
-      {!scanning && (
+      {!lockRef.current && (
         <View style={{
           position: 'absolute', top: insets.top + 8, left: 0, right: 0,
           alignItems: 'center', pointerEvents: 'box-none',
@@ -738,7 +721,7 @@ export default function ScanScreen() {
       )}
 
       {/* ── Barcode scan quota chip (free users, barcode mode only) ── */}
-      {!isPremium && scanMode === 'barcode' && remainingScans !== null && !scanning && (
+      {!isPremium && scanMode === 'barcode' && remainingScans !== null && !lockRef.current && (
         <View style={{
           position: 'absolute', top: insets.top + 58, left: 0, right: 0,
           alignItems: 'center', pointerEvents: 'box-none',
