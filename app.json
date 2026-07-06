@@ -20,7 +20,8 @@
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "Allow Trendnable to use your camera to scan barcodes and identify collectibles with Visual Scan."
+        "NSCameraUsageDescription": "Allow Trendnable to use your camera to scan barcodes and identify collectibles with Visual Scan.",
+        "NSLocationWhenInUseUsageDescription": "Trendnable does not use your location. This entry is required because a third-party SDK included in the app references location APIs."
       }
     },
     "android": {
@@ -39,10 +40,6 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      ["expo-camera", {
-        "cameraPermission": "Allow Trendnable to use your camera to scan barcodes and identify collectibles with Visual Scan.",
-        "microphonePermission": false
-      }],
       "expo-notifications",
       "expo-apple-authentication",
       "./plugins/fix-ios-assets"
