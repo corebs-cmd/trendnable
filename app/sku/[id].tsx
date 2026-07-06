@@ -257,10 +257,15 @@ function buildChartPath(values: number[], W: number, H: number, pad = 8) {
   const valid = values.filter((v) => typeof v === 'number' && isFinite(v));
   if (valid.length < 2) return { d: '', area: '', lastX: 0, lastY: 0 };
   const min = Math.min(...valid), max = Math.max(...valid);
-  const range = max - min || 1;
+  const range = max - min;
   const n = valid.length;
   const xs = (i: number) => pad + (i / (n - 1)) * (W - 2 * pad);
-  const ys = (v: number) => H - pad - ((v - min) / range) * (H - 2 * pad);
+  // When all values are identical (range === 0) render at 55% height — visually
+  // centred and clearly intentional rather than hugging the bottom baseline.
+  const flatY = H * 0.55;
+  const ys = (v: number) => range === 0
+    ? flatY
+    : H - pad - ((v - min) / range) * (H - 2 * pad);
   const pts = valid.map((v, i) => [xs(i), ys(v)]);
   let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
   for (let i = 0; i < pts.length - 1; i++) {
@@ -302,7 +307,7 @@ function HistoryCard({ sku, theme, isPremium, window, setWindow, loading, error 
         </View>
 
         {loading ? (
-          <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+          <View style={{ height: H, alignItems: 'center', justifyContent: 'center' }}>
             <ActivityIndicator color={theme.accent} />
           </View>
         ) : error ? (
