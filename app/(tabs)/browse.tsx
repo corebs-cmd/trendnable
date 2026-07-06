@@ -19,6 +19,7 @@ import { SKU } from '@/lib/types';
 import AppHeader from '@/components/AppHeader';
 import { HotScoreBadge } from '@/components/HotScore';
 import { ProductThumb } from '@/components/ProductPlaceholder';
+import MostPopularCarousel from '@/components/MostPopularCarousel';
 
 // ── Category images (same assets as onboarding) ───────────────────────────────
 
@@ -173,6 +174,16 @@ export default function BrowseScreen() {
             ))}
           </View>
         )}
+
+        {/* Most Popular carousel — hidden while user is searching */}
+        {!trimmedQuery && <MostPopularCarousel showPrices />}
+
+        {/* Categories section header */}
+        <View style={{ paddingHorizontal: 20, marginTop: !trimmedQuery ? 8 : 0, marginBottom: 12 }}>
+          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 19, color: theme.text }}>
+            Categories
+          </Text>
+        </View>
 
         {/* Category grid */}
         {filteredCategories.length === 0 ? (

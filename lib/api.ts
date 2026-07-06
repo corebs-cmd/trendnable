@@ -1004,3 +1004,19 @@ export async function callVisionPipeline(imageBase64: string, accessToken: strin
   }
   return mapScanResult(data);
 }
+
+// ── Most popular SKUs ─────────────────────────────────────────────────────────
+
+export async function fetchPopularSkus(limit = 10): Promise<SKU[]> {
+  const { data, error } = await supabase
+    .from('v_popular_skus')
+    .select('*')
+    .order('popularity_score', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('fetchPopularSkus:', error.message);
+    return [];
+  }
+  return (data ?? []).map(rowToSku);
+}
