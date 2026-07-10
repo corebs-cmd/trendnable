@@ -18,6 +18,7 @@ import { catById, fmtPrice } from '@/lib/appConfig';
 import { CollectionItemEnriched, UpgradeContext, CatalogCollectionItem, CollectionFormData } from '@/lib/types';
 import { promoteCatalogToSku, fetchSkuById } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
+import { exportCollectionAsCSV } from '@/lib/exportCollection';
 import AppHeader from '@/components/AppHeader';
 import IconButton from '@/components/IconButton';
 import Sparkline from '@/components/Sparkline';
@@ -205,6 +206,7 @@ export default function CollectionScreen() {
   const [scrolled, setScrolled] = useState(false);
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [catalogDetailId, setCatalogDetailId] = useState<string | null>(null);
   const [alertSkuId, setAlertSkuId] = useState<string | null>(null);
 
@@ -232,6 +234,18 @@ export default function CollectionScreen() {
   const catalogQty = useMemo(() =>
     catalogCollection.reduce((s, i) => s + i.qty, 0),
   [catalogCollection]);
+
+  const handleExport = useCallback(async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await exportCollectionAsCSV(items, catalogCollection);
+    } catch (err: any) {
+      Alert.alert('Export failed', err?.message ?? 'Could not export collection. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  }, [items, catalogCollection, exporting]);
 
   const total = useMemo(() => items.reduce((s, i) => s + i.current, 0) + catalogTotal, [items, catalogTotal]);
   const totalCost = useMemo(() => items.reduce((s, i) => s + i.cost, 0) + catalogCost, [items, catalogCost]);
@@ -307,8 +321,8 @@ export default function CollectionScreen() {
             <View style={{ position: 'relative' }}>
               <IconButton
                 theme={theme}
-                accessibilityLabel={isPremium ? 'Share collection' : 'Share collection (Premium)'}
-                onPress={() => isPremium ? null : setUpgradeContext('share')}
+                accessibilityLabel={isPremium ? 'Export collection as CSV' : 'Export collection (Premium)'}
+                onPress={() => isPremium ? handleExport() : setUpgradeContext('share')}
               >
                 <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isPremium ? theme.muted : theme.premium} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                   <Path d="M12 16V4M8 8l4-4 4 4" />
