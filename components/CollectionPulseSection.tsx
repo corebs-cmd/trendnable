@@ -127,9 +127,9 @@ function FlaggedRow({ item, theme, onPress }: { item: FlaggedItem; theme: Return
               <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, color: reasonColor, letterSpacing: 0.5 }}>{reasonLabel}</Text>
             </View>
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: MUTED }} numberOfLines={1}>
-              ${fmtPrice(item.price_median)}
-              {isNearPeak && item.peak_90d != null ? `  ·  90d $${fmtPrice(item.peak_90d)}` : ''}
-              {!isNearPeak && item.avg_30d != null ? `  ·  avg $${fmtPrice(item.avg_30d)}` : ''}
+              {fmtPrice(item.price_median)}
+              {isNearPeak && item.peak_90d != null ? `  ·  90d ${fmtPrice(item.peak_90d)}` : ''}
+              {!isNearPeak && item.avg_30d != null ? `  ·  avg ${fmtPrice(item.avg_30d)}` : ''}
             </Text>
           </View>
         </View>
