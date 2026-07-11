@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.trendnable.app",
-      "buildNumber": "9",
+      "buildNumber": "66",
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -30,7 +30,9 @@
         "backgroundColor": "#0A1426"
       },
       "package": "com.trendnable.app",
-      "permissions": ["android.permission.CAMERA"]
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "bundler": "metro",

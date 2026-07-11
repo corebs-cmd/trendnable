@@ -1,7 +1,6 @@
 const { withDangerousMod } = require('@expo/config-plugins');
 const path = require('path');
 const fs = require('fs');
-const { execSync } = require('child_process');
 
 // Ensures AppIcon has no alpha channel and SplashScreenLegacy has proper images.
 // Runs automatically during `expo prebuild` so fixes persist across clean builds.
@@ -10,7 +9,6 @@ module.exports = function fixIosAssets(config) {
     'ios',
     (cfg) => {
       const projectRoot = cfg.modRequest.projectRoot;
-      // xcassets live at ios/{ProjectName}/Images.xcassets
       const projectName = cfg.modRequest.projectName;
       const xcassets = path.join(
         cfg.modRequest.platformProjectRoot,
@@ -34,16 +32,8 @@ function fixAppIcon(projectRoot, xcassets) {
   if (!fs.existsSync(iconSrc)) return;
   fs.mkdirSync(iconDir, { recursive: true });
 
-  execSync(
-    `python3 -c "
-from PIL import Image
-img = Image.open('${iconSrc}').convert('RGBA')
-bg = Image.new('RGB', img.size, (0,0,0))
-bg.paste(img, mask=img.split()[3])
-bg.save('${iconDst}', 'PNG')
-"`,
-    { stdio: 'inherit' },
-  );
+  // Copy icon directly - Expo's asset processing already handles format
+  fs.copyFileSync(iconSrc, iconDst);
 }
 
 function fixSplashLegacy(projectRoot, xcassets) {
@@ -53,17 +43,10 @@ function fixSplashLegacy(projectRoot, xcassets) {
   if (!fs.existsSync(splashSrc)) return;
   fs.mkdirSync(imageset, { recursive: true });
 
-  const sizes = { 'image.png': 320, 'image@2x.png': 640, 'image@3x.png': 960 };
-  for (const [fname, px] of Object.entries(sizes)) {
+  // Copy splash image for all sizes - iOS will scale as needed
+  const sizes = { 'image.png': true, 'image@2x.png': true, 'image@3x.png': true };
+  for (const fname of Object.keys(sizes)) {
     const dst = path.join(imageset, fname);
-    execSync(
-      `python3 -c "
-from PIL import Image
-img = Image.open('${splashSrc}')
-img = img.resize((${px}, ${px}), Image.LANCZOS)
-img.save('${dst}', 'PNG')
-"`,
-      { stdio: 'inherit' },
-    );
+    fs.copyFileSync(splashSrc, dst);
   }
 }

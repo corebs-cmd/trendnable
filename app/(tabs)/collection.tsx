@@ -153,15 +153,17 @@ export default function CollectionScreen() {
     if (!userId) return;
     let active = true;
     const run = async () => {
-      await loadUserData(userId);
-      if (!active) return;
-      loadCollectionPulse();
+      try {
+        await loadUserData(userId);
+        if (!active) return;
+        loadCollectionPulse();
 
-      // Recover storeCollection items whose SKU isn't in hotSkus.
-      // This happens when a scan-created SKU (is_active:false) is not in v_hot_skus.
-      // After completeCatalogMigration clears catalog_id, the item lives only in
-      // storeCollection — if the SKU isn't in hotSkus the item becomes invisible.
-      const currentHotIds = new Set(useAppStore.getState().hotSkus.map((s) => s.id));
+        // Recover storeCollection items whose SKU isn't in hotSkus.
+        // This happens when a scan-created SKU (is_active:false) is not in v_hot_skus.
+        // After completeCatalogMigration clears catalog_id, the item lives only in
+        // storeCollection — if the SKU isn't in hotSkus the item becomes invisible.
+        const hotSkusData = useAppStore.getState().hotSkus || [];
+        const currentHotIds = new Set(hotSkusData.map((s) => s.id));
       for (const item of useAppStore.getState().collection) {
         if (!currentHotIds.has(item.skuId)) {
           fetchSkuById(item.skuId).then((sku) => { if (sku && active) mergeSkuIntoHot(sku); }).catch(() => {});
@@ -196,6 +198,9 @@ export default function CollectionScreen() {
           fetchSkuById(promotion.skuId).then((sku) => { if (sku) mergeSkuIntoHot(sku); }).catch(() => {});
         }
       }
+      } catch (err) {
+        console.error('Collection tab error:', err);
+      }
     };
     run();
     return () => { active = false; };
@@ -211,10 +216,11 @@ export default function CollectionScreen() {
   const [alertSkuId, setAlertSkuId] = useState<string | null>(null);
 
   const items: CollectionItemEnriched[] = useMemo(() => {
+    if (!storeCollection || !hotSkus) return [];
     return storeCollection.map((item) => {
       const sku = hotSkus.find((s) => s.id === item.skuId);
       if (!sku) return null;
-      const current = sku.price.median * item.qty;
+      const current = sku.price?.median ? sku.price.median * item.qty : 0;
       const cost = item.purchased * item.qty;
       return { ...item, sku, current, cost, pl: current - cost };
     }).filter(Boolean) as CollectionItemEnriched[];
