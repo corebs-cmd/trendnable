@@ -1,5 +1,4 @@
 import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 import { CollectionItemEnriched, CatalogCollectionItem } from './types';
 import { catById, fmtPrice } from './appConfig';
 
@@ -95,6 +94,8 @@ export async function exportCollectionAsCSV(
     encoding: FileSystem.EncodingType.UTF8,
   });
 
+  // Lazy-load Sharing only when needed
+  const Sharing = await import('expo-sharing');
   const canShare = await Sharing.isAvailableAsync();
   if (!canShare) {
     throw new Error('Sharing is not available on this device.');
