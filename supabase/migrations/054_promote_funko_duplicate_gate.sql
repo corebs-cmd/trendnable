@@ -1,14 +1,8 @@
--- 045_promote_candidate_seed_data.sql
+-- 054_promote_funko_duplicate_gate.sql
 --
--- When a discovery candidate is promoted to a SKU, seed the new SKU with all
--- data already available in evidence_json so it isn't empty until the next
--- pipeline run:
---
---   1. skus.ebay_url   ← evidence_json.ebay_listing_url
---   2. sku_narratives  ← evidence_json.reasoning  (shows in "Why it's hot")
---   3. daily_snapshots ← evidence_json.price_median (price shows immediately)
---   4. hot_index       ← zero-scored row so the SKU is visible in the app;
---                        proper scores computed on next hot-pipeline run
+-- Add Gate 4 to promote_candidate_to_sku to reject candidates with duplicate
+-- Funko Pop numbers before attempting insertion. This prevents the unique
+-- constraint violation that was causing 500 errors on spotlight confirm.
 
 create or replace function promote_candidate_to_sku(candidate_id uuid)
 returns text
