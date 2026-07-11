@@ -164,13 +164,14 @@ export default function CollectionScreen() {
         // storeCollection — if the SKU isn't in hotSkus the item becomes invisible.
         const hotSkusData = useAppStore.getState().hotSkus || [];
         const currentHotIds = new Set(hotSkusData.map((s) => s.id));
-      for (const item of useAppStore.getState().collection) {
+      const collectionData = useAppStore.getState().collection || [];
+      for (const item of collectionData) {
         if (!currentHotIds.has(item.skuId)) {
           fetchSkuById(item.skuId).then((sku) => { if (sku && active) mergeSkuIntoHot(sku); }).catch(() => {});
         }
       }
 
-      const all = useAppStore.getState().catalogCollection;
+      const all = useAppStore.getState().catalogCollection || [];
 
       // Syncing: sku_id already known in DB — just clear the catalog link
       const syncing = all.filter((i) => !!i.skuId);
