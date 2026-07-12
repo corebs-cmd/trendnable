@@ -91,7 +91,7 @@ export async function exportCollectionAsCSV(
   const filePath = `${FileSystem.cacheDirectory}${fileName}`;
 
   await FileSystem.writeAsStringAsync(filePath, csv, {
-    encoding: FileSystem.EncodingType.UTF8,
+    encoding: 'utf8',
   });
 
   // Lazy-load Sharing only when needed
