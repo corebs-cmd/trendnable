@@ -279,7 +279,7 @@ Deno.serve(async (req) => {
     let totalOutputTokens = 0;
     const BATCH = 40;
 
-    for (let i = 0; i < Math.min(filtered.length, 320); i += BATCH) {
+    for (let i = 0; i < Math.min(filtered.length, 250); i += BATCH) {
       const batch = filtered.slice(i, i + BATCH);
       const { candidates: approved, inputTokens, outputTokens } = await classifyWithClaude(batch, allKnownNames);
       candidates.push(...approved);
