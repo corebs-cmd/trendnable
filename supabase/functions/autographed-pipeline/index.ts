@@ -224,12 +224,12 @@ Deno.serve(async (req) => {
 
     const ebayToken = await getEbayToken();
 
-    // Collect eBay results, deduplicate by title
+    // Collect eBay results in parallel, deduplicate by title
     const seenTitles = new Set<string>();
     const allItems: any[] = [];
 
-    for (const query of AUTOGRAPHED_SEARCHES) {
-      const results = await searchEbayWatched(query, ebayToken);
+    const searchResults = await Promise.all(AUTOGRAPHED_SEARCHES.map((q) => searchEbayWatched(q, ebayToken)));
+    for (const results of searchResults) {
       for (const item of results) {
         const key = (item.title ?? '').toLowerCase().trim();
         if (key && !seenTitles.has(key)) {
@@ -237,7 +237,6 @@ Deno.serve(async (req) => {
           allItems.push(item);
         }
       }
-      await new Promise((r) => setTimeout(r, 350));
     }
 
     // Build title → eBay URL map
@@ -258,11 +257,11 @@ Deno.serve(async (req) => {
       return true;
     });
 
-    // Classify with Claude in batches of 20
+    // Classify with Claude in batches of 30 to reduce API calls
     const candidates: any[] = [];
     let totalInputTokens  = 0;
     let totalOutputTokens = 0;
-    const BATCH = 20;
+    const BATCH = 30;
 
     for (let i = 0; i < Math.min(filtered.length, MAX_ITEMS_FOR_CLAUDE); i += BATCH) {
       const batch = filtered.slice(i, i + BATCH);
@@ -271,7 +270,7 @@ Deno.serve(async (req) => {
       totalInputTokens  += inputTokens;
       totalOutputTokens += outputTokens;
       if (i + BATCH < filtered.length) {
-        await new Promise((r) => setTimeout(r, 800));
+        await new Promise((r) => setTimeout(r, 200));
       }
     }
 
