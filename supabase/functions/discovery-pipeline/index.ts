@@ -273,13 +273,13 @@ Deno.serve(async (req) => {
       filtered.push(effectiveItem);
     }
 
-    // Classify with Claude in batches of 40 — accumulate token usage
+    // Classify with Claude in batches of 50 — accumulate token usage
     const candidates: any[] = [];
     let totalInputTokens  = 0;
     let totalOutputTokens = 0;
-    const BATCH = 40;
+    const BATCH = 50;
 
-    for (let i = 0; i < Math.min(filtered.length, 250); i += BATCH) {
+    for (let i = 0; i < Math.min(filtered.length, 200); i += BATCH) {
       const batch = filtered.slice(i, i + BATCH);
       const { candidates: approved, inputTokens, outputTokens } = await classifyWithClaude(batch, allKnownNames);
       candidates.push(...approved);
