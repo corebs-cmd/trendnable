@@ -18,6 +18,7 @@ import Svg, { Path, Circle, Defs, Pattern, Rect, LinearGradient as SvgLinearGrad
 
 import { buildTheme, categoryColor } from '@/lib/theme';
 import { catById, fandomById, fmtPrice } from '@/lib/appConfig';
+import { getTierByScore } from '@/lib/hotScoreTiers';
 import { useAppStore } from '@/stores/appStore';
 import { fetchSkuHistory, fetchSkuById, fetchSkuInsight } from '@/lib/api';
 import { SKU, InsightResponse } from '@/lib/types';
@@ -101,7 +102,7 @@ function SectionHeader({ title, isDark }: { title: string; isDark: boolean }) {
   );
 }
 
-/* Tier/direction pill — matches list badge colors when direction is available */
+/* Tier/direction pill — hot score tier system with colors and emojis */
 const DIRECTION_PILL: Record<string, { dot: string; bg: string; border: string; label: string }> = {
   rising:  { dot: '#34d399', bg: 'rgba(16,185,129,0.12)',  border: 'rgba(52,211,153,0.32)',  label: 'RISING'  },
   cooling: { dot: '#fb923c', bg: 'rgba(249,115,22,0.12)',  border: 'rgba(251,146,60,0.32)',  label: 'COOLING' },
@@ -110,13 +111,13 @@ const DIRECTION_PILL: Record<string, { dot: string; bg: string; border: string; 
 };
 
 function TierPill({ score, direction, isDark }: { score: number; direction?: string | null; isDark: boolean }) {
-  const scoreTier = score >= 80 ? 'HOT' : score >= 65 ? 'STRONG' : score >= 40 ? 'HOLDING' : 'WATCH';
+  const tier = getTierByScore(score);
   const cfg = direction ? DIRECTION_PILL[direction] ?? DIRECTION_PILL.holding : null;
-  const dotColor  = cfg ? cfg.dot    : C.gold;
-  const bgColor   = cfg ? cfg.bg     : 'rgba(241,194,76,0.12)';
-  const bdColor   = cfg ? cfg.border : 'rgba(241,194,76,0.32)';
-  const label     = cfg ? cfg.label  : scoreTier;
-  const labelColor = cfg ? cfg.dot   : C.gold;
+  const dotColor  = cfg ? cfg.dot    : tier.color;
+  const bgColor   = cfg ? cfg.bg     : tier.bgColor;
+  const bdColor   = cfg ? cfg.border : tier.borderColor;
+  const label     = cfg ? cfg.label  : `${tier.emoji} ${tier.label}`;
+  const labelColor = cfg ? cfg.dot   : tier.color;
 
   return (
     <View style={{
