@@ -538,7 +538,7 @@ export default function SKUDetailScreen() {
   }
 
   const deltaColor = sku.delta > 0 ? C.green : sku.delta < 0 ? theme.neg : C.green;
-  const deltaLabel = sku.delta > 0 ? `+${sku.delta}` : sku.delta < 0 ? `−${Math.abs(sku.delta)}` : `+${sku.delta}`;
+  const deltaLabel = sku.delta > 0 ? `+${sku.delta}` : sku.delta < 0 ? `−${Math.abs(sku.delta)}` : "—";
 
   const marketplaces = [
     ...(sku.ebay_url ? [{
