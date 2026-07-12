@@ -22,6 +22,9 @@ const TIER1_PATTERNS: RegExp[] = [
   /\bredeemable\b/i,
   /\bcrypto\b/i,
   /\bdigital\b/i,
+  /\bas[\s-]*is\b/i,
+  /\bno\s+returns?\b/i,
+  /\b(bulk|wholesale)\b/i,
 ];
 
 export function titlePassesTier1(title: string): boolean {

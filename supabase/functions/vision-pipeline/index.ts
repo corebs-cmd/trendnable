@@ -160,13 +160,14 @@ Supported categories:
 - hottoys: Hot Toys 1/6 scale figures (MMS/DX codes)
 - neca: NECA action figures
 - hwheels: Hot Wheels die-cast cars
+- thrilljoy: ThrillJoy designer toy blind boxes
 - other: any other collectable
 
 Return ONLY this JSON:
 {
   "identified": true,
   "candidate_name": "most specific name (e.g. 'Funko Pop Iron Man #4', 'Charizard VMAX Secret Rare', 'Pop Mart Labubu Forest Series')",
-  "category": "funko | tcg | popmart | hottoys | neca | hwheels | other",
+  "category": "funko | tcg | popmart | hottoys | neca | hwheels | thrilljoy | other",
   "ebay_query": "search string to find this exact item on eBay",
   "confidence": "high | medium | low",
   "visible_text": "all text readable in the image"
@@ -254,6 +255,7 @@ async function classifyWithClaude(
     hottoys: `Include MMS/DX code if visible. Note scale and exclusive variants.`,
     neca: `Include scale. Note Ultimate, convention, or retailer exclusive variants.`,
     hwheels: `Identify Super Treasure Hunt (STH), Treasure Hunt (TH), or premium series. Note year and casting.`,
+    thrilljoy: `Identify figure name and series/collection. Note if it's a secret/hidden figure, limited edition, or chase variant.`,
   };
 
   const rules = categoryRules[categoryId] ?? '';
