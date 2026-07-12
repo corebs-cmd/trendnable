@@ -90,9 +90,7 @@ export async function exportCollectionAsCSV(
   const fileName = `trendnable-collection-${dateStr}.csv`;
   const filePath = `${FileSystem.cacheDirectory}${fileName}`;
 
-  await FileSystem.writeAsStringAsync(filePath, csv, {
-    encoding: 'utf8',
-  });
+  await FileSystem.writeAsStringAsync(filePath, csv);
 
   // Lazy-load Sharing only when needed
   const Sharing = await import('expo-sharing');
