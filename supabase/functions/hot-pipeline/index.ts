@@ -209,8 +209,8 @@ Deno.serve(async (req) => {
     const zeroPriceSkuIds: string[] = [];
     const skuMarketData: SkuMarketData[] = [];
 
-    // Batch eBay fetches in parallel groups (5 at a time) to speed up processing
-    const BATCH_SIZE = 5;
+    // Batch eBay fetches in parallel groups (10 at a time) to speed up processing
+    const BATCH_SIZE = 10;
     for (let i = 0; i < (skus ?? []).length; i += BATCH_SIZE) {
       const batch = (skus ?? []).slice(i, i + BATCH_SIZE);
       const batchResults = await Promise.allSettled(
