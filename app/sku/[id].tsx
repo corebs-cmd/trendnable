@@ -104,34 +104,29 @@ function SectionHeader({ title, isDark }: { title: string; isDark: boolean }) {
 
 function TierPill({ score, isDark }: { score: number; isDark: boolean }) {
   const tier = getTierByScore(score);
-  const dotColor  = tier.color;
-  const bgColor   = tier.bgColor;
-  const bdColor   = tier.borderColor;
-  const label     = `${tier.emoji} ${tier.label}`;
-  const labelColor = tier.color;
 
   return (
     <View style={{
-      flexDirection: 'row', alignItems: 'center', gap: 11,
-      backgroundColor: bgColor,
-      borderWidth: 1, borderColor: bdColor,
+      flexDirection: 'row', alignItems: 'center', gap: 8,
+      backgroundColor: tier.bgColor,
+      borderWidth: 1, borderColor: tier.borderColor,
       borderRadius: 999,
-      paddingVertical: 9, paddingLeft: 13, paddingRight: 16,
+      paddingVertical: 8, paddingHorizontal: 13,
     }}>
-      <View style={{
-        width: 13, height: 13, borderRadius: 999,
-        backgroundColor: dotColor,
-        shadowColor: dotColor, shadowOpacity: 0.7, shadowRadius: 6, shadowOffset: { width: 0, height: 0 },
-      }} />
       <Text style={{
-        fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 1,
-        color: labelColor, textTransform: 'uppercase',
+        fontSize: 20,
       }}>
-        {label}
+        {tier.emoji}
       </Text>
       <Text style={{
-        fontFamily: 'JetBrainsMono_700Bold', fontSize: 22,
-        color: isDark ? '#E1E4E6' : '#15171A',
+        fontFamily: 'Inter_700Bold', fontSize: 13, letterSpacing: 0.5,
+        color: tier.color, textTransform: 'uppercase',
+      }}>
+        {tier.label}
+      </Text>
+      <Text style={{
+        fontFamily: 'JetBrainsMono_700Bold', fontSize: 18,
+        color: tier.color,
         fontVariant: ['tabular-nums'],
       }}>
         {score}
