@@ -232,12 +232,12 @@ Deno.serve(async (req) => {
 
     const ebayToken = await getEbayToken();
 
-    // Collect eBay results, deduplicate by title
+    // Collect eBay results in parallel, deduplicate by title
     const seenTitles = new Set<string>();
     const allItems: any[] = [];
 
-    for (const query of FUNKO_SEARCHES) {
-      const results = await searchEbayWatched(query, ebayToken);
+    const searchResults = await Promise.all(FUNKO_SEARCHES.map((q) => searchEbayWatched(q, ebayToken)));
+    for (const results of searchResults) {
       for (const item of results) {
         const key = (item.title ?? '').toLowerCase().trim();
         if (key && !seenTitles.has(key)) {
@@ -245,7 +245,6 @@ Deno.serve(async (req) => {
           allItems.push(item);
         }
       }
-      await new Promise((r) => setTimeout(r, 350));
     }
 
     // Build title → eBay URL map
@@ -290,7 +289,7 @@ Deno.serve(async (req) => {
       totalInputTokens  += inputTokens;
       totalOutputTokens += outputTokens;
       if (i + BATCH < filtered.length) {
-        await new Promise((r) => setTimeout(r, 800));
+        await new Promise((r) => setTimeout(r, 200));
       }
     }
 
