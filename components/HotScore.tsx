@@ -5,7 +5,6 @@ import { Theme } from '@/lib/theme';
 import { SKU } from '@/lib/types';
 import { getTierByScore } from '@/lib/hotScoreTiers';
 import Sparkline from '@/components/Sparkline';
-import { DirectionBadge } from '@/components/signals/DirectionBadge';
 
 // ── HotScoreBadge — the new pill badge design ─────────────────────────────────
 // Tier-based colors: hot(≥80)=gold, strong(≥65)=blue, cool(≥40)=surface, faint=transparent
@@ -25,31 +24,6 @@ const BADGE_DIMS = {
 };
 
 export function HotScoreBadge({ sku, theme, size = 'md', showSpark = true }: HotScoreBadgeProps) {
-  // When direction is available from an insight, use the directional badge
-  if (sku.direction) {
-    return (
-      <View style={styles.badgeRow}>
-        {showSpark && sku.history.length > 1 && (
-          <Sparkline
-            data={sku.history}
-            theme={theme}
-            w={BADGE_DIMS[size].sparkW}
-            h={BADGE_DIMS[size].sparkH}
-            color={theme.muted}
-            fill
-          />
-        )}
-        <DirectionBadge
-          direction={sku.direction}
-          hotScore={sku.hot}
-          delta24h={sku.delta}
-          size={size}
-          theme={theme}
-        />
-      </View>
-    );
-  }
-
   const score = sku.hot;
   const dims = BADGE_DIMS[size];
   const tierData = getTierByScore(score);
