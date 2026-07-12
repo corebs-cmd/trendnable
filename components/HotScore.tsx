@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { Theme } from '@/lib/theme';
 import { SKU } from '@/lib/types';
+import { getTierByScore } from '@/lib/hotScoreTiers';
 import Sparkline from '@/components/Sparkline';
 import { DirectionBadge } from '@/components/signals/DirectionBadge';
 
@@ -51,25 +52,10 @@ export function HotScoreBadge({ sku, theme, size = 'md', showSpark = true }: Hot
 
   const score = sku.hot;
   const dims = BADGE_DIMS[size];
-
-  const tier = score >= 80 ? 'hot' : score >= 65 ? 'strong' : score >= 40 ? 'cool' : 'faint';
-  const tierBg = {
-    hot:    theme.gold,
-    strong: theme.accent,
-    cool:   theme.dark ? 'rgba(255,255,255,0.08)' : 'rgba(20,20,30,0.06)',
-    faint:  'transparent',
-  }[tier];
-  const tierColor = {
-    hot:    theme.goldInk,
-    strong: theme.accentInk,
-    cool:   theme.text,
-    faint:  theme.muted,
-  }[tier];
-  const hasBorder = tier === 'faint';
+  const tierData = getTierByScore(score);
 
   const arrow = sku.delta > 0 ? '↑' : sku.delta < 0 ? '↓' : '·';
-  const sparkColor =
-    tier === 'hot' ? theme.gold : tier === 'strong' ? theme.accent : theme.muted;
+  const sparkColor = tierData.color;
 
   return (
     <View style={styles.badgeRow}>
@@ -89,72 +75,51 @@ export function HotScoreBadge({ sku, theme, size = 'md', showSpark = true }: Hot
           {
             height: dims.h,
             paddingHorizontal: dims.padX,
-            backgroundColor: tierBg,
+            backgroundColor: tierData.bgColor,
             borderRadius: 999,
-            borderWidth: hasBorder ? StyleSheet.hairlineWidth : 0,
-            borderColor: hasBorder ? theme.hairline : 'transparent',
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: tierData.borderColor,
           },
         ]}
       >
-        {tier === 'hot' && (
-          <Svg
-            width={dims.arrowFs}
-            height={dims.arrowFs}
-            viewBox="0 0 16 16"
-            style={{ marginRight: 4 }}
-          >
-            <Defs>
-              <LinearGradient id="hsFlameGrad" x1="0" y1="1" x2="0" y2="0">
-                <Stop offset="0" stopColor="#FFCC00" />
-                <Stop offset="0.5" stopColor="#FF6B00" />
-                <Stop offset="1" stopColor="#FF2D00" />
-              </LinearGradient>
-            </Defs>
-            <Path d="M8 16c3.314 0 6-2 6-5.5 0-1.5-.5-4-2.5-6 .25 1.5-1.25 2-1.25 2C11 4 9 .5 6 0c.357 2 .5 4-2 6-1.25 1-2 2.729-2 4.5C2 14 4.686 16 8 16z" fill="url(#hsFlameGrad)" />
-          </Svg>
+        {size === 'lg' && (
+          <Text style={{
+            fontFamily: 'Inter_700Bold',
+            fontSize: Math.round(dims.fs * 0.5),
+            color: tierData.color,
+            marginRight: 6,
+          }}>
+            {tierData.emoji}
+          </Text>
         )}
         {size !== 'sm' && (
-          <View style={{ flexDirection: 'column', alignItems: 'flex-end', marginRight: 4 }}>
-            <Text style={{
-              fontFamily: 'Inter_700Bold',
-              fontSize: Math.round(dims.fs * 0.44),
-              color: tierColor,
-              opacity: 0.85,
-              letterSpacing: 0.5,
-              lineHeight: Math.round(dims.fs * 0.5),
-              textTransform: 'uppercase',
-            }}>
-              Hot
-            </Text>
-            <Text style={{
-              fontFamily: 'Inter_700Bold',
-              fontSize: Math.round(dims.fs * 0.44),
-              color: tierColor,
-              opacity: 0.85,
-              letterSpacing: 0.5,
-              lineHeight: Math.round(dims.fs * 0.5),
-              textTransform: 'uppercase',
-            }}>
-              Score
-            </Text>
-          </View>
+          <Text style={{
+            fontFamily: 'Inter_700Bold',
+            fontSize: Math.round(dims.fs * 0.42),
+            color: tierData.color,
+            letterSpacing: 0.5,
+            marginRight: 4,
+            textTransform: 'uppercase',
+          }}>
+            {tierData.label}
+          </Text>
         )}
         <Text
           style={{
             fontFamily: 'JetBrainsMono_700Bold',
             fontSize: dims.fs,
-            color: tierColor,
+            color: tierData.color,
             fontVariant: ['tabular-nums'],
             letterSpacing: -0.4,
           }}
         >
-          {score}
+          {Math.round(score)}
         </Text>
         <Text
           style={{
             fontFamily: 'JetBrainsMono_400Regular',
             fontSize: Math.round(dims.fs * 0.62),
-            color: tierColor,
+            color: tierData.color,
             opacity: 0.75,
             marginLeft: 3,
           }}
@@ -184,13 +149,10 @@ const SIZE_CONFIG: Record<HotScoreSize, {
   sm: { fontSize: 12, sparkW: 60,  sparkH: 18, barH: 4, ringR: 14 },
 };
 
-function scoreColor(score: number, theme: Theme) {
-  return score >= 80 ? theme.gold : score >= 65 ? theme.accent : score >= 40 ? theme.pos : theme.neg;
-}
-
 export default function HotScore({ sku, theme, viz = 'spark', size = 'md' }: HotScoreProps) {
   const cfg = SIZE_CONFIG[size];
-  const color = scoreColor(sku.hot, theme);
+  const tierData = getTierByScore(sku.hot);
+  const color = tierData.color;
 
   if (viz === 'bar') {
     const pct = Math.min(100, Math.max(0, sku.hot));

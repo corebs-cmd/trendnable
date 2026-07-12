@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { buildTheme } from '@/lib/theme';
 import { CollectionPulse, FlaggedItem, DemandRow, UpgradeContext } from '@/lib/types';
 import { fmtPrice } from '@/lib/appConfig';
+import { getTierByScore } from '@/lib/hotScoreTiers';
 
 // ── Build-spec design tokens ──────────────────────────────────────────────────
 const GOLD   = '#f1c24c';
@@ -193,21 +194,29 @@ function DemandTable({ hottest, coolest }: { hottest: DemandRow[]; coolest: Dema
       {Array.from({ length: count }).map((_, i) => {
         const h = hottest[i];
         const c = coolest[i];
+        const hTier = h ? getTierByScore(h.hot_score) : null;
+        const cTier = c ? getTierByScore(c.hot_score) : null;
         return (
           <View key={i} style={{ flexDirection: 'row', gap: 12, marginBottom: 9 }}>
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              {h ? (
+              {h && hTier ? (
                 <>
                   <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: TEXT, flex: 1 }} numberOfLines={1}>{h.name}</Text>
-                  <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 12, color: GREEN, marginLeft: 6 }}>{Math.round(h.hot_score)}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 6 }}>
+                    <Text style={{ fontSize: 12 }}>{hTier.emoji}</Text>
+                    <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 12, color: hTier.color }}>{Math.round(h.hot_score)}</Text>
+                  </View>
                 </>
               ) : null}
             </View>
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              {c ? (
+              {c && cTier ? (
                 <>
                   <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: TEXT, flex: 1 }} numberOfLines={1}>{c.name}</Text>
-                  <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 12, color: MUTED, marginLeft: 6 }}>{Math.round(c.hot_score)}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 6 }}>
+                    <Text style={{ fontSize: 12 }}>{cTier.emoji}</Text>
+                    <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 12, color: cTier.color }}>{Math.round(c.hot_score)}</Text>
+                  </View>
                 </>
               ) : null}
             </View>
@@ -311,14 +320,19 @@ export default function CollectionPulseSection({ pulse, loading, isPremium, them
               <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 9, color: MUTED, letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 2 }}>Standout</Text>
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: TEXT }} numberOfLines={1}>{pulse.standout.name}</Text>
             </View>
-            {/* Gold score badge + "+N today" */}
+            {/* Score badge with tier info + "+N today" */}
             <View style={{ alignItems: 'center' }}>
-              <View style={{ backgroundColor: GOLD, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 7, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 13, color: '#1A1206' }}>
-                  {Math.round(pulse.standout.hot_score)}
-                </Text>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11, color: '#1A1206' }}>↑</Text>
-              </View>
+              {(() => {
+                const tier = getTierByScore(pulse.standout!.hot_score);
+                return (
+                  <View style={{ backgroundColor: GOLD, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 7, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Text style={{ fontSize: 11 }}>{tier.emoji}</Text>
+                    <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 12, color: '#1A1206' }}>
+                      {Math.round(pulse.standout!.hot_score)}
+                    </Text>
+                  </View>
+                );
+              })()}
               {pulse.standout.delta_24h !== 0 && (
                 <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 10, color: GREEN, marginTop: 3 }}>
                   {pulse.standout.delta_24h > 0 ? '+' : ''}{pulse.standout.delta_24h.toFixed(1)} today
