@@ -257,11 +257,11 @@ Deno.serve(async (req) => {
       return true;
     });
 
-    // Classify with Claude in batches of 30 to reduce API calls
+    // Classify with Claude in batches of 40 to reduce API calls
     const candidates: any[] = [];
     let totalInputTokens  = 0;
     let totalOutputTokens = 0;
-    const BATCH = 30;
+    const BATCH = 40;
 
     for (let i = 0; i < Math.min(filtered.length, MAX_ITEMS_FOR_CLAUDE); i += BATCH) {
       const batch = filtered.slice(i, i + BATCH);
