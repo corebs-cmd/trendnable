@@ -537,8 +537,8 @@ Deno.serve(async (req) => {
     const durationMs = Date.now() - startTime;
     const costUsd    = (totalInputTokens * HAIKU_INPUT_RATE) + (totalOutputTokens * HAIKU_OUTPUT_RATE);
 
-    // Log run — non-blocking, don't let this fail the response
-    supabase.from('pipeline_runs').insert({
+    // Log run before returning so admin can see results
+    const { error: logErr } = await supabase.from('pipeline_runs').insert({
       pipeline: 'hot-pipeline',
       duration_ms: durationMs,
       input_tokens: totalInputTokens,
@@ -551,9 +551,8 @@ Deno.serve(async (req) => {
         user_skus_activated: userSkusActivated,
         date: today,
       },
-    }).then(({ error: logErr }) => {
-      if (logErr) console.error('Failed to log pipeline run:', logErr.message);
     });
+    if (logErr) console.error('Failed to log pipeline run:', logErr.message);
 
     return new Response(
       JSON.stringify({
