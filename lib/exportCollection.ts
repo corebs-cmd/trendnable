@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system/legacy';
+import { writeAsStringAsync, cacheDirectory } from 'expo-file-system/legacy';
 import { CollectionItemEnriched, CatalogCollectionItem } from './types';
 import { catById, fmtPrice } from './appConfig';
 
@@ -88,9 +88,9 @@ export async function exportCollectionAsCSV(
   const csv      = lines.join('\n');
   const dateStr  = new Date().toISOString().slice(0, 10);
   const fileName = `trendnable-collection-${dateStr}.csv`;
-  const filePath = `${FileSystem.cacheDirectory}${fileName}`;
+  const filePath = `${cacheDirectory}${fileName}`;
 
-  await FileSystem.writeAsStringAsync(filePath, csv);
+  await writeAsStringAsync(filePath, csv);
 
   // Lazy-load Sharing only when needed
   const Sharing = await import('expo-sharing');
