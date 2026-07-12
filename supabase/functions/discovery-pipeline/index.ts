@@ -216,20 +216,21 @@ Deno.serve(async (req) => {
 
     const ebayToken = await getEbayToken();
 
-    // Collect eBay results across all searches, deduplicate by title
+    // Collect eBay results in parallel, deduplicate by title
     const seenTitles = new Set<string>();
     const allItems: any[] = [];
 
-    for (const search of CATEGORY_SEARCHES) {
-      const results = await searchEbayWatched(search.query, ebayToken);
+    const searchResults = await Promise.all(CATEGORY_SEARCHES.map((s) => searchEbayWatched(s.query, ebayToken)));
+    for (let idx = 0; idx < searchResults.length; idx++) {
+      const results = searchResults[idx];
+      const categoryId = CATEGORY_SEARCHES[idx].category_id;
       for (const item of results) {
         const key = (item.title ?? '').toLowerCase().trim();
         if (key && !seenTitles.has(key)) {
           seenTitles.add(key);
-          allItems.push({ ...item, _category_id: search.category_id });
+          allItems.push({ ...item, _category_id: categoryId });
         }
       }
-      await new Promise((r) => setTimeout(r, 350));
     }
 
     // Build title → eBay listing URL map before filtering (itemWebUrl from Browse API)
@@ -272,11 +273,11 @@ Deno.serve(async (req) => {
       filtered.push(effectiveItem);
     }
 
-    // Classify with Claude in batches of 20 — accumulate token usage
+    // Classify with Claude in batches of 40 — accumulate token usage
     const candidates: any[] = [];
     let totalInputTokens  = 0;
     let totalOutputTokens = 0;
-    const BATCH = 20;
+    const BATCH = 40;
 
     for (let i = 0; i < Math.min(filtered.length, 320); i += BATCH) {
       const batch = filtered.slice(i, i + BATCH);
@@ -285,7 +286,7 @@ Deno.serve(async (req) => {
       totalInputTokens  += inputTokens;
       totalOutputTokens += outputTokens;
       if (i + BATCH < filtered.length) {
-        await new Promise((r) => setTimeout(r, 800));
+        await new Promise((r) => setTimeout(r, 200));
       }
     }
 
