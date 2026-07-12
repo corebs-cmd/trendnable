@@ -15,7 +15,7 @@ const SUPABASE_URL              = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const RAPIDAPI_KEY              = Deno.env.get('RAPIDAPI_KEY') ?? '';
 
-const CONCURRENCY = 10; // parallel RapidAPI calls per wave
+const CONCURRENCY = 20; // parallel RapidAPI calls per wave
 
 // ── RapidAPI fetch ────────────────────────────────────────────────────────────
 
