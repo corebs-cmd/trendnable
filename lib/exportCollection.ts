@@ -1,4 +1,4 @@
-import { writeAsStringAsync, cacheDirectory } from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 import { CollectionItemEnriched, CatalogCollectionItem } from './types';
 import { catById, fmtPrice } from './appConfig';
 
@@ -88,9 +88,16 @@ export async function exportCollectionAsCSV(
   const csv      = lines.join('\n');
   const dateStr  = new Date().toISOString().slice(0, 10);
   const fileName = `trendnable-collection-${dateStr}.csv`;
-  const filePath = `${cacheDirectory}${fileName}`;
+  const filePath = `${FileSystem.documentDirectory}${fileName}`;
 
-  await writeAsStringAsync(filePath, csv);
+  const fs = FileSystem as any;
+  if (fs.writeAsStringAsync) {
+    await fs.writeAsStringAsync(filePath, csv);
+  } else if (fs.write) {
+    await fs.write(filePath, csv, { encoding: 'utf8' });
+  } else {
+    throw new Error('No compatible file write method found');
+  }
 
   // Lazy-load Sharing only when needed
   const Sharing = await import('expo-sharing');
