@@ -1,4 +1,3 @@
-import RNFetchBlob from 'rn-fetch-blob';
 import * as Sharing from 'expo-sharing';
 import { CollectionItemEnriched, CatalogCollectionItem } from './types';
 import { catById, fmtPrice } from './appConfig';
@@ -88,18 +87,18 @@ export async function exportCollectionAsCSV(
   const csv = lines.join('\n');
   const dateStr = new Date().toISOString().slice(0, 10);
   const fileName = `trendnable-collection-${dateStr}.csv`;
-  const filePath = `${RNFetchBlob.fs.dirs.DocumentDir}/${fileName}`;
 
-  await RNFetchBlob.fs.writeFile(filePath, csv, 'utf8');
+  // Create a data URI with the CSV content
+  const base64CSV = Buffer.from(csv).toString('base64');
+  const dataUri = `data:text/csv;base64,${base64CSV}`;
 
   const canShare = await Sharing.isAvailableAsync();
   if (!canShare) {
     throw new Error('Sharing is not available on this device.');
   }
 
-  await Sharing.shareAsync(`file://${filePath}`, {
+  await Sharing.shareAsync(dataUri, {
     mimeType: 'text/csv',
     dialogTitle: 'Export Collection',
-    UTI: 'public.comma-separated-values-text',
   });
 }
