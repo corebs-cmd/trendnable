@@ -1,4 +1,3 @@
-import * as Sharing from 'expo-sharing';
 import { CollectionItemEnriched, CatalogCollectionItem } from './types';
 import { catById, fmtPrice } from './appConfig';
 
@@ -7,7 +6,6 @@ import { catById, fmtPrice } from './appConfig';
 function esc(value: string | number | null | undefined): string {
   if (value == null) return '';
   const str = String(value);
-  // Wrap in quotes if the value contains a comma, quote, or newline
   if (str.includes(',') || str.includes('"') || str.includes('\n')) {
     return `"${str.replace(/"/g, '""')}"`;
   }
@@ -88,17 +86,25 @@ export async function exportCollectionAsCSV(
   const dateStr = new Date().toISOString().slice(0, 10);
   const fileName = `trendnable-collection-${dateStr}.csv`;
 
-  // Create a data URI with the CSV content
-  const base64CSV = Buffer.from(csv).toString('base64');
-  const dataUri = `data:text/csv;base64,${base64CSV}`;
+  // Write file using expo-file-system legacy API
+  const FileSystem = await import('expo-file-system/legacy');
+  const dir = (FileSystem as any).cacheDirectory ?? (FileSystem as any).documentDirectory;
+  if (!dir) {
+    throw new Error('No writable directory available');
+  }
+  const filePath = `${dir}${fileName}`;
+  await (FileSystem as any).writeAsStringAsync(filePath, csv);
 
+  // Share the file
+  const Sharing = await import('expo-sharing');
   const canShare = await Sharing.isAvailableAsync();
   if (!canShare) {
     throw new Error('Sharing is not available on this device.');
   }
 
-  await Sharing.shareAsync(dataUri, {
+  await Sharing.shareAsync(filePath, {
     mimeType: 'text/csv',
     dialogTitle: 'Export Collection',
+    UTI: 'public.comma-separated-values-text',
   });
 }
