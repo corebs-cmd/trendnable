@@ -90,13 +90,13 @@ export async function exportCollectionAsCSV(
   const fileName = `trendnable-collection-${dateStr}.csv`;
   const filePath = `${FileSystem.documentDirectory}${fileName}`;
 
-  const fs = FileSystem as any;
-  if (fs.writeAsStringAsync) {
-    await fs.writeAsStringAsync(filePath, csv);
-  } else if (fs.write) {
-    await fs.write(filePath, csv, { encoding: 'utf8' });
-  } else {
-    throw new Error('No compatible file write method found');
+  try {
+    await (FileSystem as any).writeAsStringAsync(filePath, csv);
+  } catch (err) {
+    // Try new File/Directory API
+    const { File } = await import('expo-file-system');
+    const file = new (File as any)(filePath);
+    await file.write(csv);
   }
 
   // Lazy-load Sharing only when needed
