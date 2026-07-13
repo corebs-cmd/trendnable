@@ -1,4 +1,3 @@
-import * as FileSystem from 'expo-file-system';
 import { CollectionItemEnriched, CatalogCollectionItem } from './types';
 import { catById, fmtPrice } from './appConfig';
 
@@ -85,21 +84,28 @@ export async function exportCollectionAsCSV(
   for (const item of skuItems)     lines.push(skuRow(item));
   for (const item of catalogItems) lines.push(catalogRow(item));
 
-  const csv      = lines.join('\n');
-  const dateStr  = new Date().toISOString().slice(0, 10);
+  const csv = lines.join('\n');
+  const dateStr = new Date().toISOString().slice(0, 10);
   const fileName = `trendnable-collection-${dateStr}.csv`;
-  const filePath = `${FileSystem.documentDirectory}${fileName}`;
 
-  try {
-    await (FileSystem as any).writeAsStringAsync(filePath, csv);
-  } catch (err) {
-    // Try new File/Directory API
-    const { File } = await import('expo-file-system');
-    const file = new (File as any)(filePath);
-    await file.write(csv);
+  // Import FileSystem dynamically to get actual directory
+  const FileSystem = await import('expo-file-system');
+  const dirKey = Object.keys(FileSystem).find(k => k.includes('Directory') && typeof (FileSystem as any)[k] === 'string');
+  if (!dirKey) {
+    throw new Error('No valid directory found in expo-file-system');
   }
 
-  // Lazy-load Sharing only when needed
+  const directory = (FileSystem as any)[dirKey];
+  const filePath = directory + fileName;
+
+  // Write file
+  const writeAsync = (FileSystem as any).writeAsStringAsync || (FileSystem as any).write;
+  if (!writeAsync) {
+    throw new Error('No write method found in expo-file-system');
+  }
+  await writeAsync(filePath, csv);
+
+  // Share the file
   const Sharing = await import('expo-sharing');
   const canShare = await Sharing.isAvailableAsync();
   if (!canShare) {
