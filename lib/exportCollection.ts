@@ -1,5 +1,7 @@
+import { Linking } from 'react-native';
+import { supabase } from './supabase';
 import { CollectionItemEnriched, CatalogCollectionItem } from './types';
-import { catById, fmtPrice } from './appConfig';
+import { catById } from './appConfig';
 
 // ── CSV helpers ───────────────────────────────────────────────────────────────
 
@@ -82,29 +84,18 @@ export async function exportCollectionAsCSV(
   for (const item of skuItems)     lines.push(skuRow(item));
   for (const item of catalogItems) lines.push(catalogRow(item));
 
-  const csv = lines.join('\n');
-  const dateStr = new Date().toISOString().slice(0, 10);
+  const csv      = lines.join('\n');
+  const dateStr  = new Date().toISOString().slice(0, 10);
   const fileName = `trendnable-collection-${dateStr}.csv`;
 
-  // Write file using expo-file-system legacy API
-  const FileSystem = await import('expo-file-system/legacy');
-  const dir = (FileSystem as any).cacheDirectory ?? (FileSystem as any).documentDirectory;
-  if (!dir) {
-    throw new Error('No writable directory available');
-  }
-  const filePath = `${dir}${fileName}`;
-  await (FileSystem as any).writeAsStringAsync(filePath, csv);
-
-  // Share the file
-  const Sharing = await import('expo-sharing');
-  const canShare = await Sharing.isAvailableAsync();
-  if (!canShare) {
-    throw new Error('Sharing is not available on this device.');
-  }
-
-  await Sharing.shareAsync(filePath, {
-    mimeType: 'text/csv',
-    dialogTitle: 'Export Collection',
-    UTI: 'public.comma-separated-values-text',
+  // Upload CSV to Supabase Storage via edge function, get signed URL
+  const { data, error } = await supabase.functions.invoke('export-collection', {
+    body: { csv, fileName },
   });
+
+  if (error) throw new Error(error.message ?? 'Export failed');
+  if (!data?.url) throw new Error('No download URL returned');
+
+  // Open signed URL — iOS opens in Safari where user can save or share
+  await Linking.openURL(data.url);
 }
