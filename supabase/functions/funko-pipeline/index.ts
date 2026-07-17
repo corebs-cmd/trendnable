@@ -421,7 +421,7 @@ Deno.serve(async (req) => {
     const durationMs = Date.now() - startTime;
     const costUsd = (totalInputTokens * HAIKU_INPUT_RATE) + (totalOutputTokens * HAIKU_OUTPUT_RATE);
 
-    supabase.from('pipeline_runs').insert({
+    const { error: logErr } = await supabase.from('pipeline_runs').insert({
       pipeline: 'funko-pipeline',
       duration_ms: durationMs,
       input_tokens: totalInputTokens,
@@ -433,12 +433,12 @@ Deno.serve(async (req) => {
         claude_approved:  candidates.length,
         rejected_no_pop:  rejected,
         inserted,
+        processed:        inserted,
         auto_promoted:    autoPromoted,
         held_for_review:  inserted - autoPromoted,
       },
-    }).then(({ error: logErr }) => {
-      if (logErr) console.error('Failed to log pipeline run:', logErr.message);
     });
+    if (logErr) console.error('Failed to log pipeline run:', logErr.message);
 
     return new Response(
       JSON.stringify({
@@ -459,6 +459,11 @@ Deno.serve(async (req) => {
     );
   } catch (err) {
     console.error('Funko pipeline error:', err);
+    await supabase.from('pipeline_runs').insert({
+      pipeline: 'funko-pipeline',
+      duration_ms: Date.now() - startTime,
+      meta: { error: String(err), processed: 0 },
+    }).catch(() => {});
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500, headers: { 'Content-Type': 'application/json' },
     });

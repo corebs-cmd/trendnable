@@ -628,6 +628,7 @@ Deno.serve(async (req) => {
       meta: {
         skus_evaluated:   allSkus.length,
         insights_written: insightsWritten,
+        processed:        insightsWritten,
         insights_skipped: insightsSkipped,
         llm_narrations:   llmCount,
         cost_exceeded:    costExceeded,
@@ -647,6 +648,11 @@ Deno.serve(async (req) => {
 
   } catch (err) {
     console.error('detect-insights error:', err);
+    await supabase.from('pipeline_runs').insert({
+      pipeline: 'detect-insights',
+      duration_ms: Date.now() - startTime,
+      meta: { error: String(err), processed: 0 },
+    }).catch(() => {});
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500, headers: { 'Content-Type': 'application/json' },
     });

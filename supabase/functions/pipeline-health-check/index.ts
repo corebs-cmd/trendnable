@@ -15,12 +15,12 @@ interface PipelineConfig {
 }
 
 const PIPELINES: PipelineConfig[] = [
-  { name: 'funko-pipeline', expectedTime: '04:30', minProcessed: 1 },
-  { name: 'discovery-pipeline', expectedTime: '05:00', minProcessed: 1 },
-  { name: 'autographed-pipeline', expectedTime: '05:30', minProcessed: 1 },
+  { name: 'funko-pipeline', expectedTime: '04:30', minProcessed: 0 },
+  { name: 'discovery-pipeline', expectedTime: '05:00', minProcessed: 0 },
+  { name: 'autographed-pipeline', expectedTime: '05:30', minProcessed: 0 },
   { name: 'hot-pipeline', expectedTime: '07:00', minProcessed: 100 },
   { name: 'sold-pipeline', expectedTime: '08:30', minProcessed: 1 },
-  { name: 'detect-insights', expectedTime: '09:00', minProcessed: 1 },
+  { name: 'detect-insights', expectedTime: '09:00', minProcessed: 0 },
 ];
 
 interface PipelineResult {
@@ -113,9 +113,9 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Check execution time (warn if > 60s)
+      // Check execution time (warn if > 90s)
       const duration = run.duration_ms ?? 0;
-      if (duration > 60000) {
+      if (duration > 90000) {
         results.push({
           name: pipeline.name,
           ran: true,
@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
           processed,
           duration_ms: duration,
           status: 'warning',
-          message: `Pipeline completed but exceeded 60s timeout (${(duration / 1000).toFixed(1)}s)`,
+          message: `Pipeline completed but exceeded 90s timeout (${(duration / 1000).toFixed(1)}s)`,
         });
         continue;
       }

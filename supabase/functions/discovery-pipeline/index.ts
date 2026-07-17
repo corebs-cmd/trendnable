@@ -437,6 +437,7 @@ Deno.serve(async (req) => {
         after_dedup: filtered.length,
         claude_approved: candidates.length,
         inserted,
+        processed: inserted,
         auto_promoted: autoPromoted,
         held_for_review: inserted - autoPromoted,
         skipped,
@@ -464,6 +465,11 @@ Deno.serve(async (req) => {
     );
   } catch (err) {
     console.error('Discovery pipeline error:', err);
+    await supabase.from('pipeline_runs').insert({
+      pipeline: 'discovery-pipeline',
+      duration_ms: Date.now() - startTime,
+      meta: { error: String(err), processed: 0 },
+    }).catch(() => {});
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
