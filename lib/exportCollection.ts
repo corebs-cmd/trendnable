@@ -89,8 +89,12 @@ export async function exportCollectionAsCSV(
   const fileName = `trendnable-collection-${dateStr}.csv`;
 
   // Upload CSV to Supabase Storage via edge function, get signed URL
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
   const { data, error } = await supabase.functions.invoke('export-collection', {
     body: { csv, fileName },
+    headers: { Authorization: `Bearer ${session.access_token}` },
   });
 
   if (error) throw new Error(error.message ?? 'Export failed');
