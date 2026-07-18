@@ -1,8 +1,13 @@
 // Trendnable — export-collection Edge Function
-// Receives CSV + user info, sends the collection export email via Resend
-// with the CSV attached. Returns ok on success.
+// Two actions:
+//   email    — sends CSV via Resend with attachment
+//   download — uploads CSV to Supabase Storage, returns 1-hour signed URL
 
-const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const RESEND_API_KEY            = Deno.env.get('RESEND_API_KEY') ?? '';
+const SUPABASE_URL              = Deno.env.get('SUPABASE_URL') ?? '';
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
 interface Summary {
   itemCount: number;
@@ -87,20 +92,53 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { csv, fileName, userEmail, summary } = await req.json() as {
+    const { action, csv, fileName, userEmail, summary } = await req.json() as {
+      action: 'email' | 'download';
       csv: string;
       fileName: string;
-      userEmail: string;
-      summary: Summary;
+      userEmail?: string;
+      summary?: Summary;
     };
 
-    if (!csv || !fileName || !userEmail) {
+    if (!csv || !fileName) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
         status: 400, headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    // Encode CSV as base64 for Resend attachment
+    // ── Download: upload to Storage, return signed URL ────────────────────────
+    if (action === 'download') {
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      const csvBytes = new TextEncoder().encode(csv);
+      const blob = new Blob([csvBytes], { type: 'text/csv' });
+      const storageKey = `${Date.now()}-${fileName}`;
+
+      const { error: uploadErr } = await supabase.storage
+        .from('exports')
+        .upload(storageKey, blob, { contentType: 'text/csv' });
+
+      if (uploadErr) throw new Error(`Upload failed: ${uploadErr.message}`);
+
+      const { data: urlData, error: urlErr } = await supabase.storage
+        .from('exports')
+        .createSignedUrl(storageKey, 3600);
+
+      if (urlErr || !urlData?.signedUrl) {
+        throw new Error(`Failed to create signed URL: ${urlErr?.message}`);
+      }
+
+      return new Response(JSON.stringify({ url: urlData.signedUrl }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ── Email: send via Resend with CSV attachment ────────────────────────────
+    if (!userEmail || !summary) {
+      return new Response(JSON.stringify({ error: 'Missing userEmail or summary for email action' }), {
+        status: 400, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     const base64CSV = btoa(unescape(encodeURIComponent(csv)));
 
     const res = await fetch('https://api.resend.com/emails', {
@@ -114,20 +152,12 @@ Deno.serve(async (req) => {
         to: [userEmail],
         subject: 'Your Trendnable Collection Export',
         html: buildEmailHTML(summary, fileName),
-        attachments: [
-          {
-            filename: fileName,
-            content: base64CSV,
-          },
-        ],
+        attachments: [{ filename: fileName, content: base64CSV }],
       }),
     });
 
     const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(`Resend error: ${JSON.stringify(data)}`);
-    }
+    if (!res.ok) throw new Error(`Resend error: ${JSON.stringify(data)}`);
 
     return new Response(JSON.stringify({ ok: true }), {
       headers: { 'Content-Type': 'application/json' },

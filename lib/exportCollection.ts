@@ -1,3 +1,4 @@
+import { Linking } from 'react-native';
 import { supabase } from './supabase';
 import { CollectionItemEnriched, CatalogCollectionItem } from './types';
 import { catById } from './appConfig';
@@ -76,6 +77,34 @@ export interface ExportSummary {
   plPct:      number;
 }
 
+export async function downloadCollectionExport(
+  csv: string,
+  fileName: string,
+): Promise<void> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase.functions.invoke('export-collection', {
+    body: { action: 'download', csv, fileName },
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+
+  if (error) {
+    let detail = error.message ?? 'Download failed';
+    try {
+      const ctx = (error as any)?.context;
+      if (ctx instanceof Response) {
+        const body = await ctx.json();
+        detail = body?.error ?? detail;
+      }
+    } catch {}
+    throw new Error(detail);
+  }
+  if (!data?.url) throw new Error('No download URL returned');
+
+  await Linking.openURL(data.url);
+}
+
 export async function sendCollectionExport(
   csv: string,
   fileName: string,
@@ -86,7 +115,7 @@ export async function sendCollectionExport(
   if (!session) throw new Error('Not authenticated');
 
   const { data, error } = await supabase.functions.invoke('export-collection', {
-    body: { csv, fileName, userEmail, summary },
+    body: { action: 'email', csv, fileName, userEmail, summary },
     headers: { Authorization: `Bearer ${session.access_token}` },
   });
 
