@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   Image,
   Pressable,
@@ -13,8 +13,9 @@ import Svg, { Path, Circle } from 'react-native-svg';
 
 import { useAppStore } from '@/stores/appStore';
 import { buildTheme } from '@/lib/theme';
-import { CATEGORIES, fmtPrice } from '@/lib/appConfig';
+import { CATEGORIES, catById, fmtPrice } from '@/lib/appConfig';
 import { SKU } from '@/lib/types';
+import { searchCatalog } from '@/lib/api';
 
 import AppHeader from '@/components/AppHeader';
 import { HotScoreBadge } from '@/components/HotScore';
@@ -86,8 +87,10 @@ export default function BrowseScreen() {
   const theme   = buildTheme(isDark);
   const { width: sw } = useWindowDimensions();
 
-  const [query, setQuery]     = useState('');
+  const [query, setQuery]       = useState('');
   const [scrolled, setScrolled] = useState(false);
+  const [catalogMatches, setCatalogMatches] = useState<Awaited<ReturnType<typeof searchCatalog>>>([]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const CARD_W = (sw - 40 - 10) / 2; // 20px padding each side, 10px gap
 
@@ -97,6 +100,19 @@ export default function BrowseScreen() {
     if (!trimmedQuery) return [];
     return hotSkus.filter((s) => s.name.toLowerCase().includes(trimmedQuery)).slice(0, 5);
   }, [hotSkus, trimmedQuery]);
+
+  // Debounced catalog search — fires 350ms after the user stops typing
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!trimmedQuery) { setCatalogMatches([]); return; }
+    debounceRef.current = setTimeout(async () => {
+      const skuIds = new Set(skuMatches.map((s) => s.id));
+      const results = await searchCatalog(trimmedQuery, 10);
+      // Exclude catalog items already shown as SKU results
+      setCatalogMatches(results.filter((r) => !r.skuId || !skuIds.has(r.skuId)));
+    }, 350);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [trimmedQuery, skuMatches]);
 
   const filteredCategories = useMemo(() =>
     CATEGORIES.filter((c) => !trimmedQuery || c.label.toLowerCase().includes(trimmedQuery)),
@@ -170,6 +186,52 @@ export default function BrowseScreen() {
                   </Text>
                 </View>
                 <HotScoreBadge sku={sku} theme={theme} size="sm" showSpark={false} />
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        {/* Catalog search results — items not yet in hot SKUs */}
+        {catalogMatches.length > 0 && (
+          <View style={{ marginHorizontal: 20, marginBottom: 20, gap: 6 }}>
+            <Text style={{
+              fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.faint,
+              letterSpacing: 0.1 * 11, textTransform: 'uppercase', paddingLeft: 4, marginBottom: 2,
+            }}>
+              In Catalog
+            </Text>
+            {catalogMatches.map((item) => (
+              <Pressable
+                key={item.id}
+                onPress={() => item.skuId ? router.push(`/sku/${item.skuId}`) : undefined}
+                style={({ pressed }) => ({
+                  backgroundColor: theme.surface, borderRadius: theme.radius, padding: 10,
+                  flexDirection: 'row', alignItems: 'center', gap: 12,
+                  opacity: pressed && item.skuId ? 0.78 : 1,
+                })}
+              >
+                <View style={{
+                  width: 44, height: 44, borderRadius: 10,
+                  backgroundColor: theme.bg, borderWidth: 1, borderColor: theme.hairline,
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: theme.muted }}>
+                    {(catById(item.categoryId)?.short ?? item.categoryId).toUpperCase().slice(0, 3)}
+                  </Text>
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={{ fontFamily: theme.fontDispBold, fontSize: 14, color: theme.text, letterSpacing: -0.2 }} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginTop: 2 }}>
+                    {item.priceLatest ? fmtPrice(item.priceLatest) : 'No price data'} · {catById(item.categoryId)?.label ?? item.categoryId}
+                  </Text>
+                </View>
+                {!item.skuId && (
+                  <View style={{ backgroundColor: theme.surface, borderRadius: 6, borderWidth: 1, borderColor: theme.hairline, paddingHorizontal: 7, paddingVertical: 3 }}>
+                    <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 10, color: theme.faint }}>Not tracked</Text>
+                  </View>
+                )}
               </Pressable>
             ))}
           </View>

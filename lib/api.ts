@@ -705,6 +705,33 @@ export async function fetchCatalogItemById(catalogId: string): Promise<{
   };
 }
 
+export async function searchCatalog(query: string, limit = 8): Promise<Array<{
+  id: string;
+  name: string;
+  short: string | null;
+  categoryId: string;
+  priceLatest: number | null;
+  imageUrl: string | null;
+  skuId: string | null;
+}>> {
+  const { data } = await supabase
+    .from('product_catalog')
+    .select('id, name, short, category_id, price_latest, image_url, sku_id')
+    .ilike('name', `%${query}%`)
+    .order('last_seen_at', { ascending: false })
+    .limit(limit);
+
+  return (data ?? []).map((row) => ({
+    id:          row.id,
+    name:        row.name,
+    short:       row.short ?? null,
+    categoryId:  row.category_id,
+    priceLatest: row.price_latest != null ? Number(row.price_latest) : null,
+    imageUrl:    row.image_url ?? null,
+    skuId:       row.sku_id ?? null,
+  }));
+}
+
 export async function upsertCatalogCollectionItem(
   userId: string,
   catalogId: string,
