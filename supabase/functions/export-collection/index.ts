@@ -23,72 +23,77 @@ function fmtUSD(n: number): string {
 
 function buildEmailHTML(summary: Summary, fileName: string): string {
   const plPositive = summary.pl >= 0;
-  const plColor    = plPositive ? '#16a34a' : '#dc2626';
+  const plColor    = plPositive ? '#37d49b' : '#FF7A6B';
   const plSign     = plPositive ? '+' : '';
 
   return `
-    <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#ffffff;">
+    <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#0A1426;border-radius:16px;overflow:hidden;">
 
-      <!-- App brand header -->
-      <div style="background:#0A1426;border-radius:12px 12px 0 0;padding:28px 32px;display:flex;align-items:center;gap:14px;">
-        <img src="https://wmuvigcdazjitzstxqvk.supabase.co/storage/v1/object/public/assets/logo.png"
-             width="48" height="48"
-             style="width:48px;height:48px;border-radius:14px;display:inline-block;vertical-align:middle;"
-             alt="Trendnable" />
-        <div style="display:inline-block;vertical-align:middle;padding-left:14px;">
-          <div style="font-size:20px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;line-height:1.2;">Trendnable</div>
-          <div style="font-size:12px;color:#94A3B8;margin-top:2px;">Daily collectibles intelligence</div>
-        </div>
-      </div>
-
-      <!-- Content -->
-      <div style="padding:32px 32px 40px;border:1px solid #E2E8F0;border-top:none;border-radius:0 0 12px 12px;">
-
-      <!-- Heading -->
-      <div style="margin-bottom:28px;">
-        <h1 style="font-size:22px;font-weight:700;color:#0A1426;margin:0 0 4px;">Your Collection Export</h1>
-        <p style="font-size:14px;color:#6B7280;margin:0;">Attached: ${fileName}</p>
-      </div>
-
-      <!-- Summary card -->
-      <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:24px;margin-bottom:32px;">
-        <p style="font-size:12px;font-weight:600;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 16px;">Collection Summary</p>
+      <!-- Header -->
+      <div style="padding:28px 28px 24px;border-bottom:1px solid rgba(255,255,255,0.07);">
         <table style="width:100%;border-collapse:collapse;">
           <tr>
-            <td style="padding:6px 0;font-size:14px;color:#374151;">Total Items</td>
-            <td style="padding:6px 0;font-size:14px;color:#0A1426;font-weight:600;text-align:right;">${summary.itemCount}</td>
-          </tr>
-          <tr>
-            <td style="padding:6px 0;font-size:14px;color:#374151;">Estimated Value</td>
-            <td style="padding:6px 0;font-size:14px;color:#0A1426;font-weight:600;text-align:right;">${fmtUSD(summary.totalValue)}</td>
-          </tr>
-          <tr>
-            <td style="padding:6px 0;font-size:14px;color:#374151;">Total Cost</td>
-            <td style="padding:6px 0;font-size:14px;color:#0A1426;font-weight:600;text-align:right;">${fmtUSD(summary.totalCost)}</td>
-          </tr>
-          <tr style="border-top:1px solid #E2E8F0;">
-            <td style="padding:10px 0 4px;font-size:15px;font-weight:600;color:#374151;">P&amp;L</td>
-            <td style="padding:10px 0 4px;font-size:15px;font-weight:700;color:${plColor};text-align:right;">${plSign}${fmtUSD(summary.pl)} (${plSign}${summary.plPct.toFixed(1)}%)</td>
+            <td style="vertical-align:middle;">
+              <img src="https://wmuvigcdazjitzstxqvk.supabase.co/storage/v1/object/public/assets/logo.png"
+                   width="44" height="44"
+                   style="width:44px;height:44px;border-radius:12px;display:block;"
+                   alt="Trendnable" />
+            </td>
+            <td style="vertical-align:middle;padding-left:12px;">
+              <div style="font-size:18px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;line-height:1.2;">Trendnable</div>
+              <div style="font-size:11px;color:#64748B;margin-top:2px;letter-spacing:0.05em;text-transform:uppercase;">Daily collectibles intelligence</div>
+            </td>
           </tr>
         </table>
       </div>
 
+      <!-- Heading -->
+      <div style="padding:28px 28px 0;">
+        <h1 style="font-size:22px;font-weight:700;color:#ffffff;margin:0 0 6px;letter-spacing:-0.3px;">Your Collection Export</h1>
+        <p style="font-size:13px;color:#64748B;margin:0;">📎 ${fileName}</p>
+      </div>
+
+      <!-- Summary card -->
+      <div style="margin:20px 28px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:20px;">
+        <p style="font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:0.08em;margin:0 0 14px;">Collection Summary</p>
+        <table style="width:100%;border-collapse:collapse;">
+          <tr>
+            <td style="padding:5px 0;font-size:14px;color:#94A3B8;">Total Items</td>
+            <td style="padding:5px 0;font-size:14px;color:#ffffff;font-weight:600;text-align:right;">${summary.itemCount}</td>
+          </tr>
+          <tr>
+            <td style="padding:5px 0;font-size:14px;color:#94A3B8;">Estimated Value</td>
+            <td style="padding:5px 0;font-size:14px;color:#f1c24c;font-weight:700;text-align:right;">${fmtUSD(summary.totalValue)}</td>
+          </tr>
+          <tr>
+            <td style="padding:5px 0;font-size:14px;color:#94A3B8;">Total Cost</td>
+            <td style="padding:5px 0;font-size:14px;color:#ffffff;font-weight:600;text-align:right;">${fmtUSD(summary.totalCost)}</td>
+          </tr>
+          <tr style="border-top:1px solid rgba(255,255,255,0.07);">
+            <td style="padding:12px 0 4px;font-size:15px;font-weight:600;color:#94A3B8;">P&amp;L</td>
+            <td style="padding:12px 0 4px;font-size:16px;font-weight:700;color:${plColor};text-align:right;">${plSign}${fmtUSD(summary.pl)} (${plSign}${summary.plPct.toFixed(1)}%)</td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Accent bar -->
+      <div style="margin:0 28px;height:3px;background:linear-gradient(90deg,#FF5500 0%,#f3963c 33%,#f1c24c 66%,#37d49b 100%);border-radius:2px;"></div>
+
       <!-- CTA -->
-      <div style="background:#0A1426;border-radius:12px;padding:24px;margin-bottom:32px;text-align:center;">
-        <p style="font-size:13px;color:#94A3B8;margin:0 0 8px;">Track trends daily with Trendnable</p>
-        <p style="font-size:14px;color:#CBD5E1;margin:0 0 20px;">Hot scores · Market signals · Price alerts</p>
+      <div style="padding:24px 28px 28px;text-align:center;">
+        <p style="font-size:13px;color:#64748B;margin:0 0 6px;">Hot scores · Market signals · Price alerts</p>
         <a href="https://apps.apple.com/app/trendnable/id6741441154"
-           style="display:inline-block;background:#2563EB;color:#ffffff;padding:12px 28px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none;">
+           style="display:inline-block;background:#FF5500;color:#ffffff;padding:13px 32px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;margin-top:12px;letter-spacing:0.01em;">
           Open Trendnable
         </a>
       </div>
 
-      </div><!-- /content -->
-
       <!-- Footer -->
-      <p style="font-size:12px;color:#9CA3AF;text-align:center;margin:24px 0 0;">
-        Trendnable &middot; trendnable.app &middot; Your daily collectibles intelligence app
-      </p>
+      <div style="padding:16px 28px;border-top:1px solid rgba(255,255,255,0.07);text-align:center;">
+        <p style="font-size:11px;color:#334155;margin:0;">
+          Trendnable &middot; trendnable.app
+        </p>
+      </div>
 
     </div>
   `;
