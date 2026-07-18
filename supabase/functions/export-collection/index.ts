@@ -31,11 +31,15 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // Encode string to bytes — Deno storage upload requires ArrayBuffer, not raw string
+    const csvBytes = new TextEncoder().encode(csv);
+    const blob = new Blob([csvBytes], { type: 'text/csv' });
+
     // Upload CSV — prefix with timestamp to avoid collisions
     const storageKey = `${Date.now()}-${fileName}`;
     const { error: uploadErr } = await supabase.storage
       .from('exports')
-      .upload(storageKey, csv, { contentType: 'text/csv; charset=utf-8' });
+      .upload(storageKey, blob, { contentType: 'text/csv' });
 
     if (uploadErr) throw new Error(`Upload failed: ${uploadErr.message}`);
 

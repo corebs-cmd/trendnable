@@ -97,7 +97,10 @@ export async function exportCollectionAsCSV(
     headers: { Authorization: `Bearer ${session.access_token}` },
   });
 
-  if (error) throw new Error(error.message ?? 'Export failed');
+  if (error) {
+    const detail = (error as any)?.context?.error ?? error.message ?? 'Export failed';
+    throw new Error(detail);
+  }
   if (!data?.url) throw new Error('No download URL returned');
 
   // Open signed URL — iOS opens in Safari where user can save or share
