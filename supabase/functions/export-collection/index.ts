@@ -31,9 +31,10 @@ function buildEmailHTML(summary: Summary, fileName: string): string {
 
       <!-- App brand header -->
       <div style="background:#0A1426;border-radius:12px 12px 0 0;padding:28px 32px;display:flex;align-items:center;gap:14px;">
-        <div style="width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#2563EB 0%,#1d4ed8 100%);display:inline-flex;align-items:center;justify-content:center;font-family:Georgia,serif;font-size:24px;font-weight:700;color:#ffffff;text-align:center;line-height:48px;min-width:48px;">
-          T
-        </div>
+        <img src="https://wmuvigcdazjitzstxqvk.supabase.co/storage/v1/object/public/assets/logo.png"
+             width="48" height="48"
+             style="width:48px;height:48px;border-radius:14px;display:inline-block;vertical-align:middle;"
+             alt="Trendnable" />
         <div style="display:inline-block;vertical-align:middle;padding-left:14px;">
           <div style="font-size:20px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;line-height:1.2;">Trendnable</div>
           <div style="font-size:12px;color:#94A3B8;margin-top:2px;">Daily collectibles intelligence</div>
