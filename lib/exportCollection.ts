@@ -18,6 +18,11 @@ function row(...cells: (string | number | null | undefined)[]): string {
   return cells.map(esc).join(',');
 }
 
+function price(n: number | null | undefined): string {
+  if (n == null || n === 0) return '';
+  return n.toFixed(2);
+}
+
 const HEADER = row(
   'Name', 'Category', 'Series', 'Condition', 'Qty',
   'Purchase Price', 'Purchase Date',
@@ -30,8 +35,8 @@ function skuRow(item: CollectionItemEnriched): string {
   const cat = catById(item.sku.category)?.label ?? item.sku.category;
   return row(
     item.sku.name, cat, item.sku.series ?? '', item.condition, item.qty,
-    item.purchased, item.purchaseDate, item.sku.price.median,
-    item.purchased * item.qty, item.current, item.pl,
+    price(item.purchased), item.purchaseDate, price(item.sku.price.median),
+    price(item.purchased * item.qty), price(item.current), price(item.pl),
     item.notes ?? '', item.cardVariant ?? '', item.cardGrader ?? '', item.cardGrade ?? '',
     'tracked',
   );
@@ -44,8 +49,8 @@ function catalogRow(item: CatalogCollectionItem): string {
   const totalValue   = currentPrice * item.qty;
   return row(
     item.name, cat, '', item.condition, item.qty,
-    item.purchased, item.purchaseDate, currentPrice || '',
-    totalCost, totalValue || '', totalValue ? totalValue - totalCost : '',
+    price(item.purchased), item.purchaseDate, price(currentPrice) || '',
+    price(totalCost), price(totalValue) || '', totalValue ? price(totalValue - totalCost) : '',
     item.notes ?? '', '', '', '',
     'catalog',
   );
