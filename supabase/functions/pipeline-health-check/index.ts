@@ -83,8 +83,8 @@ Deno.serve(async (req) => {
       const processed = run.meta?.processed ?? 0;
       const actualTime = new Date(run.ran_at).toISOString();
 
-      // Check if processing happened
-      if (processed === 0) {
+      // Check if processing happened (skip check if pipeline allows zero items)
+      if (processed === 0 && pipeline.minProcessed > 0) {
         results.push({
           name: pipeline.name,
           ran: true,
