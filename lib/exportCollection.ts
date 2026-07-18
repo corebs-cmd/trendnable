@@ -1,4 +1,3 @@
-import { Linking } from 'react-native';
 import { supabase } from './supabase';
 import { CollectionItemEnriched, CatalogCollectionItem } from './types';
 import { catById } from './appConfig';
@@ -26,26 +25,13 @@ const HEADER = row(
   'Source',
 );
 
-// ── Row builders ──────────────────────────────────────────────────────────────
-
 function skuRow(item: CollectionItemEnriched): string {
   const cat = catById(item.sku.category)?.label ?? item.sku.category;
   return row(
-    item.sku.name,
-    cat,
-    item.sku.series ?? '',
-    item.condition,
-    item.qty,
-    item.purchased,
-    item.purchaseDate,
-    item.sku.price.median,
-    item.purchased * item.qty,
-    item.current,
-    item.pl,
-    item.notes ?? '',
-    item.cardVariant ?? '',
-    item.cardGrader ?? '',
-    item.cardGrade ?? '',
+    item.sku.name, cat, item.sku.series ?? '', item.condition, item.qty,
+    item.purchased, item.purchaseDate, item.sku.price.median,
+    item.purchased * item.qty, item.current, item.pl,
+    item.notes ?? '', item.cardVariant ?? '', item.cardGrader ?? '', item.cardGrade ?? '',
     'tracked',
   );
 }
@@ -56,44 +42,51 @@ function catalogRow(item: CatalogCollectionItem): string {
   const totalCost    = item.purchased * item.qty;
   const totalValue   = currentPrice * item.qty;
   return row(
-    item.name,
-    cat,
-    '',
-    item.condition,
-    item.qty,
-    item.purchased,
-    item.purchaseDate,
-    currentPrice || '',
-    totalCost,
-    totalValue || '',
-    totalValue ? totalValue - totalCost : '',
-    item.notes ?? '',
-    '', '', '',
+    item.name, cat, '', item.condition, item.qty,
+    item.purchased, item.purchaseDate, currentPrice || '',
+    totalCost, totalValue || '', totalValue ? totalValue - totalCost : '',
+    item.notes ?? '', '', '', '',
     'catalog',
   );
 }
 
-// ── Main export function ──────────────────────────────────────────────────────
+// ── Build CSV locally (no network) ───────────────────────────────────────────
 
-export async function exportCollectionAsCSV(
+export function buildExportCSV(
   skuItems: CollectionItemEnriched[],
   catalogItems: CatalogCollectionItem[],
-): Promise<void> {
-  const lines: string[] = [HEADER];
-
+): { csv: string; fileName: string } {
+  const lines = [HEADER];
   for (const item of skuItems)     lines.push(skuRow(item));
   for (const item of catalogItems) lines.push(catalogRow(item));
-
-  const csv      = lines.join('\n');
   const dateStr  = new Date().toISOString().slice(0, 10);
-  const fileName = `trendnable-collection-${dateStr}.csv`;
+  return {
+    csv:      lines.join('\n'),
+    fileName: `trendnable-collection-${dateStr}.csv`,
+  };
+}
 
-  // Upload CSV to Supabase Storage via edge function, get signed URL
+// ── Send via edge function (Resend with attachment) ───────────────────────────
+
+export interface ExportSummary {
+  itemCount:  number;
+  totalValue: number;
+  totalCost:  number;
+  pl:         number;
+  plPct:      number;
+}
+
+export async function sendCollectionExport(
+  csv: string,
+  fileName: string,
+  userEmail: string,
+  summary: ExportSummary,
+): Promise<void> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
 
   const { data, error } = await supabase.functions.invoke('export-collection', {
-    body: { csv, fileName },
+    body: { csv, fileName, userEmail, summary },
     headers: { Authorization: `Bearer ${session.access_token}` },
   });
 
@@ -101,8 +94,5 @@ export async function exportCollectionAsCSV(
     const detail = (error as any)?.context?.error ?? error.message ?? 'Export failed';
     throw new Error(detail);
   }
-  if (!data?.url) throw new Error('No download URL returned');
-
-  // Open signed URL — iOS opens in Safari where user can save or share
-  await Linking.openURL(data.url);
+  if (!data?.ok) throw new Error('Unexpected response from export function');
 }

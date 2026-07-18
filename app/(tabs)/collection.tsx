@@ -7,6 +7,9 @@ import {
   StyleSheet,
   Alert,
   Image,
+  Modal,
+  ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -18,7 +21,7 @@ import { catById, fmtPrice } from '@/lib/appConfig';
 import { CollectionItemEnriched, UpgradeContext, CatalogCollectionItem, CollectionFormData } from '@/lib/types';
 import { promoteCatalogToSku, fetchSkuById } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
-import { exportCollectionAsCSV } from '@/lib/exportCollection';
+import { buildExportCSV, sendCollectionExport, ExportSummary } from '@/lib/exportCollection';
 import AppHeader from '@/components/AppHeader';
 import IconButton from '@/components/IconButton';
 import Sparkline from '@/components/Sparkline';
@@ -212,7 +215,9 @@ export default function CollectionScreen() {
   const [scrolled, setScrolled] = useState(false);
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  type ExportPhase = 'idle' | 'loading' | 'ready' | 'sending' | 'sent';
+  const [exportPhase, setExportPhase]   = useState<ExportPhase>('idle');
+  const [exportPayload, setExportPayload] = useState<{ csv: string; fileName: string; summary: ExportSummary } | null>(null);
   const [catalogDetailId, setCatalogDetailId] = useState<string | null>(null);
   const [alertSkuId, setAlertSkuId] = useState<string | null>(null);
 
@@ -242,17 +247,53 @@ export default function CollectionScreen() {
     catalogCollection.reduce((s, i) => s + i.qty, 0),
   [catalogCollection]);
 
+  const user = useAppStore((s) => s.user);
+
   const handleExport = useCallback(async () => {
-    if (exporting) return;
-    setExporting(true);
+    if (exportPhase !== 'idle') return;
+    setExportPhase('loading');
     try {
-      await exportCollectionAsCSV(items, catalogCollection);
+      const { csv, fileName } = buildExportCSV(items, catalogCollection);
+      const summary: ExportSummary = {
+        itemCount:  totalQty,
+        totalValue: total,
+        totalCost,
+        pl:         totalPL,
+        plPct,
+      };
+      setExportPayload({ csv, fileName, summary });
+      setExportPhase('ready');
     } catch (err: any) {
-      Alert.alert('Export failed', err?.message ?? 'Could not export collection. Please try again.');
-    } finally {
-      setExporting(false);
+      setExportPhase('idle');
+      Alert.alert('Export failed', err?.message ?? 'Could not prepare export.');
     }
-  }, [items, catalogCollection, exporting]);
+  }, [exportPhase, items, catalogCollection, totalQty, total, totalCost, totalPL, plPct]);
+
+  const handleSend = useCallback(async () => {
+    if (!exportPayload || !user?.email) return;
+    setExportPhase('sending');
+    try {
+      await sendCollectionExport(exportPayload.csv, exportPayload.fileName, user.email, exportPayload.summary);
+      setExportPhase('sent');
+    } catch (err: any) {
+      setExportPhase('ready');
+      Alert.alert('Send failed', err?.message ?? 'Could not send email. Please try again.');
+    }
+  }, [exportPayload, user?.email]);
+
+  const handlePreview = useCallback(() => {
+    if (!exportPayload || !user?.email) return;
+    const subject = encodeURIComponent('My Trendnable Collection Export');
+    const body = encodeURIComponent(
+      `Hi,\n\nPlease find my Trendnable collection export attached.\n\nCollection Summary:\n• Items: ${exportPayload.summary.itemCount}\n• Estimated Value: $${exportPayload.summary.totalValue.toFixed(0)}\n• Total Cost: $${exportPayload.summary.totalCost.toFixed(0)}\n• P&L: ${exportPayload.summary.pl >= 0 ? '+' : ''}$${exportPayload.summary.pl.toFixed(0)}\n\nTracked with Trendnable — trendnable.app`
+    );
+    Linking.openURL(`mailto:${user.email}?subject=${subject}&body=${body}`);
+  }, [exportPayload, user?.email]);
+
+  const closeExportModal = useCallback(() => {
+    setExportPhase('idle');
+    setExportPayload(null);
+  }, []);
 
   const total = useMemo(() => items.reduce((s, i) => s + i.current, 0) + catalogTotal, [items, catalogTotal]);
   const totalCost = useMemo(() => items.reduce((s, i) => s + i.cost, 0) + catalogCost, [items, catalogCost]);
@@ -901,6 +942,108 @@ export default function CollectionScreen() {
           onUpgrade={() => { setAlertSkuId(null); setUpgradeContext('priceAlerts'); }}
         />
       )}
+
+      {/* Export modal */}
+      <Modal
+        visible={exportPhase !== 'idle'}
+        transparent
+        animationType="fade"
+        onRequestClose={exportPhase === 'ready' || exportPhase === 'sent' ? closeExportModal : undefined}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
+          onPress={exportPhase === 'ready' || exportPhase === 'sent' ? closeExportModal : undefined}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={{
+              backgroundColor: theme.surface,
+              borderTopLeftRadius: 24, borderTopRightRadius: 24,
+              padding: 28, paddingBottom: 48,
+            }}>
+
+              {/* Loading */}
+              {(exportPhase === 'loading' || exportPhase === 'sending') && (
+                <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+                  <ActivityIndicator size="large" color={theme.accent} style={{ marginBottom: 16 }} />
+                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: theme.text }}>
+                    {exportPhase === 'loading' ? 'Preparing your export…' : 'Sending email…'}
+                  </Text>
+                </View>
+              )}
+
+              {/* Ready */}
+              {exportPhase === 'ready' && (
+                <View>
+                  <Text style={{ fontFamily: theme.fontDispBold, fontSize: 20, color: theme.text, marginBottom: 6 }}>
+                    Export ready
+                  </Text>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: theme.muted, marginBottom: 24 }}>
+                    We'll send it to {user?.email ?? 'your email address'}.
+                  </Text>
+                  <Pressable
+                    onPress={handleSend}
+                    style={({ pressed }) => ({
+                      backgroundColor: theme.accent, borderRadius: 14,
+                      paddingVertical: 15, alignItems: 'center', marginBottom: 10,
+                      opacity: pressed ? 0.85 : 1,
+                    })}
+                  >
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#fff' }}>
+                      Send it to me
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={handlePreview}
+                    style={({ pressed }) => ({
+                      backgroundColor: theme.bg, borderRadius: 14, borderWidth: 1, borderColor: theme.hairline,
+                      paddingVertical: 15, alignItems: 'center', marginBottom: 10,
+                      opacity: pressed ? 0.85 : 1,
+                    })}
+                  >
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: theme.text }}>
+                      Preview in Mail
+                    </Text>
+                  </Pressable>
+                  <Pressable onPress={closeExportModal} style={{ alignItems: 'center', paddingVertical: 10 }}>
+                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: theme.muted }}>Cancel</Text>
+                  </Pressable>
+                </View>
+              )}
+
+              {/* Sent */}
+              {exportPhase === 'sent' && (
+                <View style={{ alignItems: 'center', paddingVertical: 8 }}>
+                  <View style={{
+                    width: 56, height: 56, borderRadius: 28,
+                    backgroundColor: '#16a34a20', alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+                  }}>
+                    <Svg width={28} height={28} viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M20 6L9 17l-5-5" />
+                    </Svg>
+                  </View>
+                  <Text style={{ fontFamily: theme.fontDispBold, fontSize: 20, color: theme.text, marginBottom: 6 }}>
+                    Email sent!
+                  </Text>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: theme.muted, textAlign: 'center', marginBottom: 28 }}>
+                    Check {user?.email ?? 'your inbox'} for your collection export with the CSV attached.
+                  </Text>
+                  <Pressable
+                    onPress={closeExportModal}
+                    style={({ pressed }) => ({
+                      backgroundColor: theme.accent, borderRadius: 14,
+                      paddingVertical: 15, alignItems: 'center', width: '100%',
+                      opacity: pressed ? 0.85 : 1,
+                    })}
+                  >
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#fff' }}>Done</Text>
+                  </Pressable>
+                </View>
+              )}
+
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
