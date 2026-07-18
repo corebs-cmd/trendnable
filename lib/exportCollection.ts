@@ -91,7 +91,17 @@ export async function sendCollectionExport(
   });
 
   if (error) {
-    const detail = (error as any)?.context?.error ?? error.message ?? 'Export failed';
+    // Try to read the actual error body from the edge function response
+    let detail = error.message ?? 'Export failed';
+    try {
+      const ctx = (error as any)?.context;
+      if (ctx instanceof Response) {
+        const body = await ctx.json();
+        detail = body?.error ?? detail;
+      } else if (typeof ctx?.error === 'string') {
+        detail = ctx.error;
+      }
+    } catch {}
     throw new Error(detail);
   }
   if (!data?.ok) throw new Error('Unexpected response from export function');
