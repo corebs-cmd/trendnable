@@ -20,6 +20,7 @@ import { catById, fmtPrice } from '@/lib/appConfig';
 import { CollectionItemEnriched, UpgradeContext, CatalogCollectionItem, CollectionFormData } from '@/lib/types';
 import { promoteCatalogToSku, fetchSkuById } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
+import Purchases from 'react-native-purchases';
 import { buildExportCSV, sendCollectionExport, downloadCollectionExport, ExportSummary } from '@/lib/exportCollection';
 import AppHeader from '@/components/AppHeader';
 import IconButton from '@/components/IconButton';
@@ -214,8 +215,8 @@ export default function CollectionScreen() {
   const [scrolled, setScrolled] = useState(false);
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  type ExportPhase = 'idle' | 'loading' | 'ready' | 'sending' | 'sent';
-  const [exportPhase, setExportPhase]   = useState<ExportPhase>('idle');
+  type ExportPhase = 'idle' | 'purchase' | 'purchasing' | 'loading' | 'ready' | 'sending' | 'sent';
+  const [exportPhase, setExportPhase]     = useState<ExportPhase>('idle');
   const [exportPayload, setExportPayload] = useState<{ csv: string; fileName: string; summary: ExportSummary } | null>(null);
   const [catalogDetailId, setCatalogDetailId] = useState<string | null>(null);
   const [alertSkuId, setAlertSkuId] = useState<string | null>(null);
@@ -246,10 +247,13 @@ export default function CollectionScreen() {
     catalogCollection.reduce((s, i) => s + i.qty, 0),
   [catalogCollection]);
 
-  const user = useAppStore((s) => s.user);
+  const user        = useAppStore((s) => s.user);
+  const exportCredits = user?.export_credits ?? 0;
+  const canExport     = isPremium || exportCredits > 0;
 
   const handleExport = useCallback(async () => {
     if (exportPhase !== 'idle') return;
+    if (!canExport) { setExportPhase('purchase'); return; }
     setExportPhase('loading');
     try {
       const { csv, fileName } = buildExportCSV(items, catalogCollection);
@@ -266,19 +270,54 @@ export default function CollectionScreen() {
       setExportPhase('idle');
       Alert.alert('Export failed', err?.message ?? 'Could not prepare export.');
     }
-  }, [exportPhase, items, catalogCollection, totalQty, total, totalCost, totalPL, plPct]);
+  }, [exportPhase, canExport, items, catalogCollection, totalQty, total, totalCost, totalPL, plPct]);
+
+  const handlePurchaseExport = useCallback(async () => {
+    setExportPhase('purchasing');
+    try {
+      const products = await Purchases.getProducts(['com.trendnable.app.export_single']);
+      if (!products.length) throw new Error('Export product not available. Please try again later.');
+      await Purchases.purchaseStoreProduct(products[0]);
+      // Purchase succeeded — proceed directly to export (webhook increments DB in background)
+      setExportPhase('loading');
+      const { csv, fileName } = buildExportCSV(items, catalogCollection);
+      const summary: ExportSummary = {
+        itemCount:  totalQty,
+        totalValue: total,
+        totalCost,
+        pl:         totalPL,
+        plPct,
+      };
+      setExportPayload({ csv, fileName, summary });
+      setExportPhase('ready');
+    } catch (err: any) {
+      setExportPhase('idle');
+      if (!err?.userCancelled) {
+        Alert.alert('Purchase failed', err?.message ?? 'Could not complete purchase. Please try again.');
+      }
+    }
+  }, [items, catalogCollection, totalQty, total, totalCost, totalPL, plPct]);
 
   const handleSend = useCallback(async () => {
     if (!exportPayload || !user?.email) return;
     setExportPhase('sending');
     try {
       await sendCollectionExport(exportPayload.csv, exportPayload.fileName, user.email, exportPayload.summary);
+      // Deduct credit for non-premium users
+      if (!isPremium && exportCredits > 0) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          supabase.functions.invoke('use-export-credit', {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          }).catch(() => {});
+        }
+      }
       setExportPhase('sent');
     } catch (err: any) {
       setExportPhase('ready');
       Alert.alert('Send failed', err?.message ?? 'Could not send email. Please try again.');
     }
-  }, [exportPayload, user?.email]);
+  }, [exportPayload, user?.email, isPremium, exportCredits]);
 
   const handleDownload = useCallback(async () => {
     if (!exportPayload) return;
@@ -372,10 +411,10 @@ export default function CollectionScreen() {
             <View style={{ position: 'relative' }}>
               <IconButton
                 theme={theme}
-                accessibilityLabel={isPremium ? 'Export collection as CSV' : 'Export collection (Premium)'}
-                onPress={() => isPremium ? handleExport() : setUpgradeContext('share')}
+                accessibilityLabel="Export collection"
+                onPress={handleExport}
               >
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={isPremium ? theme.muted : theme.premium} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={canExport ? theme.muted : theme.premium} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                   <Path d="M12 16V4M8 8l4-4 4 4" />
                   <Path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6" />
                 </Svg>
@@ -951,11 +990,11 @@ export default function CollectionScreen() {
         visible={exportPhase !== 'idle'}
         transparent
         animationType="fade"
-        onRequestClose={exportPhase === 'ready' || exportPhase === 'sent' ? closeExportModal : undefined}
+        onRequestClose={['ready', 'sent', 'purchase'].includes(exportPhase) ? closeExportModal : undefined}
       >
         <Pressable
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
-          onPress={exportPhase === 'ready' || exportPhase === 'sent' ? closeExportModal : undefined}
+          onPress={['ready', 'sent', 'purchase'].includes(exportPhase) ? closeExportModal : undefined}
         >
           <Pressable onPress={(e) => e.stopPropagation()}>
             <View style={{
@@ -964,13 +1003,58 @@ export default function CollectionScreen() {
               padding: 28, paddingBottom: 48,
             }}>
 
-              {/* Loading */}
-              {(exportPhase === 'loading' || exportPhase === 'sending') && (
+              {/* Loading / Purchasing */}
+              {(exportPhase === 'loading' || exportPhase === 'sending' || exportPhase === 'purchasing') && (
                 <View style={{ alignItems: 'center', paddingVertical: 16 }}>
                   <ActivityIndicator size="large" color={theme.accent} style={{ marginBottom: 16 }} />
                   <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: theme.text }}>
-                    {exportPhase === 'loading' ? 'Preparing your export…' : 'Sending email…'}
+                    {exportPhase === 'loading' ? 'Preparing your export…' : exportPhase === 'purchasing' ? 'Processing purchase…' : 'Sending email…'}
                   </Text>
+                </View>
+              )}
+
+              {/* Purchase — free user with no credits */}
+              {exportPhase === 'purchase' && (
+                <View>
+                  <Text style={{ fontFamily: theme.fontDispBold, fontSize: 20, color: theme.text, marginBottom: 6 }}>
+                    Export Collection
+                  </Text>
+                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: theme.muted, marginBottom: 24 }}>
+                    Get your full collection delivered to your inbox as a CSV file.
+                  </Text>
+                  <Pressable
+                    onPress={handlePurchaseExport}
+                    style={({ pressed }) => ({
+                      backgroundColor: theme.accent, borderRadius: 14,
+                      paddingVertical: 15, alignItems: 'center', marginBottom: 10,
+                      opacity: pressed ? 0.85 : 1,
+                    })}
+                  >
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: '#fff' }}>
+                      Export for $1.99
+                    </Text>
+                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>
+                      One-time purchase · CSV delivered to your email
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => { closeExportModal(); setUpgradeContext('share'); }}
+                    style={({ pressed }) => ({
+                      backgroundColor: theme.bg, borderRadius: 14, borderWidth: 1, borderColor: theme.hairline,
+                      paddingVertical: 15, alignItems: 'center', marginBottom: 10,
+                      opacity: pressed ? 0.85 : 1,
+                    })}
+                  >
+                    <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: theme.text }}>
+                      Go Premium — Unlimited exports
+                    </Text>
+                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.muted, marginTop: 2 }}>
+                      $1.99/mo · includes all features
+                    </Text>
+                  </Pressable>
+                  <Pressable onPress={closeExportModal} style={{ alignItems: 'center', paddingVertical: 10 }}>
+                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: theme.muted }}>Cancel</Text>
+                  </Pressable>
                 </View>
               )}
 

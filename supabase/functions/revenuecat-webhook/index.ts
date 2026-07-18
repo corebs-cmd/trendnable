@@ -28,6 +28,17 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+  // Handle export consumable purchase — increment credit, don't touch premium
+  const isExportPurchase = type === 'INITIAL_PURCHASE' &&
+    event?.product_id === 'com.trendnable.app.export_single';
+
+  if (isExportPurchase) {
+    await supabase.rpc('increment_export_credits', { user_id_input: appUserId });
+    return new Response(JSON.stringify({ ok: true }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   const isPremium = [
     'INITIAL_PURCHASE',
     'RENEWAL',

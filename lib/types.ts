@@ -123,6 +123,7 @@ export interface DBUser {
   name: string | null;
   avatar_url: string | null;
   is_premium: boolean;
+  export_credits: number;
   followed_fandoms: string[];
   followed_categories: string[];
   notification_digest_enabled: boolean;
