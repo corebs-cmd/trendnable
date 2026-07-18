@@ -27,11 +27,25 @@ function buildEmailHTML(summary: Summary, fileName: string): string {
   const plSign     = plPositive ? '+' : '';
 
   return `
-    <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:40px 20px;background:#ffffff;">
+    <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#ffffff;">
 
-      <!-- Header -->
-      <div style="margin-bottom:32px;">
-        <h1 style="font-size:26px;font-weight:700;color:#0A1426;margin:0 0 4px;">Your Collection Export</h1>
+      <!-- App brand header -->
+      <div style="background:#0A1426;border-radius:12px 12px 0 0;padding:28px 32px;display:flex;align-items:center;gap:14px;">
+        <div style="width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#2563EB 0%,#1d4ed8 100%);display:inline-flex;align-items:center;justify-content:center;font-family:Georgia,serif;font-size:24px;font-weight:700;color:#ffffff;text-align:center;line-height:48px;min-width:48px;">
+          T
+        </div>
+        <div style="display:inline-block;vertical-align:middle;padding-left:14px;">
+          <div style="font-size:20px;font-weight:700;color:#ffffff;letter-spacing:-0.3px;line-height:1.2;">Trendnable</div>
+          <div style="font-size:12px;color:#94A3B8;margin-top:2px;">Daily collectibles intelligence</div>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div style="padding:32px 32px 40px;border:1px solid #E2E8F0;border-top:none;border-radius:0 0 12px 12px;">
+
+      <!-- Heading -->
+      <div style="margin-bottom:28px;">
+        <h1 style="font-size:22px;font-weight:700;color:#0A1426;margin:0 0 4px;">Your Collection Export</h1>
         <p style="font-size:14px;color:#6B7280;margin:0;">Attached: ${fileName}</p>
       </div>
 
@@ -68,8 +82,10 @@ function buildEmailHTML(summary: Summary, fileName: string): string {
         </a>
       </div>
 
+      </div><!-- /content -->
+
       <!-- Footer -->
-      <p style="font-size:12px;color:#9CA3AF;text-align:center;margin:0;">
+      <p style="font-size:12px;color:#9CA3AF;text-align:center;margin:24px 0 0;">
         Trendnable &middot; trendnable.app &middot; Your daily collectibles intelligence app
       </p>
 
