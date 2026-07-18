@@ -535,6 +535,9 @@ export default function SKUDetailScreen() {
       listings: sku.listings,
       median: sku.price.median,
       primary: true,
+      iconBg: '#E53238',
+      iconText: '#ffffff',
+      iconLabel: 'eB',
     }] : []),
     ...(sku.mercari_url ? [{
       id: 'mercari',
@@ -543,6 +546,9 @@ export default function SKUDetailScreen() {
       listings: null as number | null,
       median: null as number | null,
       primary: false,
+      iconBg: '#FF4F4F',
+      iconText: '#ffffff',
+      iconLabel: 'M',
     }] : []),
     ...(sku.popnbeats_url ? [{
       id: 'popnbeats',
@@ -551,6 +557,9 @@ export default function SKUDetailScreen() {
       listings: null as number | null,
       median: null as number | null,
       primary: false,
+      iconBg: '#7B5CF0',
+      iconText: '#ffffff',
+      iconLabel: 'PB',
     }] : []),
   ];
 
@@ -1176,15 +1185,19 @@ export default function SKUDetailScreen() {
               })}
             >
               <View style={{
-                width: 46, height: 46, borderRadius: 12,
-                backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+                width: 46, height: 46, borderRadius: 23,
+                backgroundColor: mp.iconBg,
                 alignItems: 'center', justifyContent: 'center',
+                shadowColor: mp.iconBg,
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.35,
+                shadowRadius: 4,
               }}>
                 <Text style={{
-                  fontFamily: 'Fraunces_700Bold', fontSize: 17,
-                  color: mp.primary ? theme.accent : theme.text, letterSpacing: -0.2,
+                  fontFamily: 'Fraunces_700Bold', fontSize: 16,
+                  color: mp.iconText, letterSpacing: -0.2,
                 }}>
-                  {mp.name.slice(0, 2)}
+                  {mp.iconLabel}
                 </Text>
               </View>
               <View style={{ flex: 1 }}>
