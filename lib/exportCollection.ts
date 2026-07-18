@@ -27,7 +27,6 @@ const HEADER = row(
   'Name', 'Category', 'Series', 'Condition', 'Qty',
   'Purchase Price', 'Purchase Date',
   'Current Market Price', 'Total Cost', 'Total Value', 'P&L',
-  'Notes', 'Card Variant', 'Card Grader', 'Card Grade',
   'Source',
 );
 
@@ -37,7 +36,6 @@ function skuRow(item: CollectionItemEnriched): string {
     item.sku.name, cat, item.sku.series ?? '', item.condition, item.qty,
     price(item.purchased), item.purchaseDate, price(item.sku.price.median),
     price(item.purchased * item.qty), price(item.current), price(item.pl),
-    item.notes ?? '', item.cardVariant ?? '', item.cardGrader ?? '', item.cardGrade ?? '',
     'tracked',
   );
 }
@@ -51,7 +49,6 @@ function catalogRow(item: CatalogCollectionItem): string {
     item.name, cat, '', item.condition, item.qty,
     price(item.purchased), item.purchaseDate, price(currentPrice) || '',
     price(totalCost), price(totalValue) || '', totalValue ? price(totalValue - totalCost) : '',
-    item.notes ?? '', '', '', '',
     'catalog',
   );
 }
