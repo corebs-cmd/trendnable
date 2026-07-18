@@ -340,7 +340,7 @@ export async function fetchSkuById(skuId: string): Promise<SKU | null> {
       .from('skus')
       .select(`
         id, name, short, series, category_id, fandom_id,
-        ebay_query, ebay_url, image_url, pop_number, exclusive_type, sticker_keys,
+        ebay_query, ebay_url, mercari_url, popnbeats_url, image_url, pop_number, exclusive_type, sticker_keys,
         card_variant, card_grader, card_grade, created_at,
         hot_index(hot_score, delta_24h, momentum, velocity_score, volume_score, confirmation_score, freshness_score),
         daily_snapshots(price_low, price_median, price_high, listing_count, snapshot_date)
