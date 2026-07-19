@@ -266,7 +266,7 @@ export default function SettingsScreen() {
         },
         {
           id: 'help', type: 'nav', title: 'Help & Support',
-          onPress: () => Linking.openURL('mailto:hello@trendnable.app?subject=Support').catch(() => {}),
+          onPress: () => Linking.openURL('mailto:contact@trendnable.app?subject=Support').catch(() => {}),
         },
         {
           id: 'feedback', type: 'nav', title: 'Share feedback',
@@ -278,25 +278,25 @@ export default function SettingsScreen() {
               {
                 text: 'Missing SKU or item',
                 onPress: () => Linking.openURL(
-                  'mailto:hello@trendnable.app?subject=Missing%20SKU%20%2F%20Item&body=Hi%2C%20I%20noticed%20the%20following%20item%20isn%E2%80%99t%20tracked%20yet%3A%0A%0AName%3A%20%0ASeries%20%2F%20Set%3A%20%0AApprox.%20value%3A%20'
+                  'mailto:contact@trendnable.app?subject=Missing%20SKU%20%2F%20Item&body=Hi%2C%20I%20noticed%20the%20following%20item%20isn%E2%80%99t%20tracked%20yet%3A%0A%0AName%3A%20%0ASeries%20%2F%20Set%3A%20%0AApprox.%20value%3A%20'
                 ).catch(() => {}),
               },
               {
                 text: 'Feature idea',
                 onPress: () => Linking.openURL(
-                  'mailto:hello@trendnable.app?subject=Feature%20Idea&body=Hi%2C%20I%20have%20a%20feature%20idea%3A%0A%0A'
+                  'mailto:contact@trendnable.app?subject=Feature%20Idea&body=Hi%2C%20I%20have%20a%20feature%20idea%3A%0A%0A'
                 ).catch(() => {}),
               },
               {
                 text: "Something's not right",
                 onPress: () => Linking.openURL(
-                  'mailto:hello@trendnable.app?subject=Bug%20%2F%20Issue&body=Hi%2C%20I%20ran%20into%20an%20issue%3A%0A%0AWhat%20happened%3A%20%0AWhat%20I%20expected%3A%20%0ADevice%3A%20'
+                  'mailto:contact@trendnable.app?subject=Bug%20%2F%20Issue&body=Hi%2C%20I%20ran%20into%20an%20issue%3A%0A%0AWhat%20happened%3A%20%0AWhat%20I%20expected%3A%20%0ADevice%3A%20'
                 ).catch(() => {}),
               },
               {
                 text: 'General feedback',
                 onPress: () => Linking.openURL(
-                  'mailto:hello@trendnable.app?subject=Feedback&body=Hi%2C%20I%20wanted%20to%20share%3A%0A%0A'
+                  'mailto:contact@trendnable.app?subject=Feedback&body=Hi%2C%20I%20wanted%20to%20share%3A%0A%0A'
                 ).catch(() => {}),
               },
               { text: 'Cancel', style: 'cancel' },
