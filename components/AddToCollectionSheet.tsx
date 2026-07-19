@@ -254,7 +254,7 @@ export default function AddToCollectionSheet({
     >
       {/* ── Search view (SKU mode only, before item is selected) ── */}
       {isSearchView ? (
-        <View>
+        <View style={{ minHeight: 320 }}>
           {/* Search input */}
           <View
             style={{
