@@ -32,7 +32,6 @@ const FEATURES: Feature[] = [
     where: 'Hot tab',
   },
   {
-    // Exact GridIcon from the Browse tab
     icon: (c) => (
       <Svg width={SZ} height={SZ} viewBox="0 0 24 24" fill={c} stroke="none">
         <Rect x="3" y="3" width="7" height="7" rx="1" />
@@ -44,8 +43,8 @@ const FEATURES: Feature[] = [
     color:  '#FF5500',
     bg:     'rgba(255,85,0,0.12)',
     bgDark: 'rgba(255,85,0,0.22)',
-    title: 'Browse',
-    desc:  'Explore all categories and fandoms. Filter down to exactly what you collect.',
+    title: 'Browse & Search',
+    desc:  'Explore all categories and fandoms. Search surfaces both actively tracked items and everything in the full catalog — even items not yet on the Hot list.',
     where: 'Browse tab',
   },
   {
@@ -60,7 +59,7 @@ const FEATURES: Feature[] = [
     bg:     'rgba(139,92,246,0.12)',
     bgDark: 'rgba(139,92,246,0.22)',
     title: 'Item Details',
-    desc:  'Price history chart, trend signal, buy/sell insight, and AI-written narrative.',
+    desc:  'Price history chart, trend signals, buy/sell insight, AI-written narrative, and Where to Buy links — eBay, Mercari, and PopnBeats.',
     where: 'Tap any item',
     free:  '30-day chart only',
     pro:   '90-day + 1Y charts · AI narration',
@@ -95,10 +94,26 @@ const FEATURES: Feature[] = [
     bg:     'rgba(22,163,74,0.12)',
     bgDark: 'rgba(22,163,74,0.22)',
     title: 'Your Collection',
-    desc:  'Log what you own. Track total portfolio value and P&L over time.',
+    desc:  'Log what you own. Track total portfolio value, P&L, and category breakdown. Export your full collection as a CSV delivered to your inbox.',
     where: 'Collection tab',
     free:  'Value visible · P&L locked',
-    pro:   'Full P&L + category breakdown',
+    pro:   'Full P&L · category breakdown · free export',
+  },
+  {
+    icon: (c) => (
+      <Svg width={SZ} height={SZ} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M12 16V4M8 8l4-4 4 4" />
+        <Path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-6" />
+      </Svg>
+    ),
+    color:  '#0EA5E9',
+    bg:     'rgba(14,165,233,0.12)',
+    bgDark: 'rgba(14,165,233,0.22)',
+    title: 'Collection Export',
+    desc:  'Export your full collection as a CSV file. Premium users get it free. Free users can purchase a single export for $1.99 — delivered directly to your email with a summary of your portfolio.',
+    where: 'Collection tab → export icon',
+    free:  'Single export · $1.99',
+    pro:   'Unlimited exports included',
   },
   {
     // Bell icon — represents push notifications
@@ -114,6 +129,22 @@ const FEATURES: Feature[] = [
     title: 'Price Alerts',
     desc:  'Get a push notification when a watchlist item makes a significant move.',
     where: 'Settings › Notifications',
+  },
+  {
+    icon: (c) => (
+      <Svg width={SZ} height={SZ} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2" />
+        <Rect x="7" y="7" width="10" height="10" rx="1" />
+      </Svg>
+    ),
+    color:  '#F59E0B',
+    bg:     'rgba(245,158,11,0.12)',
+    bgDark: 'rgba(245,158,11,0.22)',
+    title: 'Scan & Identify',
+    desc:  'Scan a barcode to instantly look up a collectible, or use Visual Scan to point your camera at any item and let AI identify it.',
+    where: 'Collection tab → Scan buttons',
+    free:  '1 visual scan per day',
+    pro:   'Unlimited visual scans',
   },
   {
     // Filter/sliders icon — represents tuning your categories
