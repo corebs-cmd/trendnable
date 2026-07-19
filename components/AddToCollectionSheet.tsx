@@ -5,6 +5,7 @@ import {
   TextInput,
   Pressable,
   Image,
+  ScrollView,
 } from 'react-native';
 import { Theme, RADIUS } from '@/lib/theme';
 import { CollectionFormData, SKU } from '@/lib/types';
@@ -254,8 +255,8 @@ export default function AddToCollectionSheet({
     >
       {/* ── Search view (SKU mode only, before item is selected) ── */}
       {isSearchView ? (
-        <View style={{ minHeight: 320 }}>
-          {/* Search input */}
+        <View>
+          {/* Search input — always anchored at top */}
           <View
             style={{
               flexDirection: 'row',
@@ -283,8 +284,12 @@ export default function AddToCollectionSheet({
             />
           </View>
 
-          {/* Results */}
-          <View>
+          {/* Results — fixed height so sheet never moves */}
+          <ScrollView
+            style={{ height: 300 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             {filteredSKUs.map((s, idx) => (
               <Pressable
                 key={s.id}
@@ -325,7 +330,7 @@ export default function AddToCollectionSheet({
                 </View>
               </Pressable>
             ))}
-          </View>
+          </ScrollView>
         </View>
       ) : (
         /* ── Form view (catalog mode always; SKU mode after item picked) ── */
