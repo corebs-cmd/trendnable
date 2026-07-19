@@ -28,7 +28,6 @@ import Sparkline from '@/components/Sparkline';
 import Chip from '@/components/Chip';
 import ExclusiveSticker from '@/components/ExclusiveSticker';
 import { STICKERS, type StickerDef } from '@/lib/stickers';
-import IOSShareSheet from '@/components/IOSShareSheet';
 import AddToCollectionSheet from '@/components/AddToCollectionSheet';
 import ProductPlaceholder, { ProductThumb } from '@/components/ProductPlaceholder';
 import UpgradeSheet from '@/components/UpgradeSheet';
@@ -440,7 +439,6 @@ export default function SKUDetailScreen() {
   const fandom = sku ? fandomById(sku.fandom) : undefined;
   const c = sku ? categoryColor(sku.category, isDark) : undefined;
 
-  const [shareOpen, setShareOpen]           = useState(false);
   const [addOpen, setAddOpen]               = useState(false);
   const [alertOpen, setAlertOpen]           = useState(false);
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
@@ -1325,24 +1323,6 @@ export default function SKUDetailScreen() {
             )}
           </View>
 
-          {/* Share button — design pill style */}
-          <Pressable
-            onPress={() => setShareOpen(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Share this SKU"
-            style={({ pressed }) => ({
-              width: 44, height: 44, borderRadius: 999,
-              backgroundColor: C.navPill,
-              borderWidth: 1, borderColor: C.cardBorder,
-              alignItems: 'center', justifyContent: 'center',
-              opacity: pressed ? 0.7 : 1,
-            })}
-          >
-            <Svg width={18} height={20} viewBox="0 0 18 20" fill="none">
-              <Path d="M9 13V2.5M9 2.5L5.5 6M9 2.5L12.5 6" stroke="#c8cee0" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" />
-              <Path d="M3.5 9.5H2.5V18h13V9.5h-1" stroke="#c8cee0" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </Pressable>
         </View>
 
         {/* Ticker — slides down on scroll */}
@@ -1495,15 +1475,6 @@ export default function SKUDetailScreen() {
       </View>
 
       {/* ── Sheets ── */}
-      <IOSShareSheet
-        open={shareOpen}
-        theme={theme}
-        previewTitle={sku.name}
-        previewSub={`${sku.series} · Hot Score ${sku.hot}`}
-        previewUrl="trendnable.app/sku"
-        onClose={() => setShareOpen(false)}
-      />
-
       <AddToCollectionSheet
         open={addOpen}
         skuId={sku.id}
