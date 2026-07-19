@@ -6,7 +6,10 @@ import {
   Pressable,
   Image,
   ScrollView,
+  Modal,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Theme, RADIUS } from '@/lib/theme';
 import { CollectionFormData, SKU } from '@/lib/types';
 import { fmtPrice } from '@/lib/appConfig';
@@ -150,6 +153,7 @@ export default function AddToCollectionSheet({
   onConfirm,
 }: AddToCollectionSheetProps) {
   const hotSkus = useAppStore((s) => s.hotSkus);
+  const insets  = useSafeAreaInsets();
 
   const skuLookup = (id: string | undefined): SKU | undefined =>
     id ? hotSkus.find((s) => s.id === id) : undefined;
@@ -240,6 +244,98 @@ export default function AddToCollectionSheet({
   const headerMedian = isCatalogMode ? catalogItem.median : selectedSku?.price.median ?? 0;
   const headerImageUrl = isCatalogMode ? catalogItem.imageUrl : selectedSku?.imageUrl;
 
+  // ── Search modal — top-anchored so keyboard never covers it ──────────────
+  if (isSearchView) {
+    return (
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={onClose}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          {/* Top-anchored panel */}
+          <View style={{
+            backgroundColor: theme.surface,
+            marginTop: insets.top,
+            borderBottomLeftRadius: 20,
+            borderBottomRightRadius: 20,
+            overflow: 'hidden',
+          }}>
+            {/* Header */}
+            <View style={{
+              flexDirection: 'row', alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingHorizontal: 20, paddingVertical: 14,
+              borderBottomWidth: 1, borderBottomColor: theme.hairline,
+            }}>
+              <Text style={{ fontFamily: 'Fraunces_700Bold', fontSize: 17, color: theme.text, letterSpacing: -0.3 }}>
+                Add to Collection
+              </Text>
+              <Pressable onPress={onClose} hitSlop={8}>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: theme.accent }}>Done</Text>
+              </Pressable>
+            </View>
+
+            {/* Search input */}
+            <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 10 }}>
+              <View style={{
+                flexDirection: 'row', alignItems: 'center',
+                backgroundColor: theme.surface2,
+                borderRadius: RADIUS.card,
+                paddingHorizontal: 12, height: 44,
+              }}>
+                <Text style={{ color: theme.faint, marginRight: 8, fontSize: 15 }}>⌕</Text>
+                <TextInput
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Search SKUs…"
+                  placeholderTextColor={theme.faint}
+                  style={{ flex: 1, color: theme.text, fontFamily: 'Inter_400Regular', fontSize: 15 }}
+                  autoFocus
+                />
+              </View>
+            </View>
+
+            {/* Results */}
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              style={{ maxHeight: 320 }}
+              contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 16 }}
+            >
+              {filteredSKUs.map((s, idx) => (
+                <Pressable
+                  key={s.id}
+                  onPress={() => handleSelect(s.id)}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row', alignItems: 'center',
+                    backgroundColor: theme.surface2,
+                    borderRadius: theme.radius,
+                    padding: 10,
+                    marginBottom: idx < filteredSKUs.length - 1 ? 8 : 0,
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <ProductThumb sku={s} theme={theme} size={44} />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={{ fontFamily: theme.fontDispBold, fontSize: 14, color: theme.text, letterSpacing: -0.2, marginBottom: 2 }} numberOfLines={1}>
+                      {s.name}
+                    </Text>
+                    <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted }}>
+                      {fmtPrice(s.price.median)} · {s.series}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
   return (
     <Sheet
       open={open}
@@ -247,88 +343,7 @@ export default function AddToCollectionSheet({
       theme={theme}
       title="Add to Collection"
     >
-      {/* ── Search view (SKU mode only, before item is selected) ── */}
-      {isSearchView ? (
-        <View>
-          {/* Search input — always anchored at top */}
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: theme.surface2,
-              borderRadius: RADIUS.card,
-              paddingHorizontal: 12,
-              height: 44,
-              marginBottom: 12,
-            }}
-          >
-            <Text style={{ color: theme.faint, marginRight: 8, fontSize: 15 }}>⌕</Text>
-            <TextInput
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Search SKUs…"
-              placeholderTextColor={theme.faint}
-              style={{
-                flex: 1,
-                color: theme.text,
-                fontFamily: 'Inter_400Regular',
-                fontSize: 15,
-              }}
-              autoFocus
-            />
-          </View>
-
-          {/* Results — fixed height so sheet never moves */}
-          <ScrollView
-            style={{ height: 300 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            {filteredSKUs.map((s, idx) => (
-              <Pressable
-                key={s.id}
-                onPress={() => handleSelect(s.id)}
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: theme.surface,
-                  borderRadius: theme.radius,
-                  padding: 10,
-                  marginBottom: idx < filteredSKUs.length - 1 ? 8 : 0,
-                  opacity: pressed ? 0.7 : 1,
-                })}
-              >
-                <ProductThumb sku={s} theme={theme} size={44} />
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text
-                    style={{
-                      fontFamily: theme.fontDispBold,
-                      fontSize: 14,
-                      color: theme.text,
-                      letterSpacing: -0.2,
-                      marginBottom: 2,
-                    }}
-                    numberOfLines={1}
-                  >
-                    {s.name}
-                  </Text>
-                  <Text
-                    style={{
-                      fontFamily: 'Inter_400Regular',
-                      fontSize: 12,
-                      color: theme.muted,
-                    }}
-                  >
-                    {fmtPrice(s.price.median)} · {s.series}
-                  </Text>
-                </View>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
-      ) : (
-        /* ── Form view (catalog mode always; SKU mode after item picked) ── */
-        <View>
+      <View>
           {/* Selected item header */}
           <View
             style={{
@@ -634,7 +649,6 @@ export default function AddToCollectionSheet({
             Add to collection
           </PrimaryButton>
         </View>
-      )}
     </Sheet>
   );
 }
