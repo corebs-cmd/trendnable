@@ -2,7 +2,9 @@ import React, { useEffect, useRef } from 'react';
 import {
   Animated,
   Dimensions,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -80,6 +82,10 @@ export default function Sheet({
       statusBarTranslucent
       onRequestClose={onClose}
     >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
       {/* Backdrop */}
       <Animated.View
         style={[styles.backdrop, { opacity: overlayOpacity }]}
@@ -138,6 +144,7 @@ export default function Sheet({
           {children}
         </ScrollView>
       </Animated.View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
