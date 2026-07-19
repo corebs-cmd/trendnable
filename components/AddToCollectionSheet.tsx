@@ -254,9 +254,10 @@ export default function AddToCollectionSheet({
         statusBarTranslucent
         onRequestClose={onClose}
       >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }}>
-          {/* Top-anchored panel */}
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-start' }}>
+          {/* Top-anchored panel — flex:1 so it fills space down to keyboard */}
           <View style={{
+            flex: 1,
             backgroundColor: theme.surface,
             marginTop: insets.top,
             borderBottomLeftRadius: 20,
@@ -302,7 +303,7 @@ export default function AddToCollectionSheet({
             <ScrollView
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
-              style={{ maxHeight: 320 }}
+              style={{ flex: 1 }}
               contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 16 }}
             >
               {filteredSKUs.map((s, idx) => (
