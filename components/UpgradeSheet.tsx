@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -108,6 +108,14 @@ export default function UpgradeSheet({ open, context, theme, onClose, onConfirm 
   const [restoring, setRestoring] = useState(false);
 
   const ctx = CONTEXT_MAP[context] ?? CONTEXT_MAP.feature;
+
+  // Track every paywall impression with the triggering context
+  useEffect(() => {
+    if (open) {
+      const { capture } = require('@/lib/analytics');
+      capture({ event: 'paywall_shown', properties: { context } });
+    }
+  }, [open, context]);
 
   const handlePurchase = async () => {
     setPurchasing(true);

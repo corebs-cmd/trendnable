@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, Pressable, ActivityIndicator, Image } from 'react-native';
 import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useRouter } from 'expo-router';
+import { capture } from '@/lib/analytics';
 
 import { buildTheme } from '@/lib/theme';
 import { CollectionPulse, FlaggedItem, DemandRow, UpgradeContext } from '@/lib/types';
@@ -239,6 +240,12 @@ interface CollectionPulseSectionProps {
 
 export default function CollectionPulseSection({ pulse, loading, isPremium, theme, onUpgrade }: CollectionPulseSectionProps) {
   const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && pulse?.eligible) {
+      capture({ event: 'collection_pulse_viewed', properties: { context: 'collection_tab' } });
+    }
+  }, [loading, pulse?.eligible]);
 
   if (loading) {
     return (

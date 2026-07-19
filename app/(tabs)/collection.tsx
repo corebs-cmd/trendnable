@@ -22,6 +22,7 @@ import { promoteCatalogToSku, fetchSkuById } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import Purchases from 'react-native-purchases';
 import { buildExportCSV, sendCollectionExport, downloadCollectionExport, ExportSummary } from '@/lib/exportCollection';
+import { capture } from '@/lib/analytics';
 import AppHeader from '@/components/AppHeader';
 import IconButton from '@/components/IconButton';
 import Sparkline from '@/components/Sparkline';
@@ -273,6 +274,7 @@ export default function CollectionScreen() {
   }, [exportPhase, canExport, items, catalogCollection, totalQty, total, totalCost, totalPL, plPct]);
 
   const handlePurchaseExport = useCallback(async () => {
+    capture({ event: 'export_used', properties: { action: 'purchase' } });
     setExportPhase('purchasing');
     try {
       const products = await Purchases.getProducts(['com.trendnable.app.export_single']);
@@ -299,6 +301,7 @@ export default function CollectionScreen() {
   }, [items, catalogCollection, totalQty, total, totalCost, totalPL, plPct]);
 
   const handleSend = useCallback(async () => {
+    capture({ event: 'export_used', properties: { action: 'send_email' } });
     if (!exportPayload || !user?.email || !user.email.includes('@')) {
       Alert.alert('Cannot send', 'No valid email address found on your account.');
       return;
@@ -324,6 +327,7 @@ export default function CollectionScreen() {
 
   const handleDownload = useCallback(async () => {
     if (!exportPayload || exportPhase !== 'ready') return;
+    capture({ event: 'export_used', properties: { action: 'download' } });
     setExportPhase('sending');
     try {
       await downloadCollectionExport(exportPayload.csv, exportPayload.fileName);

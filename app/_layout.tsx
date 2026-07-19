@@ -22,10 +22,12 @@ import {
   Fraunces_700Bold,
 } from '@expo-google-fonts/fraunces';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { PostHogProvider } from 'posthog-react-native';
 import { useAppStore } from '../stores/appStore';
 import { supabase } from '../lib/supabase';
 import * as api from '../lib/api';
 import { registerForPushNotifications } from '../lib/notifications';
+import { posthog } from '../lib/posthog';
 
 export default function RootLayout() {
   const isDark = useAppStore((s) => s.isDark);
@@ -96,6 +98,15 @@ export default function RootLayout() {
           store.setFollowedCategories(profile.followed_categories);
           await store.loadUserData(session.user.id);
 
+          // Identify user in PostHog — use Supabase user ID as the canonical ID
+          posthog.identify(session.user.id, { email: session.user.email, is_premium: profile.is_premium });
+
+          // Align RevenueCat to the same user ID so PostHog→RC conversion analysis works
+          try {
+            const Purchases = require('react-native-purchases').default;
+            await Purchases.logIn(session.user.id);
+          } catch { /* RevenueCat not available in Expo Go */ }
+
           // Register for push notifications and save native APNs token
           registerForPushNotifications()
             .then((token) => {
@@ -122,6 +133,7 @@ export default function RootLayout() {
         const s = useAppStore.getState();
         s.setUser(null);
         s.setIsPremium(false);
+        posthog.reset();
         router.replace('/auth');
       }
     });
@@ -152,6 +164,7 @@ export default function RootLayout() {
   }
 
   return (
+    <PostHogProvider client={posthog} autocapture={false}>
     <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false }}>
@@ -183,5 +196,6 @@ export default function RootLayout() {
         />
       </Stack>
     </GestureHandlerRootView>
+    </PostHogProvider>
   );
 }

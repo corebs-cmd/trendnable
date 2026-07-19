@@ -9,6 +9,8 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
+import { capture } from '@/lib/analytics';
 import Svg, { Path, Circle } from 'react-native-svg';
 
 import { useAppStore } from '@/stores/appStore';
@@ -89,6 +91,8 @@ export default function BrowseScreen() {
 
   const [query, setQuery]       = useState('');
   const [scrolled, setScrolled] = useState(false);
+
+  useFocusEffect(useCallback(() => { capture({ event: 'browse_viewed' }); }, []));
   const [catalogMatches, setCatalogMatches] = useState<Awaited<ReturnType<typeof searchCatalog>>>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

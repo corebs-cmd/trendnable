@@ -22,6 +22,7 @@ import { getTierByScore } from '@/lib/hotScoreTiers';
 import { useAppStore } from '@/stores/appStore';
 import { fetchSkuHistory, fetchSkuById, fetchSkuInsight } from '@/lib/api';
 import { SKU, InsightResponse, CollectionFormData } from '@/lib/types';
+import { capture } from '@/lib/analytics';
 
 import { InsightTypePill } from '@/components/signals/DirectionBadge';
 import Sparkline from '@/components/Sparkline';
@@ -1087,7 +1088,10 @@ export default function SKUDetailScreen() {
               {/* Premium tease — only when there's a real (non-low_data, non-steady_state) insight available */}
               {!isPremium && hasRealInsight && insight!.narrationLong && (
                 <Pressable
-                  onPress={() => setUpgradeContext('feature')}
+                  onPress={() => {
+                    capture({ event: 'signal_card_tapped', properties: { direction: insight!.direction ?? 'unknown', sku_id: sku.id } });
+                    setUpgradeContext('feature');
+                  }}
                   style={({ pressed }) => ({
                     flexDirection: 'row', alignItems: 'center', gap: 10,
                     backgroundColor: 'rgba(241,194,76,0.08)',
