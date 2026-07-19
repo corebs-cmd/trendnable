@@ -170,7 +170,7 @@ export default function CollectionScreen() {
       const collectionData = useAppStore.getState().collection || [];
       for (const item of collectionData) {
         if (!currentHotIds.has(item.skuId)) {
-          fetchSkuById(item.skuId).then((sku) => { if (sku && active) mergeSkuIntoHot(sku); }).catch(() => {});
+          fetchSkuById(item.skuId).then((sku) => { if (sku && active) mergeSkuIntoHot(sku); }).catch((e) => console.error('SKU recovery failed:', e));
         }
       }
 
@@ -183,7 +183,7 @@ export default function CollectionScreen() {
           qty: item.qty, purchased: item.purchased,
           purchaseDate: item.purchaseDate, condition: item.condition,
         });
-        fetchSkuById(item.skuId!).then((sku) => { if (sku) mergeSkuIntoHot(sku); }).catch(() => {});
+        fetchSkuById(item.skuId!).then((sku) => { if (sku) mergeSkuIntoHot(sku); }).catch((e) => console.error('SKU recovery failed (sync):', e));
       }
 
       // Pending: sku_id not yet assigned — promote first
@@ -199,7 +199,7 @@ export default function CollectionScreen() {
             qty: item.qty, purchased: item.purchased,
             purchaseDate: item.purchaseDate, condition: item.condition,
           });
-          fetchSkuById(promotion.skuId).then((sku) => { if (sku) mergeSkuIntoHot(sku); }).catch(() => {});
+          fetchSkuById(promotion.skuId).then((sku) => { if (sku) mergeSkuIntoHot(sku); }).catch((e) => console.error('SKU recovery failed (promotion):', e));
         }
       }
       } catch (err) {

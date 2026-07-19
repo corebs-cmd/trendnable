@@ -161,7 +161,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    const base64CSV = btoa(unescape(encodeURIComponent(csv)));
+    const bytes = new TextEncoder().encode(csv);
+    let binary = '';
+    bytes.forEach(b => binary += String.fromCharCode(b));
+    const base64CSV = btoa(binary);
 
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
