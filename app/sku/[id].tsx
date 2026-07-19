@@ -21,7 +21,7 @@ import { catById, fandomById, fmtPrice } from '@/lib/appConfig';
 import { getTierByScore } from '@/lib/hotScoreTiers';
 import { useAppStore } from '@/stores/appStore';
 import { fetchSkuHistory, fetchSkuById, fetchSkuInsight } from '@/lib/api';
-import { SKU, InsightResponse } from '@/lib/types';
+import { SKU, InsightResponse, CollectionFormData } from '@/lib/types';
 
 import { InsightTypePill } from '@/components/signals/DirectionBadge';
 import Sparkline from '@/components/Sparkline';
@@ -372,6 +372,7 @@ export default function SKUDetailScreen() {
   const inCollection = !!collectionItem;
   const removeFromCollection = useAppStore((s) => s.removeFromCollection);
   const updateCollectionItem = useAppStore((s) => s.updateCollectionItem);
+  const addToCollection = useAppStore((s) => s.addToCollection);
 
   const theme = buildTheme(isDark);
 
@@ -1480,7 +1481,23 @@ export default function SKUDetailScreen() {
         skuId={sku.id}
         theme={theme}
         onClose={() => setAddOpen(false)}
-        onConfirm={() => setAddOpen(false)}
+        onConfirm={(data: CollectionFormData) => {
+          if (data.skuId) {
+            addToCollection({
+              skuId: data.skuId,
+              qty: data.qty,
+              purchased: data.purchased,
+              purchaseDate: data.purchaseDate,
+              condition: data.condition,
+              notes: data.notes,
+              forSale: data.forSale,
+              ...(data.cardVariant ? { cardVariant: data.cardVariant } : {}),
+              ...(data.cardGrader ? { cardGrader: data.cardGrader } : {}),
+              ...(data.cardGrade ? { cardGrade: data.cardGrade } : {}),
+            });
+          }
+          setAddOpen(false);
+        }}
       />
 
       <UpgradeSheet
