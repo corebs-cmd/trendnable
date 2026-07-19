@@ -157,11 +157,7 @@ export default function AddToCollectionSheet({
   const [selected, setSelected] = useState<string | undefined>(skuId);
   const [searchQuery, setSearchQuery] = useState('');
   const [qty, setQty] = useState(1);
-  const [price, setPrice] = useState<string>(() => {
-    if (catalogItem) return String(catalogItem.median);
-    const s = skuLookup(skuId);
-    return s ? String(s.price.median) : '';
-  });
+  const [price, setPrice] = useState<string>('');
   const [condition, setCondition] = useState<Condition>('Mint');
   const [grader, setGrader] = useState<Grader>('PSA');
   const [grade, setGrade] = useState('');
@@ -200,8 +196,6 @@ export default function AddToCollectionSheet({
 
   function handleSelect(id: string) {
     setSelected(id);
-    const s = skuLookup(id);
-    if (s) setPrice(String(s.price.median));
   }
 
   function handleConfirm() {
@@ -231,7 +225,7 @@ export default function AddToCollectionSheet({
 
     // reset
     setQty(1);
-    setPrice(isCatalogMode ? String(catalogItem.median) : '');
+    setPrice('');
     setCondition('Mint');
     setGrader('PSA');
     setGrade('');
