@@ -179,7 +179,7 @@ export default function AddToCollectionSheet({
     return (
       s.name.toLowerCase().includes(q) ||
       s.series.toLowerCase().includes(q) ||
-      s.short.toLowerCase().includes(q)
+      s.short?.toLowerCase().includes(q)
     );
   });
 

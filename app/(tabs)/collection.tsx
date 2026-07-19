@@ -299,12 +299,15 @@ export default function CollectionScreen() {
   }, [items, catalogCollection, totalQty, total, totalCost, totalPL, plPct]);
 
   const handleSend = useCallback(async () => {
-    if (!exportPayload || !user?.email) return;
+    if (!exportPayload || !user?.email || !user.email.includes('@')) {
+      Alert.alert('Cannot send', 'No valid email address found on your account.');
+      return;
+    }
     setExportPhase('sending');
     try {
       await sendCollectionExport(exportPayload.csv, exportPayload.fileName, user.email, exportPayload.summary);
       // Deduct credit for non-premium users
-      if (!isPremium && exportCredits > 0) {
+      if (!isPremium && exportCredits > 0 && user?.id) {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           supabase.functions.invoke('use-export-credit', {
@@ -320,7 +323,7 @@ export default function CollectionScreen() {
   }, [exportPayload, user?.email, isPremium, exportCredits]);
 
   const handleDownload = useCallback(async () => {
-    if (!exportPayload) return;
+    if (!exportPayload || exportPhase !== 'ready') return;
     setExportPhase('sending');
     try {
       await downloadCollectionExport(exportPayload.csv, exportPayload.fileName);

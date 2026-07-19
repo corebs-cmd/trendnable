@@ -54,7 +54,7 @@ export default function PriceAlertSheet({ open, sku, theme, onClose, onUpgrade }
 
   const parsedCustom  = customInput ? parseFloat(customInput) : null;
   const targetPrice   = parsedCustom ?? selectedSuggestion;
-  const canSave       = targetPrice != null && targetPrice > 0 && !isNaN(targetPrice);
+  const canSave       = targetPrice != null && targetPrice > 0 && !isNaN(targetPrice) && isFinite(targetPrice);
 
   const handleDirectionChange = (dir: 'above' | 'below') => {
     setDirection(dir);
