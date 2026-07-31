@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.trendnable.app",
-      "buildNumber": "108",
+      "buildNumber": "115",
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -44,7 +44,8 @@
       "expo-font",
       "expo-notifications",
       "expo-apple-authentication",
-      "./plugins/fix-ios-assets"
+      "./plugins/fix-ios-assets",
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true
