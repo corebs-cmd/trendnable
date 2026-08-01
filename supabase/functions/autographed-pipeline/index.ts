@@ -113,11 +113,17 @@ APPROVE if the listing is a single specific signed collectible AND all of these:
 
 2. SPECIFIC ITEM — a named person signed a specific named item. Not lots, mystery boxes, multi-signed team balls (unless every signer is famous).
 
-3. RESALE-WORTHY — $50 floor for cards/photos, $100+ for jerseys/balls/figures. Cheap signed items don't track well.
+3. RESALE-WORTHY — $100+ floor for sports cards, $50+ for photos/comics/trading cards, $100+ for jerseys/balls/figures. Cheap signed items don't track well.
+
+4. SPORTS CARDS — VERY HIGH BAR. Approve ONLY if ALL of the following:
+   - The signer is a verified STAR: Hall of Famer, multi-time All-Star, MVP, championship winner, or a widely recognized top rookie (e.g. #1 overall pick, Topps/Bowman RC of a franchise player). NO common players, bench players, or journeymen.
+   - The card is a KEY issue: rookie card (RC), vintage (pre-1990), refractor/prizm/patch auto, or numbered to ≤100 copies. Generic base autos of non-stars are REJECTED.
+   - The card is graded (PSA, BGS, SGC) OR has PSA/DNA or Beckett witnessed authentication. Raw cards with just a COA sticker are REJECTED unless the signer is a legend.
+   - Price is $100+. Sports cards under $100 are REJECTED regardless of player.
 
 ━━ ITEM TYPES (in order of market volume — keep balanced) ━━
 
-- SPORTS CARDS — signed/auto rookie cards, vintage, modern
+- SPORTS CARDS — signed/auto rookie cards, vintage, graded (STRICT — see rule 4 above)
 - SPORTS MEMORABILIA — jerseys, balls, photos, bats
 - ENTERTAINMENT PHOTOS — actor/musician 8x10 signed
 - COMICS — CGC SS, CBCS signature, key issues signed by creators
@@ -252,7 +258,7 @@ Deno.serve(async (req) => {
       const title = item.title ?? '';
       if (!AUTHENTICATORS.test(title)) return false;
       const price = parseFloat(item.price?.value ?? '0');
-      if (price < 50) return false;
+      if (price < 75) return false;
       if (existingNames.some((existing) => tokenOverlapFraction(title, existing) >= 0.65)) return false;
       return true;
     });
@@ -311,7 +317,8 @@ Deno.serve(async (req) => {
         }
       }
 
-      const meetsThreshold = Number(c.price_median ?? 0) >= 50;
+      const cardFloor = c.item_type === 'card' ? 100 : 75;
+      const meetsThreshold = Number(c.price_median ?? 0) >= cardFloor;
 
       const { data, error } = await supabase
         .from('discovery_candidates')
