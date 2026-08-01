@@ -8,7 +8,7 @@
 
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { titlePassesTier1, tcgMultiQty, catalogFingerprint, exclusiveTypeToVariantType, tokenOverlapFraction } from '../_shared/pipeline-utils.ts';
+import { titlePassesTier1, tcgMultiQty, catalogFingerprint, exclusiveTypeToVariantType, coreTokens, brandStripName } from '../_shared/pipeline-utils.ts';
 
 const SUPABASE_URL              = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -241,6 +241,13 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Pre-strip existing names once so the dedup loop doesn't re-process them
+    // for every eBay candidate — avoids O(n×m) redundant string ops that were
+    // causing CPU time overruns as the catalog grew.
+    const existingStripped = existingNames.map(
+      (n) => brandStripName(n).replace(/[^a-z0-9 ]/g, '')
+    );
+
     // Pre-filter: Tier 1 keywords, TCG multi-quantity, price floor, existing-SKU dedup
     const filtered: any[] = [];
     for (const item of allItems) {
@@ -265,10 +272,15 @@ Deno.serve(async (req) => {
       const price = parseFloat(effectiveItem.price?.value ?? '0');
       if (price < 5) continue;
 
-      // Semantic dedup: skip if title is ≥65% similar to an existing SKU name.
-      // Uses brand-stripped token overlap — safe to compare eBay titles against
-      // structured SKU names because it only checks meaningful tokens (≥4 chars).
-      if (existingNames.some((existing) => tokenOverlapFraction(title, existing) >= 0.65)) continue;
+      // Semantic dedup: tokenize candidate once, check against pre-stripped existing names.
+      const candidateTokens = coreTokens(title);
+      if (candidateTokens.length > 0 && existingStripped.some((stripped) => {
+        let matches = 0;
+        for (const token of candidateTokens) {
+          if (stripped.includes(token)) matches++;
+        }
+        return matches / candidateTokens.length >= 0.65;
+      })) continue;
 
       filtered.push(effectiveItem);
     }

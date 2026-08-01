@@ -8,7 +8,7 @@
 
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { catalogFingerprint, tokenOverlapFraction } from '../_shared/pipeline-utils.ts';
+import { catalogFingerprint, coreTokens, brandStripName } from '../_shared/pipeline-utils.ts';
 
 const SUPABASE_URL              = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -253,13 +253,25 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Pre-strip existing names once to avoid re-processing on every candidate comparison.
+    const existingStripped = existingNames.map(
+      (n) => brandStripName(n).replace(/[^a-z0-9 ]/g, '')
+    );
+
     // Pre-filter: require authentication keyword in title + price floor + dedup
     const filtered = allItems.filter((item) => {
       const title = item.title ?? '';
       if (!AUTHENTICATORS.test(title)) return false;
       const price = parseFloat(item.price?.value ?? '0');
       if (price < 75) return false;
-      if (existingNames.some((existing) => tokenOverlapFraction(title, existing) >= 0.65)) return false;
+      const candidateTokens = coreTokens(title);
+      if (candidateTokens.length > 0 && existingStripped.some((stripped) => {
+        let matches = 0;
+        for (const token of candidateTokens) {
+          if (stripped.includes(token)) matches++;
+        }
+        return matches / candidateTokens.length >= 0.65;
+      })) return false;
       return true;
     });
 
