@@ -109,17 +109,21 @@ export default function SettingsScreen() {
   }, [user?.id]);
 
   const REWARD_LADDER = [
-    { cost: 50,  type: 'export'          as SparkRewardType, label: '1 free export' },
-    { cost: 75,  type: 'watchlist_slots' as SparkRewardType, label: '+10 watchlist slots' },
-    { cost: 100, type: 'feature_unlock'  as SparkRewardType, label: '7-day feature unlock' },
-    { cost: 250, type: 'badge'           as SparkRewardType, label: 'Contributor badge' },
-    { cost: 500, type: 'free_month'      as SparkRewardType, label: '1 free month Premium' },
+    { cost: 50,  type: 'export'          as SparkRewardType, label: '1 free export',         enabled: true  },
+    { cost: 75,  type: 'watchlist_slots' as SparkRewardType, label: '+10 watchlist slots',   enabled: true  },
+    { cost: 100, type: 'feature_unlock'  as SparkRewardType, label: '7-day feature unlock',  enabled: false },
+    { cost: 250, type: 'badge'           as SparkRewardType, label: 'Contributor badge',      enabled: false },
+    { cost: 500, type: 'free_month'      as SparkRewardType, label: '1 free month Premium',  enabled: true  },
   ];
 
-  const claimableReward = REWARD_LADDER.find(r => r.cost <= rewardUnits);
-  const nextTarget      = REWARD_LADDER.find(r => r.cost > rewardUnits) ?? REWARD_LADDER[REWARD_LADDER.length - 1];
-  const prevCost        = [...REWARD_LADDER].reverse().find(r => r.cost <= rewardUnits)?.cost ?? 0;
-  const sparksProgress  = rewardUnits >= 500 ? 1 : Math.min(1, (rewardUnits - prevCost) / (nextTarget.cost - prevCost));
+  const enabledLadder   = REWARD_LADDER.filter(r => r.enabled);
+  // Cheapest enabled reward the user can currently afford
+  const claimableReward = enabledLadder.find(r => r.cost <= rewardUnits);
+  // Next enabled reward above their balance (what the bar is filling toward)
+  const nextTarget      = enabledLadder.find(r => r.cost > rewardUnits) ?? enabledLadder[enabledLadder.length - 1];
+  const prevCost        = [...enabledLadder].reverse().find(r => r.cost < nextTarget.cost && r.cost <= rewardUnits)?.cost ?? 0;
+  const sparksProgress  = rewardUnits >= (enabledLadder[enabledLadder.length - 1]?.cost ?? 500) ? 1
+    : Math.min(1, (rewardUnits - prevCost) / (nextTarget.cost - prevCost));
 
   async function handleRedeem(rewardType: SparkRewardType) {
     if (!user) return;

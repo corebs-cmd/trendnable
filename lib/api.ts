@@ -1019,50 +1019,50 @@ export async function redeemReward(userId: string, rewardType: SparkRewardType):
   const cost = REWARD_COSTS[rewardType];
   if (!cost) throw new Error('Unknown reward type');
 
-  const { data: userData } = await supabase
-    .from('users')
-    .select('reward_units, export_credits')
-    .eq('id', userId)
-    .single();
+  // Atomic gate + decrement via Postgres function — prevents double-spend and
+  // enforces disabled-tier guard server-side in one round-trip.
+  const { data: rpcResult, error: rpcError } = await supabase
+    .rpc('claim_spark_reward', { p_user_id: userId, p_reward_type: rewardType, p_cost: cost });
 
-  const units = (userData as any)?.reward_units ?? 0;
-  if (units < cost) throw new Error('Not enough sparks');
+  if (rpcError) throw new Error(rpcError.message);
+  if (!(rpcResult as any)?.ok) throw new Error((rpcResult as any)?.error ?? 'Redemption failed');
 
-  // Apply the reward effect
-  const now       = new Date();
-  const updates: Record<string, unknown> = { reward_units: units - cost };
+  // Balance successfully decremented — now apply the reward side-effect
+  const now = new Date();
+  const sideEffects: Record<string, unknown> = {};
 
   if (rewardType === 'export') {
-    const current = (userData as any)?.export_credits ?? 0;
-    updates.export_credits = current + 1;
+    // Increment export credits — read current then +1
+    const { data: ud } = await supabase.from('users').select('export_credits').eq('id', userId).single();
+    sideEffects.export_credits = ((ud as any)?.export_credits ?? 0) + 1;
   } else if (rewardType === 'watchlist_slots') {
-    const expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    updates.watchlist_bonus_slots      = 10;
-    updates.watchlist_bonus_expires_at = expires;
+    sideEffects.watchlist_bonus_slots      = 10;
+    sideEffects.watchlist_bonus_expires_at = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
   } else if (rewardType === 'free_month') {
     const expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    updates.premium_reward_claimed_at  = now.toISOString();
-    updates.premium_reward_expires_at  = expires;
-    updates.is_premium                 = true;
+    sideEffects.premium_reward_claimed_at = now.toISOString();
+    sideEffects.premium_reward_expires_at = expires;
+    sideEffects.is_premium                = true;
   }
-  // feature_unlock and badge: logged in spark_rewards only (no DB column side effect yet)
 
-  await supabase.from('users').update(updates).eq('id', userId);
+  if (Object.keys(sideEffects).length > 0) {
+    await supabase.from('users').update(sideEffects).eq('id', userId);
+  }
 
-  // Log redemption
+  // Log to ledger tables
   const expiresAt = rewardType === 'watchlist_slots'
     ? new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
-    : rewardType === 'feature_unlock'
-    ? new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
     : undefined;
 
-  await supabase.from('spark_rewards').insert({ user_id: userId, reward_type: rewardType, cost, expires_at: expiresAt ?? null });
-  await supabase.from('reward_events').insert({
-    user_id:    userId,
-    event_type: 'redemption',
-    units:      -cost,
-    note:       `Redeemed: ${rewardType.replace(/_/g, ' ')}`,
-  });
+  await Promise.all([
+    supabase.from('spark_rewards').insert({ user_id: userId, reward_type: rewardType, cost, expires_at: expiresAt ?? null }),
+    supabase.from('reward_events').insert({
+      user_id:    userId,
+      event_type: 'redemption',
+      units:      -cost,
+      note:       `Redeemed: ${rewardType.replace(/_/g, ' ')}`,
+    }),
+  ]);
 
   return { ok: true };
 }
