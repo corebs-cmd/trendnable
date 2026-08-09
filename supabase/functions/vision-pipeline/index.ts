@@ -393,19 +393,38 @@ Deno.serve(async (req) => {
 
   const svc = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  // ── Premium gate ──────────────────────────────────────────────────────────────
+  // ── Quota check — free users get 1 visual scan/day, premium is unlimited ──────
+  const VISUAL_SCAN_DAILY_LIMIT = 1;
+
   const { data: userRow } = await svc
     .from('users')
-    .select('is_premium')
+    .select('is_premium, visual_scan_count_day, visual_scan_count_used')
     .eq('id', userId)
     .single();
 
-  if (!userRow?.is_premium) {
-    return json({
-      ok: false,
-      error: 'premium_required',
-      message: 'Visual Scan is a Premium feature. Upgrade to unlock it.',
-    }, 403);
+  const isPremium = userRow?.is_premium ?? false;
+
+  if (!isPremium) {
+    const today = new Date().toISOString().slice(0, 10);
+    const usedToday = userRow?.visual_scan_count_day === today
+      ? (userRow?.visual_scan_count_used ?? 0)
+      : 0;
+
+    if (usedToday >= VISUAL_SCAN_DAILY_LIMIT) {
+      return json({
+        ok: false,
+        error: 'visual_quota_exceeded',
+        message: `You've used your free visual scan for today. Upgrade for unlimited scans.`,
+        used: usedToday,
+        limit: VISUAL_SCAN_DAILY_LIMIT,
+      }, 429);
+    }
+
+    // Increment before processing so concurrent requests don't both slip through
+    await svc.from('users').update({
+      visual_scan_count_day: today,
+      visual_scan_count_used: usedToday + 1,
+    }).eq('id', userId);
   }
 
   // ── Parse body ────────────────────────────────────────────────────────────────

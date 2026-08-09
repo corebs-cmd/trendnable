@@ -92,7 +92,17 @@ export default function SettingsScreen() {
   const theme = buildTheme(isDark);
 
   const rewardUnits = useAppStore((s) => s.rewardUnits);
-  const stars = Math.floor(rewardUnits / 50);
+
+  const REWARD_LADDER = [
+    { cost: 50,  label: '1 free export' },
+    { cost: 75,  label: '+10 watchlist slots' },
+    { cost: 100, label: '7-day feature unlock' },
+    { cost: 250, label: 'Contributor badge' },
+    { cost: 500, label: '1 free month Premium' },
+  ];
+  const nextReward   = REWARD_LADDER.find(r => r.cost > rewardUnits) ?? REWARD_LADDER[REWARD_LADDER.length - 1];
+  const prevCost     = [...REWARD_LADDER].reverse().find(r => r.cost <= rewardUnits)?.cost ?? 0;
+  const sparksProgress = rewardUnits >= 500 ? 1 : Math.min(1, (rewardUnits - prevCost) / (nextReward.cost - prevCost));
 
   const [scrolled, setScrolled] = useState(false);
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
@@ -389,7 +399,7 @@ export default function SettingsScreen() {
             marginBottom: 20,
           }}>
             {/* Header row */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
               <Svg width={14} height={14} viewBox="0 0 24 24" style={{ marginRight: 6 }}>
                 <Path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill={theme.premium} />
               </Svg>
@@ -400,38 +410,26 @@ export default function SettingsScreen() {
               }}>
                 Sparks
               </Text>
-              {/* Star pip row — up to 5 stars, each = 50 units */}
-              <View style={{ flexDirection: 'row', gap: 4 }}>
-                {Array.from({ length: 5 }).map((_, i) => {
-                  const filled = i < stars;
-                  return (
-                    <View key={i} style={{
-                      width: 18, height: 18, borderRadius: 999,
-                      backgroundColor: filled ? '#E8A33D' : theme.surface2,
-                      borderWidth: filled ? 0 : 1,
-                      borderColor: theme.premium,
-                      alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <Text style={{ fontSize: 10, color: filled ? '#1a1008' : theme.premium, lineHeight: 12 }}>★</Text>
-                    </View>
-                  );
-                })}
-              </View>
+              <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: theme.text }}>
+                {rewardUnits}
+              </Text>
             </View>
 
-            {/* Progress bar */}
+            {/* Progress bar to next reward */}
             <View style={{ height: 6, borderRadius: 999, backgroundColor: theme.surface2, overflow: 'hidden', marginBottom: 8 }}>
               <View style={{
                 height: '100%',
                 borderRadius: 999,
                 backgroundColor: theme.premium,
-                width: `${((rewardUnits % 50) / 50) * 100}%`,
+                width: `${sparksProgress * 100}%`,
               }} />
             </View>
 
-            {/* Status text */}
+            {/* Next reward label */}
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginBottom: 2 }}>
-              {rewardUnits} Sparks · {stars} star{stars !== 1 ? 's' : ''} · {50 - (rewardUnits % 50)} to next star
+              {rewardUnits >= 500
+                ? `${rewardUnits} sparks · all rewards unlocked`
+                : `${rewardUnits} sparks · ${nextReward.label} at ${nextReward.cost}`}
             </Text>
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.faint }}>
               Share prices during scans to earn more

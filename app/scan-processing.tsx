@@ -150,7 +150,7 @@ export default function ScanProcessingScreen() {
       const code: string = err?.errorCode ?? '';
       if (code === 'quota_exceeded') {
         setUpgradeCtx('scanQuota');
-      } else if (code === 'premium_required') {
+      } else if (code === 'visual_quota_exceeded' || code === 'premium_required') {
         setUpgradeCtx('visionScan');
       } else if (code === 'not_found') {
         setErrorMsg(

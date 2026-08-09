@@ -939,6 +939,19 @@ export async function fetchScanQuota(userId: string): Promise<ScanQuota> {
   return { used, limit: SCAN_DAILY_LIMIT, resetsAt: nextUtcMidnight() };
 }
 
+const VISUAL_SCAN_DAILY_LIMIT = 1;
+
+export async function fetchVisualScanQuota(userId: string): Promise<ScanQuota> {
+  const { data } = await supabase
+    .from('users')
+    .select('visual_scan_count_day, visual_scan_count_used')
+    .eq('id', userId)
+    .maybeSingle();
+  const today = new Date().toISOString().slice(0, 10);
+  const used = data?.visual_scan_count_day === today ? ((data?.visual_scan_count_used as number) ?? 0) : 0;
+  return { used, limit: VISUAL_SCAN_DAILY_LIMIT, resetsAt: nextUtcMidnight() };
+}
+
 // ── Scan pipeline ─────────────────────────────────────────────────────────────
 
 export type ScanError = Error & { errorCode?: string; quota?: { used: number; limit: number; resetsAt: string } };

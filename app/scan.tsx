@@ -42,6 +42,7 @@ import { useAppStore } from '@/stores/appStore';
 import { buildTheme } from '@/lib/theme';
 import { setPendingScan } from '@/lib/scanHandoff';
 import UpgradeSheet from '@/components/UpgradeSheet';
+import { fetchVisualScanQuota } from '@/lib/api';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const FRAME_SIZE = 240;
@@ -51,15 +52,16 @@ type ScanMode = 'barcode' | 'visual';
 export default function ScanScreen() {
   const router   = useRouter();
   const insets   = useSafeAreaInsets();
-  const isDark   = useAppStore((s) => s.isDark);
+  const isDark    = useAppStore((s) => s.isDark);
   const isPremium = useAppStore((s) => s.isPremium);
-  const theme    = buildTheme(isDark);
+  const user      = useAppStore((s) => s.user);
+  const theme     = buildTheme(isDark);
   const { mode: modeParam } = useLocalSearchParams<{ mode?: string }>();
 
-  const [scanMode, setScanMode] = useState<ScanMode>(
-    modeParam === 'visual' ? 'visual' : 'barcode'
-  );
+  const [scanMode, setScanMode] = useState<ScanMode>('barcode');
   const [upgradeCtx, setUpgradeCtx] = useState<'visionScan' | null>(null);
+  const [visualScanUsed, setVisualScanUsed] = useState(1); // assume used until loaded
+  const [quotaLoaded, setQuotaLoaded] = useState(false);
 
   const lockedRef = useRef(false);
   const cameraRef = useRef<Camera>(null);
@@ -70,7 +72,11 @@ export default function ScanScreen() {
   useFocusEffect(
     useCallback(() => {
       lockedRef.current = false;
-    }, [])
+      // Refresh visual scan quota when returning from scan-processing
+      if (user?.id && !isPremium) {
+        fetchVisualScanQuota(user.id).then(({ used }) => setVisualScanUsed(used)).catch(() => {});
+      }
+    }, [user?.id, isPremium])
   );
 
   const { hasPermission, requestPermission } = useCameraPermission();
@@ -80,12 +86,25 @@ export default function ScanScreen() {
     if (!hasPermission) requestPermission();
   }, [hasPermission]);
 
+  // Load visual scan quota, then apply the initial mode param
   useEffect(() => {
-    if (modeParam === 'visual' && !isPremium) {
-      setScanMode('barcode');
-      setUpgradeCtx('visionScan');
-    }
-  }, []);
+    if (!user?.id) { setQuotaLoaded(true); return; }
+    fetchVisualScanQuota(user.id).then(({ used }) => {
+      setVisualScanUsed(used);
+      setQuotaLoaded(true);
+      if (modeParam === 'visual') {
+        if (isPremium || used === 0) {
+          setScanMode('visual');
+        } else {
+          setScanMode('barcode');
+          setUpgradeCtx('visionScan');
+        }
+      }
+    }).catch(() => {
+      setQuotaLoaded(true);
+      // On error, fall back to barcode
+    });
+  }, [user?.id]);
 
   // ── Barcode ───────────────────────────────────────────────────────────────
   // Called via runOnJS — arrives on JS thread asynchronously, no mutex held.
@@ -126,8 +145,11 @@ export default function ScanScreen() {
 
   const handleModeToggle = (mode: ScanMode) => {
     if (mode === 'visual' && !isPremium) {
-      setUpgradeCtx('visionScan');
-      return;
+      if (!quotaLoaded || visualScanUsed >= 1) {
+        setUpgradeCtx('visionScan');
+        return;
+      }
+      // 1 free visual scan available
     }
     lockedRef.current = false;
     setScanMode(mode);
@@ -276,7 +298,7 @@ export default function ScanScreen() {
               flexDirection: 'row', alignItems: 'center', gap: 6,
               paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999,
               backgroundColor: scanMode === 'visual' ? '#FF5500' : 'transparent',
-              opacity: pressed ? 0.8 : (isPremium ? 1 : 0.55),
+              opacity: pressed ? 0.8 : (!isPremium && quotaLoaded && visualScanUsed >= 1 ? 0.55 : 1),
             })}
           >
             <Svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke={scanMode === 'visual' ? '#FFF' : 'rgba(225,228,230,0.65)'} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
@@ -286,9 +308,11 @@ export default function ScanScreen() {
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: scanMode === 'visual' ? '#FFF' : 'rgba(225,228,230,0.65)' }}>
               Visual Scan
             </Text>
-            {!isPremium && (
+            {!isPremium && quotaLoaded && (
               <View style={{ backgroundColor: 'rgba(241,194,76,0.25)', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 2 }}>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, color: '#f1c24c', letterSpacing: 0.3 }}>★ PRO</Text>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 9, color: '#f1c24c', letterSpacing: 0.3 }}>
+                  {visualScanUsed === 0 ? '1 LEFT' : '★ PRO'}
+                </Text>
               </View>
             )}
           </Pressable>
