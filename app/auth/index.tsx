@@ -18,9 +18,11 @@ function mapAuthError(msg: string): string {
   if (/invalid login credentials/i.test(msg)) return 'Wrong email or password.';
   if (/email not confirmed/i.test(msg)) return 'Please check your inbox and confirm your email first.';
   if (/user already registered/i.test(msg)) return 'An account with this email already exists. Try signing in.';
+  if (/already been registered/i.test(msg)) return 'An account with this email already exists. Try signing in.';
   if (/password should be at least/i.test(msg)) return 'Password must be at least 6 characters.';
-  if (/rate limit/i.test(msg)) return 'Too many attempts. Please wait a moment and try again.';
+  if (/rate limit|for security purposes|only request this/i.test(msg)) return 'Too many attempts. Please wait a moment and try again.';
   if (/network request failed/i.test(msg)) return 'No internet connection. Check your network and try again.';
+  if (/wmuvigcdazjitzstxqvk/i.test(msg)) return 'Something went wrong. Please try again.';
   return msg;
 }
 
