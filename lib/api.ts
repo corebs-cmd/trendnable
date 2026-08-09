@@ -843,9 +843,20 @@ export async function submitCommunityPrice(params: {
   // ── Read user state in one query ──────────────────────────────────────────
   const { data: userData } = await supabase
     .from('users')
-    .select('reward_units, sparks_earned_day, sparks_earned_today')
+    .select('reward_units, sparks_earned_day, sparks_earned_today, is_premium')
     .eq('id', userId)
     .single();
+
+  // Premium users: write prices (data still flows to pipeline) but earn no sparks.
+  // Balance and history are preserved — they just can't accumulate while subscribed.
+  if ((userData as any)?.is_premium) {
+    const update: Record<string, unknown> = { community_contributor_id: userId };
+    if (validPpg)    update.ppg_price    = ppgPrice;
+    if (validRetail) update.retail_price = retailPrice;
+    if (catalogId) await supabase.from('product_catalog').update(update).eq('id', catalogId);
+    if (skuId)     await supabase.from('skus').update(update).eq('id', skuId);
+    return { awarded: 0 };
+  }
 
   const today        = new Date().toISOString().slice(0, 10);
   const earnedDay    = (userData as any)?.sparks_earned_day ?? '';

@@ -435,8 +435,8 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Sparks reward card */}
-        {user && (
+        {/* Sparks reward card — free users only */}
+        {user && !isPremium && (
           <View style={{
             backgroundColor: theme.surface,
             borderRadius: theme.radiusLg,

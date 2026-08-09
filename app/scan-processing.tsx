@@ -575,7 +575,13 @@ export default function ScanProcessingScreen() {
           </View>
         )}
 
-        {priceSubmitMsg ? (
+        {isPremium ? (
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 28 }}>
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: 'rgba(225,228,230,0.4)', flex: 1, lineHeight: 18 }}>
+              Your prices help improve market data for the community.
+            </Text>
+          </View>
+        ) : priceSubmitMsg ? (
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 28 }}>
             <Text style={{ fontSize: 13 }}>⚡</Text>
             <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#f1c24c', flex: 1, lineHeight: 18 }}>
