@@ -11,6 +11,7 @@ interface AppState {
   isPremium: boolean;
   isAuthReady: boolean;
   rewardUnits: number;
+  watchlistBonusSlots: number; // active bonus slots from sparks redeem (0 when expired)
 
   // UI
   isDark: boolean;
@@ -121,6 +122,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   isPremium: false,
   isAuthReady: false,
   rewardUnits: 0,
+  watchlistBonusSlots: 0,
   isDark: true,
   hasOnboarded: false,
   hotSkus: [],
@@ -194,11 +196,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       api.fetchNotifications(userId),
       api.fetchCatalogWatchlist(userId),
       api.fetchCatalogCollection(userId),
-      supabase.from('users').select('reward_units, premium_reward_expires_at').eq('id', userId).single(),
+      supabase.from('users').select('reward_units, premium_reward_expires_at, watchlist_bonus_slots, watchlist_bonus_expires_at').eq('id', userId).single(),
     ]);
     const rewardRow = (rewardData as any)?.data;
     const rewardUnits = rewardRow?.reward_units ?? 0;
     const premiumRewardExpiresAt: string | null = rewardRow?.premium_reward_expires_at ?? null;
+    const watchlistBonusSlots: number = rewardRow?.watchlist_bonus_slots ?? 0;
+    const watchlistBonusExpiresAt: string | null = rewardRow?.watchlist_bonus_expires_at ?? null;
+    const activeBonusSlots = (watchlistBonusExpiresAt && new Date(watchlistBonusExpiresAt) > new Date())
+      ? watchlistBonusSlots : 0;
     set({
       collection,
       watchlist,
@@ -208,6 +214,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       catalogWatchlist,
       catalogCollection,
       rewardUnits,
+      watchlistBonusSlots: activeBonusSlots,
     });
     // If reward-based premium is active but isPremium is false, activate it
     if (premiumRewardExpiresAt && new Date(premiumRewardExpiresAt) > new Date()) {
@@ -261,9 +268,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   addToWatchlist: (skuId) => {
-    const { watchlist, catalogWatchlist, isPremium } = get();
+    const { watchlist, catalogWatchlist, isPremium, watchlistBonusSlots } = get();
     if (watchlist.includes(skuId)) return true;
-    if (!isPremium && watchlist.length + catalogWatchlist.length >= 20) return false;
+    const cap = isPremium ? Infinity : 20 + watchlistBonusSlots;
+    if (!isPremium && watchlist.length + catalogWatchlist.length >= cap) return false;
     set({ watchlist: [...watchlist, skuId] });
     const userId = get().user?.id;
     if (userId) api.addWatchlistItem(userId, skuId).catch(console.error);
@@ -291,9 +299,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   isInCollection: (skuId) => get().collection.some((c) => c.skuId === skuId),
 
   addCatalogToWatchlist: (item) => {
-    const { watchlist, catalogWatchlist, isPremium } = get();
+    const { watchlist, catalogWatchlist, isPremium, watchlistBonusSlots } = get();
     if (catalogWatchlist.some((c) => c.catalogId === item.catalogId)) return true;
-    if (!isPremium && watchlist.length + catalogWatchlist.length >= 20) return false;
+    const cap = isPremium ? Infinity : 20 + watchlistBonusSlots;
+    if (!isPremium && watchlist.length + catalogWatchlist.length >= cap) return false;
     set({ catalogWatchlist: [item, ...catalogWatchlist] });
     const userId = get().user?.id;
     if (userId) api.addCatalogWatchlistItem(userId, item.catalogId).catch(console.error);

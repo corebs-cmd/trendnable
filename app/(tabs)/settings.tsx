@@ -11,13 +11,15 @@ import {
   Share,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import Svg, { Path } from 'react-native-svg';
 
 import { buildTheme } from '@/lib/theme';
 import { useAppStore } from '@/stores/appStore';
 import { UpgradeContext, RewardSummary } from '@/lib/types';
-import { fetchRewardSummary, claimRewardPremium } from '@/lib/api';
+import { fetchRewardSummary, claimRewardPremium, redeemReward } from '@/lib/api';
+import type { SparkRewardType } from '@/lib/types';
 import AppHeader from '@/components/AppHeader';
 import UpgradeSheet from '@/components/UpgradeSheet';
 import GuideSheet from '@/components/GuideSheet';
@@ -81,6 +83,7 @@ function UsageMeter({ label, used, limit, theme, isDark }: {
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const isDark = useAppStore((s) => s.isDark);
+  const router = useRouter();
   const setIsDark = useAppStore((s) => s.setIsDark);
   const isPremium = useAppStore((s) => s.isPremium);
   const followedCategories = useAppStore((s) => s.followedCategories);
@@ -93,17 +96,6 @@ export default function SettingsScreen() {
 
   const rewardUnits = useAppStore((s) => s.rewardUnits);
 
-  const REWARD_LADDER = [
-    { cost: 50,  label: '1 free export' },
-    { cost: 75,  label: '+10 watchlist slots' },
-    { cost: 100, label: '7-day feature unlock' },
-    { cost: 250, label: 'Contributor badge' },
-    { cost: 500, label: '1 free month Premium' },
-  ];
-  const nextReward   = REWARD_LADDER.find(r => r.cost > rewardUnits) ?? REWARD_LADDER[REWARD_LADDER.length - 1];
-  const prevCost     = [...REWARD_LADDER].reverse().find(r => r.cost <= rewardUnits)?.cost ?? 0;
-  const sparksProgress = rewardUnits >= 500 ? 1 : Math.min(1, (rewardUnits - prevCost) / (nextReward.cost - prevCost));
-
   const [scrolled, setScrolled] = useState(false);
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -115,6 +107,32 @@ export default function SettingsScreen() {
     if (!user) return;
     fetchRewardSummary(user.id).then(setRewardSummary).catch(() => {});
   }, [user?.id]);
+
+  const REWARD_LADDER = [
+    { cost: 50,  type: 'export'          as SparkRewardType, label: '1 free export' },
+    { cost: 75,  type: 'watchlist_slots' as SparkRewardType, label: '+10 watchlist slots' },
+    { cost: 100, type: 'feature_unlock'  as SparkRewardType, label: '7-day feature unlock' },
+    { cost: 250, type: 'badge'           as SparkRewardType, label: 'Contributor badge' },
+    { cost: 500, type: 'free_month'      as SparkRewardType, label: '1 free month Premium' },
+  ];
+
+  const claimableReward = REWARD_LADDER.find(r => r.cost <= rewardUnits);
+  const nextTarget      = REWARD_LADDER.find(r => r.cost > rewardUnits) ?? REWARD_LADDER[REWARD_LADDER.length - 1];
+  const prevCost        = [...REWARD_LADDER].reverse().find(r => r.cost <= rewardUnits)?.cost ?? 0;
+  const sparksProgress  = rewardUnits >= 500 ? 1 : Math.min(1, (rewardUnits - prevCost) / (nextTarget.cost - prevCost));
+
+  async function handleRedeem(rewardType: SparkRewardType) {
+    if (!user) return;
+    try {
+      await redeemReward(user.id, rewardType);
+      useAppStore.getState().addRewardUnits(-REWARD_LADDER.find(r => r.type === rewardType)!.cost);
+      const updated = await fetchRewardSummary(user.id);
+      setRewardSummary(updated);
+      Alert.alert('Reward claimed!', 'Check your rewards in settings.');
+    } catch (e: unknown) {
+      Alert.alert('Could not claim', (e as Error).message ?? 'Please try again.');
+    }
+  }
 
   async function handleClaimFreeMonth() {
     if (!user) return;
@@ -425,15 +443,42 @@ export default function SettingsScreen() {
               }} />
             </View>
 
-            {/* Next reward label */}
-            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, marginBottom: 2 }}>
-              {rewardUnits >= 500
-                ? `${rewardUnits} sparks · all rewards unlocked`
-                : `${rewardUnits} sparks · ${nextReward.label} at ${nextReward.cost}`}
-            </Text>
+            {/* Status + history link */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: theme.muted, flex: 1 }}>
+                {rewardUnits >= 500
+                  ? `${rewardUnits} sparks · all rewards unlocked`
+                  : claimableReward
+                    ? `${rewardUnits} sparks · ${claimableReward.label} ready`
+                    : `${rewardUnits} sparks · ${nextTarget.label} at ${nextTarget.cost}`}
+              </Text>
+              <Pressable onPress={() => router.push('/sparks-ledger')} hitSlop={8}>
+                <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: theme.premium }}>History</Text>
+              </Pressable>
+            </View>
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: theme.faint }}>
               Share prices during scans to earn more
             </Text>
+
+            {/* Claim button — appears when user can afford the cheapest reward */}
+            {claimableReward && (
+              <Pressable
+                onPress={() => claimableReward.type === 'free_month' ? handleClaimFreeMonth() : handleRedeem(claimableReward.type)}
+                accessibilityRole="button"
+                style={({ pressed }) => ({
+                  alignSelf: 'flex-start',
+                  marginTop: 12,
+                  backgroundColor: theme.premium,
+                  paddingHorizontal: 14, paddingVertical: 8,
+                  borderRadius: 999,
+                  opacity: pressed ? 0.8 : 1,
+                })}
+              >
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: theme.premiumInk }}>
+                  Claim {claimableReward.label} ({claimableReward.cost} sparks) →
+                </Text>
+              </Pressable>
+            )}
 
             {/* Active reward premium period */}
             {rewardSummary?.expiresAt && new Date(rewardSummary.expiresAt) > new Date() && (
@@ -445,26 +490,6 @@ export default function SettingsScreen() {
               </Text>
             )}
 
-            {/* Claim button — only when eligible and not in active reward period */}
-            {rewardSummary?.canClaimFreeMonth && !(rewardSummary.expiresAt && new Date(rewardSummary.expiresAt) > new Date()) && (
-              <Pressable
-                onPress={handleClaimFreeMonth}
-                accessibilityRole="button"
-                accessibilityLabel="Claim your free month of Premium"
-                style={({ pressed }) => ({
-                  alignSelf: 'flex-end',
-                  marginTop: 12,
-                  backgroundColor: theme.premium,
-                  paddingHorizontal: 14, paddingVertical: 8,
-                  borderRadius: 999,
-                  opacity: pressed ? 0.8 : 1,
-                })}
-              >
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 12, color: theme.premiumInk }}>
-                  Claim your free month →
-                </Text>
-              </Pressable>
-            )}
           </View>
         )}
 

@@ -97,6 +97,7 @@ export default function ScanProcessingScreen() {
   const [ppgPrice, setPpgPrice]   = useState('');
   const [showRetail, setShowRetail] = useState(false);
   const [retailPrice, setRetailPrice] = useState('');
+  const [priceSubmitMsg, setPriceSubmitMsg] = useState<string | null>(null);
 
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -251,18 +252,34 @@ export default function ScanProcessingScreen() {
     }
   };
 
-  const submitCommunityPrices = (result: ScanResult, token: string) => {
-    const ppg     = ppgPrice     ? parseFloat(ppgPrice)     : null;
-    const retail  = retailPrice  ? parseFloat(retailPrice)  : null;
+  const submitCommunityPrices = async (result: ScanResult, token: string) => {
+    const ppg    = ppgPrice    ? parseFloat(ppgPrice)    : null;
+    const retail = retailPrice ? parseFloat(retailPrice) : null;
     if ((ppg != null || retail != null) && user?.id) {
-      submitCommunityPrice({
-        catalogId:   result.catalogId,
-        ppgPrice:    ppg,
-        retailPrice: retail,
-        ebayMedian:  result.price.median,
-        userId:      user.id,
-        accessToken: token,
-      }).catch(() => {});
+      try {
+        const res = await submitCommunityPrice({
+          catalogId:   result.catalogId,
+          skuName:     result.name,
+          ppgPrice:    ppg,
+          retailPrice: retail,
+          ebayMedian:  result.price.median,
+          listings:    result.activeListings ?? 0,
+          userId:      user.id,
+          accessToken: token,
+        });
+        if (res.reason === 'daily_cap') {
+          setPriceSubmitMsg("You've hit today's limit — come back tomorrow for more sparks.");
+        } else if (res.reason === 'cooldown') {
+          setPriceSubmitMsg('Already contributed for this item — try again tomorrow.');
+        } else if (res.reason === 'validation') {
+          setPriceSubmitMsg('Price outside expected range — not counted.');
+        } else if (res.bonusNote) {
+          setPriceSubmitMsg(res.bonusNote);
+          useAppStore.getState().addRewardUnits(res.awarded);
+        } else if (res.awarded > 0) {
+          useAppStore.getState().addRewardUnits(res.awarded);
+        }
+      } catch { /* silent */ }
     }
   };
 
@@ -557,12 +574,21 @@ export default function ScanProcessingScreen() {
           </View>
         )}
 
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 28 }}>
-          <Text style={{ fontSize: 13 }}>⚡</Text>
-          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: 'rgba(225,228,230,0.5)', flex: 1, lineHeight: 18 }}>
-            Earn +2 Sparks for each price you share — help the community grow the catalog
-          </Text>
-        </View>
+        {priceSubmitMsg ? (
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 28 }}>
+            <Text style={{ fontSize: 13 }}>⚡</Text>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#f1c24c', flex: 1, lineHeight: 18 }}>
+              {priceSubmitMsg}
+            </Text>
+          </View>
+        ) : (
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 28 }}>
+            <Text style={{ fontSize: 13 }}>⚡</Text>
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: 'rgba(225,228,230,0.5)', flex: 1, lineHeight: 18 }}>
+              Share a price → earn sparks → get rewards
+            </Text>
+          </View>
+        )}
 
         {/* ── Action buttons ── */}
         {result.skuId && (

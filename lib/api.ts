@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { CollectionItem, DBUser, DBCollectionItem, SKU, PriceAlert, AppNotification, CatalogWatchlistItem, CatalogCollectionItem, SkuInsight, InsightResponse, InsightDirection, RewardSummary, CollectionPulse, ScanResult } from './types';
+import { CollectionItem, DBUser, DBCollectionItem, SKU, PriceAlert, AppNotification, CatalogWatchlistItem, CatalogCollectionItem, SkuInsight, InsightResponse, InsightDirection, RewardSummary, CollectionPulse, ScanResult, CommunityPriceResult, SparkLedgerEntry, SparkRewardType } from './types';
 import type { StickerDef } from './stickers';
 
 // ── Sticker catalog ───────────────────────────────────────────────────────────
@@ -807,59 +807,171 @@ export function validateCommunityPrice(value: number, ebayMedian: number): boole
   return true;
 }
 
+// Config defaults — match app_config table seeds in migration 061
+const SPARKS_DAILY_CAP            = 15;
+const SPARKS_SKU_COOLDOWN_HOURS   = 24;
+const CONSENSUS_LISTING_THRESHOLD = 3;   // N: min pipeline listings for instant path
+const CONSENSUS_MATCH_BAND_PCT    = 20;  // ±20% band
+const CONSENSUS_DEFER_DAYS        = 7;
+
+function withinConsensusband(submitted: number, median: number): boolean {
+  if (median <= 0) return false;
+  return Math.abs(submitted - median) / median <= CONSENSUS_MATCH_BAND_PCT / 100;
+}
+
 // Submits a community price (ppg and/or retail) for a catalog or sku entry.
-// Awards 2 reward units per valid field submitted.
-// Returns { awarded: number } — total units awarded this call.
+// §4: enforces daily cap + per-SKU cooldown.
+// §5: detects new-SKU bonus and instant/deferred consensus.
 export async function submitCommunityPrice(params: {
   catalogId?: string;
   skuId?: string;
+  skuName?: string;      // for ledger label
   ppgPrice?: number | null;
   retailPrice?: number | null;
   ebayMedian: number;
+  listings?: number;     // pipeline listing_count — drives consensus instant path
   userId: string;
   accessToken: string;
-}): Promise<{ awarded: number }> {
-  const { catalogId, skuId, ppgPrice, retailPrice, ebayMedian, userId } = params;
-  let awarded = 0;
+}): Promise<CommunityPriceResult> {
+  const { catalogId, skuId, skuName, ppgPrice, retailPrice, ebayMedian, listings = 0, userId } = params;
 
   const validPpg    = ppgPrice    != null && validateCommunityPrice(ppgPrice,    ebayMedian);
   const validRetail = retailPrice != null && validateCommunityPrice(retailPrice, ebayMedian);
 
-  if (!validPpg && !validRetail) return { awarded: 0 };
+  if (!validPpg && !validRetail) return { awarded: 0, reason: 'validation' };
 
+  // ── Read user state in one query ──────────────────────────────────────────
+  const { data: userData } = await supabase
+    .from('users')
+    .select('reward_units, sparks_earned_day, sparks_earned_today')
+    .eq('id', userId)
+    .single();
+
+  const today        = new Date().toISOString().slice(0, 10);
+  const earnedDay    = (userData as any)?.sparks_earned_day ?? '';
+  const earnedToday  = earnedDay === today ? ((userData as any)?.sparks_earned_today ?? 0) : 0;
+  const currentUnits = (userData as any)?.reward_units ?? 0;
+
+  // ── Daily cap check ───────────────────────────────────────────────────────
+  if (earnedToday >= SPARKS_DAILY_CAP) {
+    const resetsAt = new Date();
+    resetsAt.setUTCHours(24, 0, 0, 0);
+    return { awarded: 0, reason: 'daily_cap', resetsAt: resetsAt.toISOString() };
+  }
+
+  // ── Per-SKU cooldown check ────────────────────────────────────────────────
+  const cutoff = new Date(Date.now() - SPARKS_SKU_COOLDOWN_HOURS * 3600 * 1000).toISOString();
+  const { data: recentEvents } = await supabase
+    .from('reward_events')
+    .select('id')
+    .eq('user_id', userId)
+    .in('event_type', ['ppg_price', 'retail_price'])
+    .gt('created_at', cutoff)
+    .or(
+      [catalogId ? `catalog_id.eq.${catalogId}` : null, skuId ? `sku_id.eq.${skuId}` : null]
+        .filter(Boolean).join(',')
+    )
+    .limit(1);
+
+  if (recentEvents && recentEvents.length > 0) {
+    return { awarded: 0, reason: 'cooldown' };
+  }
+
+  // ── Check if this is a new-SKU (first community price) ───────────────────
+  let isNewSku = false;
+  if (catalogId) {
+    const { data: existingCat } = await supabase
+      .from('product_catalog')
+      .select('ppg_price, retail_price')
+      .eq('id', catalogId)
+      .maybeSingle();
+    isNewSku = existingCat?.ppg_price == null && existingCat?.retail_price == null;
+  } else if (skuId) {
+    const { data: existingSku } = await supabase
+      .from('skus')
+      .select('ppg_price, retail_price')
+      .eq('id', skuId)
+      .maybeSingle();
+    isNewSku = existingSku?.ppg_price == null && existingSku?.retail_price == null;
+  }
+
+  // ── Write prices ──────────────────────────────────────────────────────────
   const update: Record<string, unknown> = { community_contributor_id: userId };
   if (validPpg)    update.ppg_price    = ppgPrice;
   if (validRetail) update.retail_price = retailPrice;
+  if (catalogId) await supabase.from('product_catalog').update(update).eq('id', catalogId);
+  if (skuId)     await supabase.from('skus').update(update).eq('id', skuId);
 
-  // Update catalog row
-  if (catalogId) {
-    await supabase.from('product_catalog').update(update).eq('id', catalogId);
-  }
-  // Update sku row
-  if (skuId) {
-    await supabase.from('skus').update(update).eq('id', skuId);
-  }
+  // ── Calculate awards ──────────────────────────────────────────────────────
+  let awarded     = 0;
+  let bonusAmount = 0;
+  let bonusType: CommunityPriceResult['bonusType'];
+  let bonusNote: string | undefined;
 
-  // Award units + log events
-  const events: { user_id: string; event_type: string; units: number; sku_id?: string; catalog_id?: string }[] = [];
+  const events: {
+    user_id: string; event_type: string; units: number;
+    sku_id?: string; catalog_id?: string; note?: string; sku_name?: string;
+  }[] = [];
+
   if (validPpg) {
     awarded += 2;
-    events.push({ user_id: userId, event_type: 'ppg_price', units: 2, sku_id: skuId, catalog_id: catalogId });
+    events.push({ user_id: userId, event_type: 'ppg_price', units: 2, sku_id: skuId, catalog_id: catalogId, sku_name: skuName, note: 'Price shared' });
   }
   if (validRetail) {
     awarded += 2;
-    events.push({ user_id: userId, event_type: 'retail_price', units: 2, sku_id: skuId, catalog_id: catalogId });
+    events.push({ user_id: userId, event_type: 'retail_price', units: 2, sku_id: skuId, catalog_id: catalogId, sku_name: skuName, note: 'Retail price shared' });
   }
 
-  if (events.length > 0) {
+  // New-SKU bonus — 5 sparks, first submitter only
+  if (isNewSku) {
+    bonusAmount += 5;
+    bonusType    = 'new_sku';
+    bonusNote    = 'First to price this! +5';
+    events.push({ user_id: userId, event_type: 'new_sku', units: 5, sku_id: skuId, catalog_id: catalogId, sku_name: skuName, note: bonusNote });
+  }
+
+  // Consensus check
+  const priceToCheck = validPpg ? ppgPrice! : retailPrice!;
+  const priceType    = validPpg ? 'ppg' : 'retail';
+
+  if (listings >= CONSENSUS_LISTING_THRESHOLD && ebayMedian > 0) {
+    // Instant path
+    if (withinConsensusband(priceToCheck, ebayMedian)) {
+      bonusAmount += 3;
+      if (!bonusType) bonusType = 'consensus';
+      bonusNote = bonusNote ? bonusNote : 'Your price matched the market (+3)';
+      events.push({ user_id: userId, event_type: 'consensus', units: 3, sku_id: skuId, catalog_id: catalogId, sku_name: skuName, note: bonusNote });
+    }
+  } else if (listings < CONSENSUS_LISTING_THRESHOLD && ebayMedian > 0) {
+    // Deferred path — queue for nightly sweep
+    const submittedAt = new Date();
+    const expiresAt   = new Date(submittedAt.getTime() + CONSENSUS_DEFER_DAYS * 86400 * 1000);
+    await supabase.from('deferred_consensus').insert({
+      user_id:         userId,
+      catalog_id:      catalogId ?? null,
+      sku_id:          skuId     ?? null,
+      submitted_price: priceToCheck,
+      price_type:      priceType,
+      submitted_at:    submittedAt.toISOString(),
+      expires_at:      expiresAt.toISOString(),
+    });
+  }
+
+  // ── Persist sparks ────────────────────────────────────────────────────────
+  const totalAwarded = awarded + bonusAmount;
+  const capRoom      = SPARKS_DAILY_CAP - earnedToday;
+  const actualAwarded = Math.min(totalAwarded, Math.max(0, capRoom));
+
+  if (actualAwarded > 0) {
     await supabase.from('reward_events').insert(events);
-    // Fetch current units, add awarded amount, persist
-    const { data: userData } = await supabase.from('users').select('reward_units').eq('id', userId).single();
-    const current = (userData as any)?.reward_units ?? 0;
-    await supabase.from('users').update({ reward_units: current + awarded }).eq('id', userId);
+    await supabase.from('users').update({
+      reward_units:       currentUnits + actualAwarded,
+      sparks_earned_day:  today,
+      sparks_earned_today: Math.min(SPARKS_DAILY_CAP, earnedToday + actualAwarded),
+    }).eq('id', userId);
   }
 
-  return { awarded };
+  return { awarded: actualAwarded, bonusType, bonusAmount: bonusAmount || undefined, bonusNote };
 }
 
 // ── Rewards ───────────────────────────────────────────────────────────────────
@@ -892,6 +1004,77 @@ export async function claimRewardPremium(userId: string): Promise<{ success: boo
     is_premium: true,
   }).eq('id', userId);
   return { success: true, expiresAt };
+}
+
+// Reward costs — must match REWARD_LADDER in settings.tsx
+const REWARD_COSTS: Record<SparkRewardType, number> = {
+  export:          50,
+  watchlist_slots: 75,
+  feature_unlock:  100,
+  badge:           250,
+  free_month:      500,
+};
+
+export async function redeemReward(userId: string, rewardType: SparkRewardType): Promise<{ ok: boolean }> {
+  const cost = REWARD_COSTS[rewardType];
+  if (!cost) throw new Error('Unknown reward type');
+
+  const { data: userData } = await supabase
+    .from('users')
+    .select('reward_units, export_credits')
+    .eq('id', userId)
+    .single();
+
+  const units = (userData as any)?.reward_units ?? 0;
+  if (units < cost) throw new Error('Not enough sparks');
+
+  // Apply the reward effect
+  const now       = new Date();
+  const updates: Record<string, unknown> = { reward_units: units - cost };
+
+  if (rewardType === 'export') {
+    const current = (userData as any)?.export_credits ?? 0;
+    updates.export_credits = current + 1;
+  } else if (rewardType === 'watchlist_slots') {
+    const expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    updates.watchlist_bonus_slots      = 10;
+    updates.watchlist_bonus_expires_at = expires;
+  } else if (rewardType === 'free_month') {
+    const expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    updates.premium_reward_claimed_at  = now.toISOString();
+    updates.premium_reward_expires_at  = expires;
+    updates.is_premium                 = true;
+  }
+  // feature_unlock and badge: logged in spark_rewards only (no DB column side effect yet)
+
+  await supabase.from('users').update(updates).eq('id', userId);
+
+  // Log redemption
+  const expiresAt = rewardType === 'watchlist_slots'
+    ? new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    : rewardType === 'feature_unlock'
+    ? new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    : undefined;
+
+  await supabase.from('spark_rewards').insert({ user_id: userId, reward_type: rewardType, cost, expires_at: expiresAt ?? null });
+  await supabase.from('reward_events').insert({
+    user_id:    userId,
+    event_type: 'redemption',
+    units:      -cost,
+    note:       `Redeemed: ${rewardType.replace(/_/g, ' ')}`,
+  });
+
+  return { ok: true };
+}
+
+export async function fetchSparkLedger(userId: string, limit = 30): Promise<SparkLedgerEntry[]> {
+  const { data } = await supabase
+    .from('reward_events')
+    .select('id, event_type, units, note, sku_name, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  return (data ?? []) as SparkLedgerEntry[];
 }
 
 export async function getCollectionPulse(): Promise<CollectionPulse | null> {

@@ -96,6 +96,26 @@ export interface RewardSummary {
   expiresAt: string | null;
 }
 
+export interface CommunityPriceResult {
+  awarded: number;             // base sparks awarded
+  bonusType?: 'new_sku' | 'consensus'; // surprise bonus fired
+  bonusAmount?: number;        // extra sparks from bonus
+  bonusNote?: string;          // toast copy, e.g. "First to price this! +5"
+  reason?: 'daily_cap' | 'cooldown' | 'validation'; // why no sparks were awarded
+  resetsAt?: string;           // ISO — for daily cap reset time
+}
+
+export interface SparkLedgerEntry {
+  id: string;
+  event_type: string;
+  units: number;
+  note: string | null;
+  sku_name: string | null;
+  created_at: string;
+}
+
+export type SparkRewardType = 'export' | 'watchlist_slots' | 'feature_unlock' | 'badge' | 'free_month';
+
 export interface CollectionFormData {
   skuId?: string;
   qty: number;
