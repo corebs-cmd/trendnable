@@ -277,6 +277,7 @@ export default function ScanProcessingScreen() {
           setPriceSubmitMsg(res.bonusNote);
           useAppStore.getState().addRewardUnits(res.awarded);
         } else if (res.awarded > 0) {
+          setPriceSubmitMsg(`+${res.awarded} sparks earned`);
           useAppStore.getState().addRewardUnits(res.awarded);
         }
       } catch { /* silent */ }

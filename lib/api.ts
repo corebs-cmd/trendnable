@@ -1055,7 +1055,7 @@ export async function redeemReward(userId: string, rewardType: SparkRewardType):
     : undefined;
 
   await Promise.all([
-    supabase.from('spark_rewards').insert({ user_id: userId, reward_type: rewardType, cost, expires_at: expiresAt ?? null }),
+    supabase.from('spark_rewards').insert({ user_id: userId, reward_type: rewardType, cost, expires_at: expiresAt ?? null, meta: {} }),
     supabase.from('reward_events').insert({
       user_id:    userId,
       event_type: 'redemption',

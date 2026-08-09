@@ -113,7 +113,7 @@ export default function SettingsScreen() {
     { cost: 50,  type: 'export'          as SparkRewardType, label: '1 free export',         enabled: true  },
     { cost: 75,  type: 'watchlist_slots' as SparkRewardType, label: '+10 watchlist slots',   enabled: true  },
     { cost: 100, type: 'feature_unlock'  as SparkRewardType, label: '7-day feature unlock',  enabled: false },
-    { cost: 250, type: 'badge'           as SparkRewardType, label: 'Contributor badge',      enabled: false },
+    { cost: 250, type: 'badge'           as SparkRewardType, label: 'Contributor badge',      enabled: true  },
     { cost: 500, type: 'free_month'      as SparkRewardType, label: '1 free month Premium',  enabled: true  },
   ];
 
