@@ -12,6 +12,7 @@ interface AppState {
   isAuthReady: boolean;
   rewardUnits: number;
   watchlistBonusSlots: number; // active bonus slots from sparks redeem (0 when expired)
+  hasContributorBadge: boolean;
 
   // UI
   isDark: boolean;
@@ -56,6 +57,7 @@ interface AppState {
   setIsPremium: (premium: boolean) => void;
   setIsAuthReady: (ready: boolean) => void;
   addRewardUnits: (amount: number) => void;
+  setContributorBadge: () => void;
   setIsDark: (dark: boolean) => void;
   setHasOnboarded: (v: boolean) => void;
   setFollowedFandoms: (fandoms: string[]) => void;
@@ -123,6 +125,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   isAuthReady: false,
   rewardUnits: 0,
   watchlistBonusSlots: 0,
+  hasContributorBadge: false,
   isDark: true,
   hasOnboarded: false,
   hotSkus: [],
@@ -146,6 +149,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setIsPremium: (isPremium) => set({ isPremium }),
   setIsAuthReady: (isAuthReady) => set({ isAuthReady }),
   addRewardUnits: (amount) => set((s) => ({ rewardUnits: s.rewardUnits + amount })),
+  setContributorBadge: () => set({ hasContributorBadge: true }),
 
   setIsDark: (isDark) => {
     set({ isDark });
@@ -189,7 +193,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   loadUserData: async (userId) => {
-    const [collection, watchlist, priceAlerts, notifications, catalogWatchlist, catalogCollection, rewardData] = await Promise.all([
+    const [collection, watchlist, priceAlerts, notifications, catalogWatchlist, catalogCollection, rewardData, badgeData] = await Promise.all([
       api.fetchCollection(userId),
       api.fetchWatchlist(userId),
       api.fetchPriceAlerts(userId),
@@ -197,6 +201,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       api.fetchCatalogWatchlist(userId),
       api.fetchCatalogCollection(userId),
       supabase.from('users').select('reward_units, premium_reward_expires_at, watchlist_bonus_slots, watchlist_bonus_expires_at').eq('id', userId).single(),
+      supabase.from('user_badges').select('badge_key').eq('user_id', userId).eq('badge_key', 'contributor').maybeSingle(),
     ]);
     const rewardRow = (rewardData as any)?.data;
     const rewardUnits = rewardRow?.reward_units ?? 0;
@@ -215,6 +220,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       catalogCollection,
       rewardUnits,
       watchlistBonusSlots: activeBonusSlots,
+      hasContributorBadge: !!(badgeData as any)?.data?.badge_key,
     });
     // If reward-based premium is active but isPremium is false, activate it
     if (premiumRewardExpiresAt && new Date(premiumRewardExpiresAt) > new Date()) {

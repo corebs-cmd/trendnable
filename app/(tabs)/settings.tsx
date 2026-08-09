@@ -85,7 +85,8 @@ export default function SettingsScreen() {
   const isDark = useAppStore((s) => s.isDark);
   const router = useRouter();
   const setIsDark = useAppStore((s) => s.setIsDark);
-  const isPremium = useAppStore((s) => s.isPremium);
+  const isPremium           = useAppStore((s) => s.isPremium);
+  const hasContributorBadge = useAppStore((s) => s.hasContributorBadge);
   const followedCategories = useAppStore((s) => s.followedCategories);
   const setFollowedCategories = useAppStore((s) => s.setFollowedCategories);
   const user = useAppStore((s) => s.user);
@@ -129,12 +130,19 @@ export default function SettingsScreen() {
     if (!user) return;
     try {
       await redeemReward(user.id, rewardType);
-      useAppStore.getState().addRewardUnits(-REWARD_LADDER.find(r => r.type === rewardType)!.cost);
+      const tier = REWARD_LADDER.find(r => r.type === rewardType)!;
+      useAppStore.getState().addRewardUnits(-tier.cost);
+      if (rewardType === 'badge') useAppStore.getState().setContributorBadge();
       const updated = await fetchRewardSummary(user.id);
       setRewardSummary(updated);
-      Alert.alert('Reward claimed!', 'Check your rewards in settings.');
+      Alert.alert('Reward claimed!', rewardType === 'badge' ? 'You\'re now a Contributor. ⚡' : 'Check your rewards in settings.');
     } catch (e: unknown) {
-      Alert.alert('Could not claim', (e as Error).message ?? 'Please try again.');
+      const msg = (e as Error).message ?? '';
+      if (msg === 'already_owned') {
+        Alert.alert('Already claimed', 'You already own the Contributor badge.');
+      } else {
+        Alert.alert('Could not claim', msg || 'Please try again.');
+      }
     }
   }
 
@@ -391,6 +399,21 @@ export default function SettingsScreen() {
                     <View style={{ backgroundColor: theme.premium, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999 }}>
                       <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: theme.premiumInk, letterSpacing: 0.12 * 10, textTransform: 'uppercase' }}>
                         Premium
+                      </Text>
+                    </View>
+                  )}
+                  {hasContributorBadge && (
+                    <View style={{
+                      flexDirection: 'row', alignItems: 'center', gap: 3,
+                      paddingHorizontal: 8, paddingVertical: 5, borderRadius: 999,
+                      backgroundColor: theme.premium + '22',
+                      borderWidth: 1, borderColor: theme.premium + '55',
+                    }}>
+                      <Svg width={9} height={9} viewBox="0 0 24 24">
+                        <Path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill={theme.premium} />
+                      </Svg>
+                      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 10, color: theme.premium, letterSpacing: 0.12 * 10, textTransform: 'uppercase' }}>
+                        Contributor
                       </Text>
                     </View>
                   )}
