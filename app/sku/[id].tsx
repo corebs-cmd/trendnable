@@ -10,6 +10,9 @@ import {
   Linking,
   Alert,
   Animated,
+  Modal,
+  Image,
+  StatusBar,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -445,6 +448,7 @@ export default function SKUDetailScreen() {
   const [alertOpen, setAlertOpen]           = useState(false);
   const [upgradeContext, setUpgradeContext] = useState<UpgradeContext | null>(null);
   const [insightData, setInsightData]       = useState<InsightResponse | null>(null);
+  const [imagePreviewVisible, setImagePreviewVisible] = useState(false);
 
   const userId = useAppStore((s) => s.user?.id ?? null);
 
@@ -593,6 +597,10 @@ export default function SKUDetailScreen() {
             transform: [{ scale: heroImgScale }],
             opacity: heroImgOpacity,
           }}>
+          <Pressable
+            onPress={() => sku.imageUrl ? setImagePreviewVisible(true) : undefined}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}
+          >
             {(() => {
               const stickers = (sku.stickerKeys ?? []).slice(0, 3)
                 .map((k) => stickerCatalog[k] ?? STICKERS[k])
@@ -661,6 +669,7 @@ export default function SKUDetailScreen() {
                 </>
               );
             })()}
+          </Pressable>
           </Animated.View>
         </Animated.View>
 
@@ -1521,6 +1530,42 @@ export default function SKUDetailScreen() {
           onUpgrade={() => { setAlertOpen(false); setUpgradeContext('priceAlerts'); }}
         />
       )}
+
+      {/* ── Full-screen image preview ── */}
+      <Modal
+        visible={imagePreviewVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setImagePreviewVisible(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.96)', alignItems: 'center', justifyContent: 'center' }}
+          onPress={() => setImagePreviewVisible(false)}
+        >
+          {sku?.imageUrl && (
+            <Image
+              source={{ uri: sku.imageUrl }}
+              style={{ width: SCREEN_W, height: SCREEN_W }}
+              resizeMode="contain"
+            />
+          )}
+          {/* Close button — top right, easy to tap */}
+          <View style={{
+            position: 'absolute',
+            top: (StatusBar.currentHeight ?? 44) + 8,
+            right: 18,
+            backgroundColor: 'rgba(255,255,255,0.12)',
+            borderRadius: 20,
+            width: 36,
+            height: 36,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <Text style={{ color: '#fff', fontSize: 18, lineHeight: 20 }}>✕</Text>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
