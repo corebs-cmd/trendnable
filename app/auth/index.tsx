@@ -33,12 +33,14 @@ export default function AuthScreen() {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
   const isDark = useAppStore((s) => s.isDark);
   const theme = buildTheme(isDark);
 
   const handleSubmit = async () => {
     setError(null);
+    setSuccess(null);
     setLoading(true);
     try {
       const store = useAppStore.getState();
@@ -87,7 +89,7 @@ export default function AuthScreen() {
         }
 
         if (!data.session) {
-          setError('Check your inbox and confirm your email to finish signing up.');
+          setSuccess('Check your inbox and confirm your email to finish signing up.');
           return;
         }
 
@@ -250,6 +252,11 @@ export default function AuthScreen() {
           />
         </View>
 
+        {success && (
+          <Text style={{ color: '#34d399', fontFamily: 'Inter_400Regular', fontSize: 14, textAlign: 'center', marginBottom: 8, lineHeight: 20 }}>
+            ✓ {success}
+          </Text>
+        )}
         {error && (
           <Text style={[styles.error, { color: theme.neg, fontFamily: 'Inter_400Regular' }]}>{error}</Text>
         )}
