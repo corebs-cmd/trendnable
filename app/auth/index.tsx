@@ -76,22 +76,33 @@ export default function AuthScreen() {
         });
         if (authError) throw authError;
 
+        // session is null when email confirmation is required.
+        // Still create the profile so it exists when they confirm + sign in.
         if (data.user) {
-          const profile = await api.createUserProfile(
+          await api.createUserProfile(
             data.user.id,
             email.trim(),
             name.trim() || null
           );
+        }
+
+        if (!data.session) {
+          setError('Check your inbox and confirm your email to finish signing up.');
+          return;
+        }
+
+        if (data.user) {
+          const profile = await api.fetchUserProfile(data.user.id);
           if (profile) {
             store.setUser(profile);
-            store.setIsPremium(false);
+            store.setIsPremium(profile.is_premium ?? false);
           }
         }
 
         router.replace('/onboarding');
       }
     } catch (e: unknown) {
-      const raw = e instanceof Error ? e.message : 'Something went wrong';
+      const raw = e instanceof Error ? e.message : typeof e === 'string' ? e : 'Something went wrong';
       setError(mapAuthError(raw));
     } finally {
       setLoading(false);
