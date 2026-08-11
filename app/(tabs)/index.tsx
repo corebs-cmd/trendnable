@@ -95,6 +95,7 @@ export default function HotScreen() {
   const [notifOpen, setNotifOpen]   = useState(false);
   const [scrolled, setScrolled]     = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [heroOffset, setHeroOffset] = useState(0);
 
   const visibleCatIds = followedCategories.length > 0
     ? followedCategories
@@ -104,8 +105,8 @@ export default function HotScreen() {
   const hero = useMemo(() => {
     const catScope = activeCat === 'all' ? visibleCatIds : [activeCat];
     const pool = hotSkus.filter((s) => catScope.includes(s.category));
-    return getFeaturedSku(pool.sort((a, b) => b.hot - a.hot));
-  }, [hotSkus, activeCat, visibleCatIds]);
+    return getFeaturedSku(pool.sort((a, b) => b.hot - a.hot), heroOffset);
+  }, [hotSkus, activeCat, visibleCatIds, heroOffset]);
 
   // Per-category sections: top 5 by selected sort
   const sections = useMemo(() => {
@@ -143,6 +144,7 @@ export default function HotScreen() {
     setRefreshing(true);
     try {
       await useAppStore.getState().loadHotSkus();
+      setHeroOffset((prev) => prev + 1);
     } finally {
       setRefreshing(false);
     }

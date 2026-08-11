@@ -11,7 +11,7 @@ const SLOT_MS = 6 * 60 * 60 * 1000; // 6 hours in ms
  *
  * Graceful at any pool size: a pool of 1 always returns that item; a pool of 0 returns undefined.
  */
-export function getFeaturedSku(pool: SKU[]): SKU | undefined {
+export function getFeaturedSku(pool: SKU[], refreshOffset = 0): SKU | undefined {
   if (pool.length === 0) return undefined;
 
   const now = Date.now();
@@ -24,6 +24,6 @@ export function getFeaturedSku(pool: SKU[]): SKU | undefined {
   if (pinned) return pinned;
 
   const candidates = pool.slice(0, 5);
-  const slotIdx = Math.floor(now / SLOT_MS);
+  const slotIdx = Math.floor(now / SLOT_MS) + refreshOffset;
   return candidates[slotIdx % candidates.length];
 }
