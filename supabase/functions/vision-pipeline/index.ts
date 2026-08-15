@@ -146,18 +146,29 @@ interface VisionIdentification {
 }
 
 async function identifyWithVision(imageBase64: string): Promise<VisionIdentification> {
-  const prompt = `You are an expert collectibles identifier. Examine this image of a collectable item carefully.
+  const prompt = `You are an expert collectibles identifier. Examine this photo of a collectable item.
 
-Your task:
-1. Read ALL visible text in the image (character name, series, item number, brand, any labels)
-2. Identify the type of collectable
-3. Produce a specific, searchable name
+## CRITICAL RULE
+**Text printed on the item or its packaging is ALWAYS the authoritative identifier.**
+Read the text first. Trust what the box says over what the figure looks like.
+Never guess from visual appearance alone when text is readable.
 
-Supported categories:
-- funko: Funko Pop vinyl figures (box usually shows character name and #number)
-- tcg: Trading cards (Pokémon, Magic: The Gathering, Yu-Gi-Oh, sports cards)
+## For Funko Pops specifically
+- The bottom panel of the box shows the character name — this is definitive.
+- The front of the box shows the Pop number (e.g. #1175 or SE).
+- Read the EXACT name from the box (e.g. "Freddy Funko as Marty McFly", not just "Marty McFly").
+- "SE" means Special Edition (no number). Note any edition labels: Fundays, SDCC, ECCC, etc.
+
+## Your task
+1. Read ALL visible text carefully (bottom panel, front, stickers, edition badges).
+2. Identify the collectable category.
+3. Produce the most specific searchable name using the text you read.
+
+## Supported categories
+- funko: Funko Pop vinyl figures
+- tcg: Trading cards (Pokémon, MTG, Yu-Gi-Oh, sports cards)
 - popmart: Pop Mart / Labubu figures
-- hottoys: Hot Toys 1/6 scale figures (MMS/DX codes)
+- hottoys: Hot Toys 1/6 scale figures
 - neca: NECA action figures
 - hwheels: Hot Wheels die-cast cars
 - thrilljoy: ThrillJoy designer toy blind boxes
@@ -166,11 +177,11 @@ Supported categories:
 Return ONLY this JSON:
 {
   "identified": true,
-  "candidate_name": "most specific name (e.g. 'Funko Pop Iron Man #4', 'Charizard VMAX Secret Rare', 'Pop Mart Labubu Forest Series')",
+  "candidate_name": "exact name from packaging (e.g. 'Freddy Funko as Marty McFly [#SE] Fundays 2026', 'Charizard VMAX Rainbow Rare 074/073')",
   "category": "funko | tcg | popmart | hottoys | neca | hwheels | thrilljoy | other",
   "ebay_query": "search string to find this exact item on eBay",
   "confidence": "high | medium | low",
-  "visible_text": "all text readable in the image"
+  "visible_text": "all text you can read in the image"
 }
 
 If you cannot identify a collectable at all, return:
@@ -189,7 +200,7 @@ If you cannot identify a collectable at all, return:
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: 'claude-sonnet-4-6',
         max_tokens: 512,
         messages: [{
           role: 'user',
