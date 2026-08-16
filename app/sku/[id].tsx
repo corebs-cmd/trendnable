@@ -309,7 +309,7 @@ function HistoryCard({ sku, theme, isPremium, window, setWindow, loading, error 
             {/* Current value */}
             <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
               <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: theme.muted, letterSpacing: 1.1, textTransform: 'uppercase' }}>
-                Median Price
+                Est. Value
               </Text>
               <Text style={{ fontFamily: 'JetBrainsMono_700Bold', fontSize: 18, color, fontVariant: ['tabular-nums'] }}>
                 {fmtPrice(sku.price.median)}
@@ -799,11 +799,11 @@ export default function SKUDetailScreen() {
 
         {/* ── Stats grid ── */}
         <View style={{ paddingHorizontal: 18, paddingTop: 8, gap: 8 }}>
-          {/* Row 1: Median / Lowest / Highest */}
+          {/* Row 1: Est. Value / Lowest / Highest */}
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <StatBox label="Median"  value={fmtPrice(sku.price.median)} isDark={isDark} valueColor={C.amber} />
-            <StatBox label="Lowest"  value={fmtPrice(sku.price.low)}    isDark={isDark} />
-            <StatBox label="Highest" value={fmtPrice(sku.price.high)}   isDark={isDark} />
+            <StatBox label="Est. Value" value={fmtPrice(sku.price.median)} isDark={isDark} valueColor={C.amber} />
+            <StatBox label="Lowest"     value={fmtPrice(sku.price.low)}    isDark={isDark} />
+            <StatBox label="Highest"    value={fmtPrice(sku.price.high)}   isDark={isDark} />
           </View>
           {/* Row 2: Listings / Days Tracked */}
           <View style={{ flexDirection: 'row', gap: 8 }}>

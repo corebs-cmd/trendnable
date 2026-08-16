@@ -1,0 +1,10 @@
+android/
+ios/
+.git/
+.expo/
+.claude/
+__tests__/
+supabase/
+check_pipeline.ts
+trigger_pipeline.ts
+populate_stickers.js

@@ -1,5 +1,42 @@
+# Native build folders
 ios/
 android/
-.claude/
+.kotlin/
+
+# Dependencies
 node_modules/
+
+# Expo local cache
+.expo/
+web-build/
+dist/
+
+# Git
 .git/
+
+# Claude Code
+.claude/
+
+# macOS
+.DS_Store
+*.pem
+
+# Supabase CLI temp files
+supabase/.temp/
+
+# Local env files
+.env
+.env*.local
+
+# TypeScript
+*.tsbuildinfo
+
+# Debug scripts (not needed for builds)
+check_pipeline.ts
+trigger_pipeline.ts
+populate_stickers.js
+
+# Test files
+__tests__/
+jest.config.js
+jest.setup.js

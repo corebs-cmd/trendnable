@@ -177,7 +177,7 @@ export default function ScanProcessingScreen() {
   // Dismiss all modal screens (scan + scan-processing) then navigate to tabs.
   const exitToTab = (path: string) => {
     router.dismissAll();
-    router.replace(path as any);
+    router.push(path as any);
   };
 
   const handleWatch = async () => {
@@ -571,23 +571,32 @@ export default function ScanProcessingScreen() {
 
         {/* ── Price card (actual eBay sold data) ── */}
         <View style={{ backgroundColor: '#181818', borderRadius: 16, padding: 20, marginBottom: 24, borderWidth: 0.5, borderColor: 'rgba(225,228,230,0.08)' }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 10 }}>
+          {/* Est. Value hero */}
+          <View style={{ alignItems: 'center', marginBottom: 16 }}>
+            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: 'rgba(225,228,230,0.5)', letterSpacing: 1.1, textTransform: 'uppercase', marginBottom: 6 }}>
+              Est. Value
+            </Text>
+            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 38, color: '#FF5500', letterSpacing: -1 }}>
+              {fmtPrice(result.price.median)}
+            </Text>
+          </View>
+          {/* Low / High secondary */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingTop: 14, borderTopWidth: 0.5, borderTopColor: 'rgba(225,228,230,0.08)' }}>
             {[
-              { label: 'Low',    value: result.price.low },
-              { label: 'Median', value: result.price.median },
-              { label: 'High',   value: result.price.high },
+              { label: 'Low',  value: result.price.low },
+              { label: 'High', value: result.price.high },
             ].map(({ label, value }) => (
               <View key={label} style={{ alignItems: 'center' }}>
-                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 22, color: '#FF5500', letterSpacing: -0.5 }}>
+                <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 17, color: '#E1E4E6', letterSpacing: -0.3 }}>
                   {fmtPrice(value)}
                 </Text>
-                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: 'rgba(225,228,230,0.5)', marginTop: 3 }}>
+                <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: 'rgba(225,228,230,0.4)', marginTop: 3 }}>
                   {label}
                 </Text>
               </View>
             ))}
           </View>
-          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: 'rgba(225,228,230,0.4)', textAlign: 'center' }}>
+          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: 'rgba(225,228,230,0.4)', textAlign: 'center', marginTop: 12 }}>
             {result.soldCount > 0
               ? `Based on ${Math.min(result.soldCount, 50)} recent eBay sales`
               : `${result.activeListings} active listings`
