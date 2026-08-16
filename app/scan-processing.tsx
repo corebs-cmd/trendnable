@@ -29,7 +29,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { useAppStore } from '@/stores/appStore';
 import { buildTheme } from '@/lib/theme';
 import { takePendingScan } from '@/lib/scanHandoff';
-import { callScanPipeline, callVisionPipeline, promoteCatalogToSku, fetchSkuById, submitCommunityPrice, ScanError } from '@/lib/api';
+import { callScanPipeline, callVisionPipeline, promoteCatalogToSku, fetchSkuById, submitCommunityPrice, assessScanPhoto, uploadScanPhoto, ScanError } from '@/lib/api';
 import { ScanResult, UpgradeContext, CollectionFormData } from '@/lib/types';
 import { catById, fmtPrice } from '@/lib/appConfig';
 import { supabase } from '@/lib/supabase';
@@ -98,6 +98,9 @@ export default function ScanProcessingScreen() {
   const [showRetail, setShowRetail] = useState(false);
   const [retailPrice, setRetailPrice] = useState('');
   const [priceSubmitMsg, setPriceSubmitMsg] = useState<string | null>(null);
+  const [usePhotoAsImage, setUsePhotoAsImage] = useState(true);
+  const [photoUri, setPhotoUri]               = useState<string | null>(null);
+  const [photoSubmitMsg, setPhotoSubmitMsg]   = useState<string | null>(null);
 
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
@@ -107,6 +110,7 @@ export default function ScanProcessingScreen() {
     const scan = takePendingScan();
     if (!scan) { router.back(); return; }
     setScanType(scan.type);
+    if (scan.type === 'visual') setPhotoUri(scan.photoUri);
     runScan(scan);
     return () => clearTimers();
   }, []);
@@ -197,6 +201,7 @@ export default function ScanProcessingScreen() {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.access_token) {
       submitCommunityPrices(scanResult, session.access_token);
+      submitScanPhotoIfRequested(scanResult, session.access_token);
       const promo = await promoteCatalogToSku(scanResult.catalogId, session.access_token);
       const skuId = promo?.skuId ?? scanResult.skuId;
       if (skuId) {
@@ -236,6 +241,7 @@ export default function ScanProcessingScreen() {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.access_token) {
       submitCommunityPrices(scanResult, session.access_token);
+      submitScanPhotoIfRequested(scanResult, session.access_token);
       const promo = await promoteCatalogToSku(scanResult.catalogId, session.access_token);
       if (promo?.skuId) {
         completeCatalogMigration(scanResult.catalogId, promo.skuId, {
@@ -249,6 +255,65 @@ export default function ScanProcessingScreen() {
         { text: 'Go to Collection', onPress: () => exitToTab('/(tabs)/collection') },
         { text: 'Done', style: 'cancel', onPress: () => router.dismissAll() },
       ]);
+    }
+  };
+
+  const submitScanPhotoIfRequested = async (result: ScanResult, token: string) => {
+    if (!usePhotoAsImage || !photoUri || scanType !== 'visual' || !user?.id) return;
+    try {
+      // Compress to base64 for quality assessment (same size as we sent to vision)
+      const compressed = await ImageManipulator.manipulateAsync(
+        photoUri,
+        [{ resize: { width: 512 } }],
+        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+      );
+      if (!compressed.base64) return;
+
+      const assessment = await assessScanPhoto({
+        imageBase64:      compressed.base64,
+        catalogId:        result.catalogId,
+        existingImageUrl: result.imageUrl ?? null,
+        accessToken:      token,
+      });
+
+      if (!assessment.accepted) {
+        setPhotoSubmitMsg('Photo not used — did not meet quality standards.');
+        return;
+      }
+
+      // Apply crop if needed, then upload at higher resolution
+      const cropActions: ImageManipulator.Action[] = [];
+      if (assessment.shouldCrop && assessment.cropBounds) {
+        const { width: origW, height: origH } = await new Promise<{ width: number; height: number }>((resolve) => {
+          const { Image: RNImage } = require('react-native');
+          RNImage.getSize(photoUri, (w: number, h: number) => resolve({ width: w, height: h }));
+        });
+        const b = assessment.cropBounds;
+        cropActions.push({
+          crop: {
+            originX: Math.round(b.x * origW),
+            originY: Math.round(b.y * origH),
+            width:   Math.round(b.width  * origW),
+            height:  Math.round(b.height * origH),
+          },
+        });
+      }
+
+      const finalPhoto = await ImageManipulator.manipulateAsync(
+        photoUri,
+        cropActions,
+        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
+      );
+
+      await uploadScanPhoto({
+        localUri:  finalPhoto.uri,
+        catalogId: result.catalogId,
+        userId:    user.id,
+      });
+
+      setPhotoSubmitMsg('Photo submitted — we\'ll review it against our standards.');
+    } catch (err) {
+      console.error('[scan photo]', err);
     }
   };
 
@@ -594,6 +659,42 @@ export default function ScanProcessingScreen() {
             <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: 'rgba(225,228,230,0.5)', flex: 1, lineHeight: 18 }}>
               Share a price → earn sparks → get rewards
             </Text>
+          </View>
+        )}
+
+        {/* ── Use scan photo ── (visual scan only) */}
+        {scanType === 'visual' && (
+          <View style={{ marginBottom: 20, padding: 14, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 12, borderWidth: 0.5, borderColor: 'rgba(225,228,230,0.1)' }}>
+            <Pressable
+              onPress={() => setUsePhotoAsImage(v => !v)}
+              style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}
+            >
+              <View style={{
+                width: 20, height: 20, borderRadius: 4, flexShrink: 0, marginTop: 1,
+                borderWidth: 1.5,
+                borderColor: usePhotoAsImage ? '#FF5500' : 'rgba(225,228,230,0.3)',
+                backgroundColor: usePhotoAsImage ? '#FF5500' : 'transparent',
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                {usePhotoAsImage && (
+                  <Svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth={3} strokeLinecap="round">
+                    <Path d="M20 6L9 17l-5-5" />
+                  </Svg>
+                )}
+              </View>
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: '#E1E4E6', flex: 1, lineHeight: 19 }}>
+                Use my photo as this item's catalog image
+              </Text>
+            </Pressable>
+            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: 'rgba(225,228,230,0.4)', marginTop: 8, lineHeight: 17, marginLeft: 32 }}>
+              Photos are reviewed against our quality standards before being displayed. We may crop the image to focus on the item. By submitting, you agree this photo may be visible to other users. See our{' '}
+              <Text style={{ color: 'rgba(225,228,230,0.6)' }}>Privacy Policy</Text>{' '}for details.
+            </Text>
+            {photoSubmitMsg && (
+              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 11, color: '#f1c24c', marginTop: 6, marginLeft: 32 }}>
+                {photoSubmitMsg}
+              </Text>
+            )}
           </View>
         )}
 

@@ -1078,6 +1078,69 @@ export async function redeemReward(userId: string, rewardType: SparkRewardType):
   return { ok: true };
 }
 
+// ── Scan photo upload ─────────────────────────────────────────────────────────
+
+export type PhotoAssessment = {
+  accepted: boolean;
+  qualityScore: number;
+  itemFillsPct: number;
+  shouldCrop: boolean;
+  cropBounds: { x: number; y: number; width: number; height: number };
+  reason?: string;
+};
+
+export async function assessScanPhoto(params: {
+  imageBase64: string;
+  catalogId: string;
+  existingImageUrl: string | null;
+  accessToken: string;
+}): Promise<PhotoAssessment> {
+  const { imageBase64, catalogId, existingImageUrl, accessToken } = params;
+  const res = await fetch(
+    `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/assess-scan-photo`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ imageBase64, catalogId, existingImageUrl }),
+    },
+  );
+  const data = await res.json();
+  if (!data.ok && !data.hasOwnProperty('accepted')) throw new Error(data.error ?? 'Assessment failed');
+  return data as PhotoAssessment;
+}
+
+export async function uploadScanPhoto(params: {
+  localUri: string;      // file:// URI of the (cropped) photo on device
+  catalogId: string;
+  userId: string;
+}): Promise<string> {
+  const { localUri, catalogId, userId } = params;
+
+  const response = await fetch(localUri);
+  const blob = await response.blob();
+  const path = `${catalogId}/${userId}_${Date.now()}.jpg`;
+
+  const { data, error } = await supabase.storage
+    .from('item-photos')
+    .upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+
+  if (error) throw new Error(`Upload failed: ${error.message}`);
+
+  const { data: { publicUrl } } = supabase.storage.from('item-photos').getPublicUrl(path);
+
+  // Update catalog entry image
+  await supabase
+    .from('product_catalog')
+    .update({ image_url: publicUrl })
+    .eq('id', catalogId)
+    .is('image_url', null); // only set if no image exists yet; admin handles replacements for existing images
+
+  return publicUrl;
+}
+
 export async function fetchSparkLedger(userId: string, limit = 30): Promise<SparkLedgerEntry[]> {
   const { data } = await supabase
     .from('reward_events')
