@@ -33,6 +33,7 @@ import { callScanPipeline, callVisionPipeline, promoteCatalogToSku, fetchSkuById
 import { ScanResult, UpgradeContext, CollectionFormData } from '@/lib/types';
 import { catById, fmtPrice } from '@/lib/appConfig';
 import { supabase } from '@/lib/supabase';
+import { CheckCircle, Bookmark } from 'lucide-react-native';
 import UpgradeSheet from '@/components/UpgradeSheet';
 import AddToCollectionSheet from '@/components/AddToCollectionSheet';
 
@@ -86,6 +87,8 @@ export default function ScanProcessingScreen() {
   const mergeSkuIntoHot            = useAppStore((s) => s.mergeSkuIntoHot);
   const watchlist                  = useAppStore((s) => s.watchlist);
   const catalogWatchlist           = useAppStore((s) => s.catalogWatchlist);
+  const collection                 = useAppStore((s) => s.collection);
+  const catalogCollection          = useAppStore((s) => s.catalogCollection);
 
   const [phase, setPhase]         = useState<Phase>('loading');
   const [step, setStep]           = useState<ScanStep>('reading');
@@ -361,6 +364,11 @@ export default function ScanProcessingScreen() {
       catalogWatchlist.some((c) => c.catalogId === scanResult.catalogId)
     : false;
 
+  const isOwned = scanResult
+    ? collection.some((c) => c.skuId === scanResult.skuId && !!scanResult.skuId) ||
+      catalogCollection.some((c) => c.catalogId === scanResult.catalogId)
+    : false;
+
   const stepLabels = scanType === 'visual' ? VISION_LABELS : BARCODE_LABELS;
   const steps: ScanStep[] = ['reading', 'identifying', 'analyzing'];
   const currentStepIdx = steps.indexOf(step);
@@ -603,6 +611,24 @@ export default function ScanProcessingScreen() {
             }
           </Text>
         </View>
+
+        {/* ── Ownership indicators ── */}
+        {(isOwned || isWatched) && (
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+            {isOwned && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(34,197,94,0.12)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.25)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 }}>
+                <CheckCircle size={14} color="#22C55E" strokeWidth={2.5} />
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#22C55E' }}>In Your Collection</Text>
+              </View>
+            )}
+            {isWatched && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(59,130,246,0.12)', borderWidth: 1, borderColor: 'rgba(59,130,246,0.25)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 }}>
+                <Bookmark size={14} color="#3B82F6" strokeWidth={2.5} />
+                <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: '#3B82F6' }}>On Your Watchlist</Text>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* ── Community Data ── */}
         <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 11, color: 'rgba(225,228,230,0.4)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 12 }}>
