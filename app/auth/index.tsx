@@ -75,6 +75,7 @@ export default function AuthScreen() {
         const { data, error: authError } = await supabase.auth.signUp({
           email: email.trim(),
           password,
+          options: { emailRedirectTo: 'trendnable://' },
         });
         if (authError) throw authError;
 
