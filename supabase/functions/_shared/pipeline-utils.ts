@@ -25,6 +25,17 @@ const TIER1_PATTERNS: RegExp[] = [
   /\bas[\s-]*is\b/i,
   /\bno\s+returns?\b/i,
   /\b(bulk|wholesale)\b/i,
+  // Multi-item / bundle listings
+  /\bmulti[-\s]?figure\b/i,
+  /\bmulti[-\s]?pack\b/i,
+  /\bmulti[-\s]?item\b/i,
+  /\bmulti[-\s]?set\b/i,
+  /\bfigures?\s+set\b/i,
+  /\bset\s+of\s+\d+\b/i,
+  /\bpack\s+of\s+\d+\b/i,
+  /\b\d+\s*[-\s]pack\b/i,
+  /\b\d+\s+figures?\b/i,
+  /\bcollection\s+(set|lot|pack|bundle)\b/i,
 ];
 
 export function titlePassesTier1(title: string): boolean {
@@ -184,9 +195,10 @@ export function catalogFingerprint(
     s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
   if (category === 'funko') {
-    const popPart    = opts.popNumber != null ? String(opts.popNumber) : slug(name);
+    const namePart    = slug(name.replace(/\[#\d+\]/g, '').trim());
+    const popPart     = opts.popNumber != null ? `-${opts.popNumber}` : '';
     const variantPart = (opts.variantType ?? 'common').toLowerCase();
-    return `funko-${popPart}-${variantPart}`;
+    return `funko-${namePart}${popPart}-${variantPart}`;
   }
 
   if (category === 'tcg') {
