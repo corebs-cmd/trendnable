@@ -194,7 +194,8 @@ Deno.serve(async (req) => {
     const [{ data: existingSkus }, { data: existingCandidates }, { data: deletedSkus }] = await Promise.all([
       supabase.from('skus').select('name'),
       supabase.from('discovery_candidates').select('name').in('status', ['new', 'approved', 'rejected']),
-      supabase.from('deleted_skus').select('normalized_name, name'),
+      // Only load active blocks: permanent (expires_at null) or not yet expired
+      supabase.from('deleted_skus').select('normalized_name, name, expires_at'),
     ]);
     const existingNames: string[] = [
       ...(existingSkus ?? []).map((s: any) => s.name as string),
@@ -203,10 +204,13 @@ Deno.serve(async (req) => {
     // Must match normalize_sku_name() in migration 044 exactly
     const normalizeName = (s: string) =>
       s.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+    const now = new Date();
     const deletedNameSet = new Set<string>(
-      (deletedSkus ?? []).map((d: any) =>
-        (d.normalized_name as string | null) ?? normalizeName(d.name as string)
-      )
+      (deletedSkus ?? [])
+        .filter((d: any) => !d.expires_at || new Date(d.expires_at) > now)
+        .map((d: any) =>
+          (d.normalized_name as string | null) ?? normalizeName(d.name as string)
+        )
     );
     // Pass deleted names to Claude so it can skip them during classification
     const allKnownNames = [
