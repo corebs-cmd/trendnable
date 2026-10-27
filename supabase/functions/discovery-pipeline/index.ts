@@ -248,7 +248,15 @@ Deno.serve(async (req) => {
     // Pre-strip existing names once so the dedup loop doesn't re-process them
     // for every eBay candidate — avoids O(n×m) redundant string ops that were
     // causing CPU time overruns as the catalog grew.
-    const existingStripped = existingNames.map(
+    //
+    // Also include active deleted SKU names so the semantic pre-filter catches
+    // items the admin has already rejected that come back under slightly different
+    // eBay titles. Gate 1 (exact match) misses these; token overlap catches them.
+    const activeDeletedNames = (deletedSkus ?? [])
+      .filter((d: any) => !d.expires_at || new Date(d.expires_at) > now)
+      .map((d: any) => d.name as string);
+
+    const existingStripped = [...existingNames, ...activeDeletedNames].map(
       (n) => brandStripName(n).replace(/[^a-z0-9 ]/g, '')
     );
 
